@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: luma-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-luma}
+      POSTGRES_USER: ${POSTGRES_USER:-luma}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-luma_dev_password}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - luma_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U luma -d luma"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Luma.Api/Dockerfile
+    container_name: luma-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-luma};Username=${POSTGRES_USER:-luma};Password=${POSTGRES_PASSWORD:-luma_dev_password}
+      Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
+      Ollama__Enabled: ${OLLAMA_ENABLED:-true}
+      Ollama__BaseUrl: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      Ollama__Model: ${OLLAMA_MODEL:-llama3.2}
+      Ollama__TimeoutSeconds: ${OLLAMA_TIMEOUT_SECONDS:-20}
+    ports:
+      - "${API_HOST_PORT:-5050}:8080"
+
+volumes:
+  luma_postgres_data:

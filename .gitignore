@@ -1,0 +1,50 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+artifacts/
+publish/
+coverage/
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+
+# IDE/editor
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Docker/local data
+docker-data/
+postgres-data/
+
+# Node/frontend leftovers, if used later
+node_modules/
+.next/
+dist/
+build/
+out/
+

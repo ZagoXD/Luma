@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{CACD63FF-D493-498B-BB5E-BB6831629D18}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Luma.Api", "src\Luma.Api\Luma.Api.csproj", "{BC3CCB8B-B0E3-42AC-946B-7CB7CFB2C07A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{F13FBFE4-4B01-4393-B6B6-4F32CDDC8B75}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Luma.Tests", "tests\Luma.Tests\Luma.Tests.csproj", "{582FF77B-C56C-462A-9F66-B76CFE55DB4A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BC3CCB8B-B0E3-42AC-946B-7CB7CFB2C07A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC3CCB8B-B0E3-42AC-946B-7CB7CFB2C07A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC3CCB8B-B0E3-42AC-946B-7CB7CFB2C07A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC3CCB8B-B0E3-42AC-946B-7CB7CFB2C07A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{582FF77B-C56C-462A-9F66-B76CFE55DB4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{582FF77B-C56C-462A-9F66-B76CFE55DB4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{582FF77B-C56C-462A-9F66-B76CFE55DB4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{582FF77B-C56C-462A-9F66-B76CFE55DB4A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BC3CCB8B-B0E3-42AC-946B-7CB7CFB2C07A} = {CACD63FF-D493-498B-BB5E-BB6831629D18}
+		{582FF77B-C56C-462A-9F66-B76CFE55DB4A} = {F13FBFE4-4B01-4393-B6B6-4F32CDDC8B75}
+	EndGlobalSection
+EndGlobal
