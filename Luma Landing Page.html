@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Luma — Seu ciclo, registrado em uma conversa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --plum-deep:   oklch(20% 0.07 315);
+      --plum-mid:    oklch(32% 0.09 315);
+      --plum-soft:   oklch(45% 0.09 315);
+      --lavender:    oklch(72% 0.22 295);
+      --lavender-lt: oklch(94% 0.06 295);
+      --rose:        oklch(72% 0.10 8);
+      --rose-lt:     oklch(94% 0.04 8);
+      --cream:       oklch(97% 0.012 80);
+      --cream-dk:    oklch(93% 0.018 80);
+      --text-dark:   oklch(18% 0.04 315);
+      --text-mid:    oklch(42% 0.06 315);
+      --text-light:  oklch(62% 0.05 315);
+      --border:      oklch(88% 0.03 295);
+      --card-bg:     oklch(98.5% 0.008 80);
+
+      --ff-display: 'Playfair Display', Georgia, serif;
+      --ff-body:    'DM Sans', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--ff-body);
+      background: linear-gradient(180deg, oklch(98.5% 0.015 82) 0%, oklch(97% 0.02 300) 36%, oklch(98.2% 0.018 22) 68%, oklch(97.2% 0.022 300) 100%);
+      color: var(--text-dark);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.25rem 2rem;
+      transition: background 0.4s, backdrop-filter 0.4s;
+    }
+    nav.scrolled {
+      background: oklch(20% 0.07 315 / 0.92);
+      backdrop-filter: blur(12px);
+    }
+    .nav-logo {
+      font-family: var(--ff-display);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .nav-logo span { color: var(--lavender); }
+    .nav-cta {
+      background: var(--lavender);
+      color: #fff;
+      border: none; cursor: pointer;
+      font-family: var(--ff-body);
+      font-weight: 700; font-size: 0.85rem;
+      padding: 0.6rem 1.35rem;
+      border-radius: 100px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 12px oklch(72% 0.22 295 / 0.4);
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px oklch(72% 0.22 295 / 0.5); }
+
+    /* ── HERO ── */
+    .hero {
+      background: var(--plum-deep);
+      min-height: 100svh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 3rem;
+      padding: 8rem 5vw 5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 60% at 80% 40%, oklch(35% 0.11 295 / 0.25), transparent),
+                  radial-gradient(ellipse 50% 50% at 10% 80%, oklch(35% 0.10 8 / 0.18), transparent);
+      pointer-events: none;
+    }
+    .hero-text { position: relative; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: oklch(100% 0 0 / 0.08);
+      border: 1px solid oklch(100% 0 0 / 0.15);
+      color: var(--lavender);
+      font-size: 0.78rem; font-weight: 500;
+      padding: 0.4rem 1rem; border-radius: 100px;
+      margin-bottom: 1.5rem; letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .hero-badge::before { content: '✦'; font-size: 0.65rem; }
+    .hero h1 {
+      font-family: var(--ff-display);
+      font-size: clamp(2.4rem, 5vw, 4rem);
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.15;
+      margin-bottom: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--lavender);
+    }
+    .hero-sub {
+      color: oklch(80% 0.04 295);
+      font-size: clamp(1rem, 1.8vw, 1.15rem);
+      font-weight: 300;
+      line-height: 1.65;
+      max-width: 480px;
+      margin-bottom: 2.5rem;
+    }
+    .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .btn-primary {
+      background: var(--lavender);
+      color: #fff;
+      border: none; cursor: pointer;
+      font-family: var(--ff-body);
+      font-weight: 700; font-size: 1rem;
+      padding: 0.9rem 2rem;
+      border-radius: 100px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none; display: inline-block;
+      box-shadow: 0 4px 16px oklch(72% 0.22 295 / 0.35);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px oklch(72% 0.22 295 / 0.5); }
+    .btn-ghost {
+      background: transparent;
+      color: oklch(80% 0.04 295);
+      border: 1px solid oklch(100% 0 0 / 0.2);
+      cursor: pointer;
+      font-family: var(--ff-body);
+      font-weight: 500; font-size: 1rem;
+      padding: 0.9rem 2rem;
+      border-radius: 100px;
+      transition: border-color 0.2s, color 0.2s;
+      text-decoration: none; display: inline-block;
+    }
+    .btn-ghost:hover { border-color: oklch(100% 0 0 / 0.4); color: #fff; }
+
+    /* ── CHAT MOCKUP ── */
+    .hero-visual { position: relative; display: flex; justify-content: center; }
+    .phone-frame {
+      width: min(320px, 90vw);
+      background: oklch(97% 0.01 80);
+      border-radius: 2.5rem;
+      box-shadow: 0 40px 80px oklch(0% 0 0 / 0.5), 0 0 0 1px oklch(100% 0 0 / 0.08);
+      overflow: hidden;
+      position: relative;
+    }
+    .phone-statusbar {
+      background: #075E54;
+      padding: 0.6rem 1.5rem 0.4rem;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.7rem; color: #fff; font-weight: 500;
+    }
+    .phone-header {
+      background: #075E54;
+      padding: 0.75rem 1rem;
+      display: flex; align-items: center; gap: 0.75rem;
+      border-bottom: 1px solid rgba(0,0,0,0.15);
+    }
+    .phone-avatar {
+      width: 38px; height: 38px;
+      background: #d9c2ef url('content.png') center 22% / cover no-repeat;
+      border-radius: 50%;
+      flex-shrink: 0;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .phone-contact { flex: 1; }
+    .phone-contact-name { font-weight: 600; font-size: 0.9rem; color: #fff; }
+    .phone-contact-status { font-size: 0.72rem; color: #a8e6cf; }
+    .phone-body {
+      background: #ECE5DD;
+      padding: 1rem 0.85rem;
+      display: flex; flex-direction: column;
+      gap: 0.6rem;
+      height: 320px;
+      overflow: hidden;
+    }
+    .msg { display: flex; flex-direction: column; max-width: 82%; }
+    .msg.user { align-self: flex-end; }
+    .msg.bot  { align-self: flex-start; }
+    .msg-bubble {
+      padding: 0.55rem 0.9rem;
+      border-radius: 1.1rem;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      position: relative;
+    }
+    .msg.user .msg-bubble {
+      background: #DCF8C6;
+      color: #111;
+      border-bottom-right-radius: 0.25rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .msg.bot .msg-bubble {
+      background: #fff;
+      color: #111;
+      border-bottom-left-radius: 0.25rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .msg-time { font-size: 0.65rem; color: #7a8c7a; margin-top: 0.2rem; }
+    .msg.user .msg-time { text-align: right; }
+
+    .chat-typing {
+      align-self: flex-start;
+      display: flex; gap: 4px; padding: 0.6rem 0.9rem;
+      background: #fff; border-radius: 1.1rem; border-bottom-left-radius: 0.25rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .chat-typing span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #aaa;
+      animation: typing 1.2s infinite;
+    }
+    .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+    .chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing { 0%,60%,100% { opacity: 0.3; transform: scale(1); } 30% { opacity: 1; transform: scale(1.2); } }
+
+    /* hide typing once msgs load */
+    .msg-hidden { display: none; }
+
+    /* ── SECTION BASE ── */
+    section { padding: 6rem 5vw; position: relative; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-tag {
+      font-size: 0.75rem; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--plum-soft);
+      margin-bottom: 0.75rem;
+    }
+    .section-h2 {
+      font-family: var(--ff-display);
+      font-size: clamp(1.9rem, 3.5vw, 2.8rem);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: var(--text-dark);
+      margin-bottom: 1rem;
+    }
+    .section-h2 em { font-style: italic; color: var(--plum-soft); }
+    .section-lead {
+      font-size: 1.05rem; font-weight: 300;
+      color: var(--text-mid);
+      max-width: 560px;
+      line-height: 1.7;
+    }
+
+    /* fade-in on scroll */
+    .fade-up { opacity: 0; transform: translateY(28px); transition: opacity 0.65s ease, transform 0.65s ease; }
+    .fade-up.visible { opacity: 1; transform: none; }
+
+    /* ── PROBLEMA ── */
+    .problema {
+      background: linear-gradient(180deg, oklch(23% 0.07 315) 0%, oklch(27% 0.075 315) 100%);
+    }
+    .problema .section-tag { color: var(--lavender); }
+    .problema .section-h2 { color: #fff; }
+    .problema .section-h2 em { color: var(--lavender); }
+    .problema .section-lead { color: oklch(75% 0.04 295); }
+    .problema-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+      margin-top: 3.5rem;
+    }
+    .pain-card {
+      background: oklch(100% 0 0 / 0.05);
+      border: 1px solid oklch(100% 0 0 / 0.1);
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+      transition: background 0.2s;
+    }
+    .pain-card:hover { background: oklch(100% 0 0 / 0.09); }
+    .pain-icon {
+      font-size: 1.75rem; margin-bottom: 1rem;
+      display: block;
+    }
+    .pain-card h3 {
+      font-family: var(--ff-display);
+      font-size: 1.15rem; font-weight: 600;
+      color: #fff; margin-bottom: 0.5rem;
+    }
+    .pain-card p { font-size: 0.9rem; color: oklch(70% 0.04 295); line-height: 1.6; }
+
+    /* ── SOLUÇÃO ── */
+    .solucao {
+      background: linear-gradient(180deg, oklch(98.2% 0.018 82) 0%, oklch(97.2% 0.028 288) 100%);
+    }
+    .solucao-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      margin-top: 3rem;
+    }
+    .solucao-visual {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .solucao-visual .phone-frame {
+      width: min(320px, 100%);
+      box-shadow: 0 24px 60px oklch(20% 0.07 315 / 0.16);
+    }
+    .solucao-visual .phone-body {
+      height: auto;
+      min-height: 320px;
+    }
+    .solucao-visual .msg {
+      max-width: 86%;
+    }
+    .convo-divider {
+      align-self: center;
+      text-align: center;
+      color: #7f8f88;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0;
+    }
+
+    .solucao-points { display: flex; flex-direction: column; gap: 1.5rem; }
+    .point-row { display: flex; gap: 1rem; align-items: flex-start; }
+    .point-dot {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: var(--lavender-lt);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .point-row h4 {
+      font-weight: 600; font-size: 0.95rem;
+      color: var(--text-dark); margin-bottom: 0.2rem;
+    }
+    .point-row p { font-size: 0.88rem; color: var(--text-mid); }
+
+    /* ── REGISTRAR ── */
+    .registrar {
+      background: linear-gradient(180deg, oklch(97.2% 0.028 288) 0%, oklch(98.1% 0.02 304) 100%);
+    }
+    .register-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 3rem;
+    }
+    .reg-card {
+      background: #fff;
+      border-radius: 1.1rem;
+      padding: 1.4rem 1.2rem;
+      border: 1px solid var(--border);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .reg-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px oklch(0% 0 0 / 0.07); }
+    .reg-emoji { font-size: 1.5rem; margin-bottom: 0.6rem; display: block; }
+    .reg-card h4 { font-weight: 600; font-size: 0.9rem; color: var(--text-dark); margin-bottom: 0.3rem; }
+    .reg-card p { font-size: 0.8rem; color: var(--text-mid); line-height: 1.5; }
+
+    /* ── COMO FUNCIONA ── */
+    .como {
+      background: linear-gradient(180deg, oklch(98.1% 0.02 304) 0%, oklch(97.7% 0.018 78) 100%);
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.5rem;
+      margin-top: 3.5rem;
+      position: relative;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: calc(12.5% + 28px);
+      right: calc(12.5% + 28px);
+      height: 3px;
+      background: linear-gradient(90deg, oklch(80% 0.09 300) 0%, oklch(84% 0.06 25) 50%, oklch(80% 0.08 160) 100%);
+      border-radius: 999px;
+      z-index: 0;
+    }
+    .step { text-align: center; position: relative; z-index: 1; }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1.25rem;
+      font-family: var(--ff-display);
+      font-size: 1.1rem; font-weight: 700;
+      background: linear-gradient(135deg, oklch(79% 0.09 300) 0%, oklch(81% 0.06 20) 55%, oklch(79% 0.08 160) 100%);
+      color: #fff;
+      box-shadow: 0 10px 22px oklch(72% 0.08 295 / 0.22);
+      border: 3px solid oklch(99% 0.01 80);
+    }
+    .step h4 { font-weight: 700; font-size: 0.95rem; color: var(--plum-mid); margin-bottom: 0.4rem; }
+    .step p { font-size: 0.85rem; color: oklch(42% 0.04 315); line-height: 1.55; }
+
+    /* ── BENEFÍCIOS ── */
+    .beneficios {
+      background: linear-gradient(180deg, oklch(97.7% 0.018 78) 0%, oklch(98.4% 0.012 84) 100%);
+    }
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      margin-top: 3rem;
+    }
+    .benefit {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1.1rem;
+      padding: 1.5rem 1.25rem;
+      transition: transform 0.2s;
+    }
+    .benefit:hover { transform: translateY(-2px); }
+    .benefit-icon { font-size: 1.4rem; margin-bottom: 0.75rem; }
+    .benefit h4 { font-weight: 600; font-size: 0.9rem; color: var(--text-dark); margin-bottom: 0.3rem; }
+    .benefit p { font-size: 0.82rem; color: var(--text-mid); line-height: 1.5; }
+
+    /* ── PRIVACIDADE ── */
+    .privacidade {
+      background: linear-gradient(180deg, oklch(30% 0.08 315) 0%, oklch(24% 0.07 315) 100%);
+    }
+    .privacidade .section-tag { color: var(--lavender); }
+    .privacidade .section-h2 { color: #fff; }
+    .privacidade .section-lead { color: oklch(78% 0.04 295); max-width: 640px; }
+    .privacy-points {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 3rem;
+    }
+    .privacy-item {
+      background: oklch(100% 0 0 / 0.06);
+      border: 1px solid oklch(100% 0 0 / 0.1);
+      border-radius: 1rem;
+      padding: 1.25rem 1.5rem;
+      display: flex; gap: 1rem; align-items: flex-start;
+    }
+    .privacy-check {
+      width: 28px; height: 28px; flex-shrink: 0;
+      background: var(--lavender);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem;
+      color: var(--plum-deep);
+      font-weight: 700;
+    }
+    .privacy-item p { font-size: 0.88rem; color: oklch(80% 0.04 295); line-height: 1.55; }
+    .privacy-item strong { color: #fff; }
+    .privacy-disclaimer {
+      margin-top: 2rem;
+      background: oklch(100% 0 0 / 0.04);
+      border: 1px solid oklch(100% 0 0 / 0.12);
+      border-radius: 1rem;
+      padding: 1.25rem 1.5rem;
+      display: flex; gap: 0.75rem; align-items: flex-start;
+      font-size: 0.85rem;
+      color: oklch(70% 0.04 295);
+      line-height: 1.6;
+    }
+    .privacy-disclaimer::before { content: 'ℹ️'; font-size: 1rem; flex-shrink: 0; }
+
+    /* ── DESENVOLVIMENTO ── */
+    .desenvolvimento {
+      background: linear-gradient(180deg, oklch(98.4% 0.012 84) 0%, oklch(97.6% 0.022 14) 100%);
+      text-align: center;
+    }
+    .desenvolvimento .section-h2 { margin: 0 auto 1rem; }
+    .desenvolvimento .section-lead { margin: 0 auto 2rem; text-align: center; }
+    .dev-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--rose);
+      color: #fff;
+      font-size: 0.78rem; font-weight: 600;
+      padding: 0.4rem 1rem; border-radius: 100px;
+      margin-bottom: 1.5rem; letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .dev-badge::before { content: '🛠'; }
+    .dev-counter {
+      display: flex; justify-content: center; gap: 3rem;
+      margin: 2.5rem auto;
+    }
+    .dev-stat strong {
+      display: block;
+      font-family: var(--ff-display);
+      font-size: 2rem; font-weight: 700;
+      color: var(--plum-deep);
+    }
+    .dev-stat span { font-size: 0.82rem; color: var(--text-mid); }
+
+    /* ── FORM ── */
+    .cta-final {
+      background: linear-gradient(180deg, oklch(24% 0.07 315) 0%, oklch(18% 0.055 315) 100%);
+    }
+    .cta-final .section-tag { color: var(--lavender); }
+    .cta-final .section-h2 { color: #fff; }
+    .cta-final .section-lead { color: oklch(75% 0.04 295); margin-bottom: 3rem; }
+    .cta-final .section-inner { max-width: 920px; text-align: center; }
+
+    .form-wrapper {
+      background: oklch(100% 0 0 / 0.06);
+      border: 1px solid oklch(100% 0 0 / 0.12);
+      border-radius: 1.75rem;
+      padding: 2.5rem;
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .form-field { display: flex; flex-direction: column; gap: 0.4rem; }
+    .form-field.full { grid-column: 1 / -1; }
+    .form-field label {
+      font-size: 0.8rem; font-weight: 600;
+      color: oklch(75% 0.05 295);
+      letter-spacing: 0.03em;
+    }
+    .form-field input,
+    .form-field textarea,
+    .form-field select {
+      background: oklch(100% 0 0 / 0.07);
+      border: 1px solid oklch(100% 0 0 / 0.15);
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+      font-family: var(--ff-body);
+      font-size: 0.9rem;
+      color: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+      resize: none;
+    }
+    .form-field input::placeholder,
+    .form-field textarea::placeholder { color: oklch(60% 0.04 295); }
+    .form-field input:focus,
+    .form-field textarea:focus { border-color: var(--lavender); }
+    .form-field textarea { min-height: 80px; }
+    .plan-selector {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.85rem;
+      margin-top: 0.25rem;
+    }
+    .plan-option {
+      position: relative;
+    }
+    .plan-option input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .plan-option-card {
+      display: block;
+      min-height: 100%;
+      background: oklch(100% 0 0 / 0.05);
+      border: 1px solid oklch(100% 0 0 / 0.14);
+      border-radius: 1rem;
+      padding: 1rem 0.95rem;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      text-align: left;
+    }
+    .plan-option-card:hover {
+      transform: translateY(-2px);
+      border-color: oklch(100% 0 0 / 0.22);
+      box-shadow: 0 10px 24px oklch(0% 0 0 / 0.08);
+    }
+    .plan-option-card strong {
+      display: block;
+      font-size: 0.95rem;
+      color: #fff;
+      margin-bottom: 0.2rem;
+    }
+    .plan-option-card span {
+      display: block;
+      font-size: 0.8rem;
+      color: oklch(74% 0.04 295);
+      line-height: 1.45;
+    }
+    .plan-option input:checked + .plan-option-card {
+      background: oklch(72% 0.12 295 / 0.18);
+      border-color: var(--lavender);
+      box-shadow: 0 0 0 1px var(--lavender), 0 12px 28px oklch(72% 0.18 295 / 0.18);
+    }
+    .plan-option input:checked + .plan-option-card strong {
+      color: #fff;
+    }
+    .plan-option input:checked + .plan-option-card span {
+      color: oklch(90% 0.02 295);
+    }
+
+    .form-check {
+      display: flex; gap: 0.75rem; align-items: flex-start;
+      margin: 1.25rem 0;
+    }
+    .form-check input[type=checkbox] {
+      width: 18px; height: 18px; flex-shrink: 0;
+      accent-color: var(--lavender);
+      margin-top: 0.1rem;
+      cursor: pointer;
+    }
+    .form-check label {
+      font-size: 0.82rem; color: oklch(68% 0.04 295); line-height: 1.5; cursor: pointer;
+    }
+    .form-check label a { color: var(--lavender); text-decoration: none; }
+    .form-check label a:hover { text-decoration: underline; }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--lavender);
+      color: #fff;
+      border: none; cursor: pointer;
+      font-family: var(--ff-body);
+      font-weight: 700; font-size: 1rem;
+      padding: 1rem 2rem;
+      border-radius: 100px;
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      letter-spacing: 0.01em;
+      box-shadow: 0 4px 16px oklch(72% 0.22 295 / 0.4);
+    }
+    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 28px oklch(72% 0.22 295 / 0.55); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .form-success {
+      display: none;
+      text-align: center; padding: 2rem 0;
+    }
+    .form-success.show { display: block; }
+    .success-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .form-success h3 {
+      font-family: var(--ff-display);
+      font-size: 1.5rem; color: #fff; margin-bottom: 0.5rem;
+    }
+    .form-success p { color: oklch(70% 0.04 295); font-size: 0.9rem; }
+
+    .form-real { display: block; }
+    .form-real.hide { display: none; }
+
+    /* form error */
+    .field-error { font-size: 0.75rem; color: var(--rose); margin-top: 0.2rem; display: none; }
+    .field-error.show { display: block; }
+    .plan-error { margin-top: 0.75rem; }
+    .form-status {
+      display: none;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      border-radius: 0.85rem;
+      padding: 0.8rem 1rem;
+    }
+    .form-status.show { display: block; }
+    .form-status.error {
+      background: oklch(72% 0.08 8 / 0.15);
+      border: 1px solid oklch(72% 0.08 8 / 0.3);
+      color: oklch(88% 0.03 20);
+    }
+    .form-status.info {
+      background: oklch(72% 0.08 295 / 0.14);
+      border: 1px solid oklch(72% 0.08 295 / 0.28);
+      color: oklch(88% 0.03 295);
+    }
+
+    /* ── PREÇOS ── */
+    .precos {
+      background: linear-gradient(180deg, oklch(97.6% 0.022 14) 0%, oklch(98.2% 0.016 82) 100%);
+    }
+    .precos .section-h2 { text-align: center; margin: 0 auto 0.75rem; }
+    .precos .section-tag { text-align: center; }
+    .precos .section-lead { text-align: center; margin: 0 auto 3.5rem; }
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      align-items: stretch;
+    }
+    .plan-card {
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 2rem 1.75rem;
+      display: flex; flex-direction: column;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .plan-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px oklch(0% 0 0 / 0.08); }
+    .plan-card.featured {
+      background: var(--plum-deep);
+      border-color: var(--lavender);
+      box-shadow: 0 20px 50px oklch(20% 0.07 315 / 0.3);
+      transform: translateY(-6px);
+    }
+    .plan-card.featured:hover { transform: translateY(-10px); }
+    .plan-badge {
+      display: inline-block;
+      font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.3rem 0.8rem; border-radius: 100px;
+      margin-bottom: 1.25rem;
+      align-self: flex-start;
+    }
+    .plan-badge.free  { background: var(--lavender-lt); color: var(--plum-soft); }
+    .plan-badge.basic { background: oklch(93% 0.04 8); color: oklch(42% 0.10 8); }
+    .plan-badge.full  { background: var(--lavender); color: var(--plum-deep); }
+    .plan-name {
+      font-family: var(--ff-display);
+      font-size: 1.4rem; font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--text-dark);
+    }
+    .plan-card.featured .plan-name { color: #fff; }
+    .plan-price {
+      display: flex; align-items: baseline; gap: 0.25rem;
+      margin-bottom: 0.35rem;
+    }
+    .plan-currency { font-size: 0.95rem; font-weight: 600; color: var(--text-mid); margin-top: 0.25rem; }
+    .plan-amount {
+      font-family: var(--ff-display);
+      font-size: 2.8rem; font-weight: 700;
+      color: var(--text-dark); line-height: 1;
+    }
+    .plan-card.featured .plan-amount,
+    .plan-card.featured .plan-currency { color: #fff; }
+    .plan-period { font-size: 0.82rem; color: var(--text-light); }
+    .plan-card.featured .plan-period { color: oklch(72% 0.06 295); }
+    .plan-desc {
+      font-size: 0.85rem; color: var(--text-mid);
+      margin-bottom: 1.75rem; margin-top: 0.4rem;
+      line-height: 1.55;
+    }
+    .plan-card.featured .plan-desc { color: oklch(75% 0.04 295); }
+    .plan-divider {
+      height: 1px;
+      background: var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .plan-card.featured .plan-divider { background: oklch(100% 0 0 / 0.12); }
+    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 0.7rem; flex: 1; }
+    .plan-features li {
+      display: flex; align-items: flex-start; gap: 0.6rem;
+      font-size: 0.86rem; color: var(--text-mid); line-height: 1.4;
+    }
+    .plan-card.featured .plan-features li { color: oklch(80% 0.04 295); }
+    .plan-features li .check {
+      flex-shrink: 0; margin-top: 0.05rem;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: 700;
+    }
+    .plan-features li .check.on  { background: #25D366; color: #fff; }
+    .plan-features li .check.off { background: var(--border); color: var(--text-light); }
+    .plan-card.featured .plan-features li .check.off { background: oklch(100% 0 0 / 0.12); color: oklch(55% 0.05 295); }
+    .plan-cta {
+      margin-top: 2rem;
+      width: 100%;
+      padding: 0.85rem 1rem;
+      border-radius: 100px;
+      border: none; cursor: pointer;
+      font-family: var(--ff-body);
+      font-weight: 700; font-size: 0.9rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-align: center;
+    }
+    .plan-cta.free-btn  { background: var(--lavender-lt); color: var(--plum-soft); }
+    .plan-cta.basic-btn { background: var(--cream-dk); color: var(--text-dark); border: 1.5px solid var(--border); }
+    .plan-cta.full-btn  { background: var(--lavender); color: var(--plum-deep); }
+    .plan-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 18px oklch(0% 0 0 / 0.1); }
+    .plan-note { font-size: 0.72rem; color: var(--text-light); text-align: center; margin-top: 0.6rem; }
+    .plan-card.featured .plan-note { color: oklch(55% 0.05 295); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: oklch(14% 0.05 315);
+      padding: 2.5rem 5vw;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-logo {
+      font-family: var(--ff-display);
+      font-size: 1.2rem; font-weight: 700;
+      color: oklch(60% 0.06 295);
+    }
+    footer p { font-size: 0.78rem; color: oklch(45% 0.04 295); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; text-align: center; padding-top: 7rem; }
+      .hero-sub { margin: 0 auto 2rem; }
+      .hero-actions { justify-content: center; }
+      .hero-visual { margin-top: 2rem; }
+      .problema-cards { grid-template-columns: 1fr; }
+      .solucao-grid { grid-template-columns: 1fr; }
+      .register-grid { grid-template-columns: repeat(2, 1fr); }
+      .steps { grid-template-columns: repeat(2, 1fr); }
+      .steps::before { display: none; }
+      .benefits-grid { grid-template-columns: repeat(2, 1fr); }
+      .privacy-points { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .plans-grid { grid-template-columns: 1fr; }
+      .plan-card.featured { transform: none; }
+      .plan-selector { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      section { padding: 4rem 1.25rem; }
+      .hero { padding: 6rem 1.25rem 4rem; }
+      .register-grid { grid-template-columns: 1fr 1fr; }
+      .benefits-grid { grid-template-columns: 1fr 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      nav { padding: 1rem 1.25rem; }
+      .dev-counter { gap: 1.5rem; }
+      .form-wrapper { padding: 1.5rem; border-radius: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="nav">
+  <div class="nav-logo">Luma<span>.</span></div>
+  <button class="nav-cta" onclick="document.getElementById('lista').scrollIntoView({behavior:'smooth'})">Entrar na lista</button>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-text fade-up">
+    <span class="hero-badge">Em breve</span>
+    <h1>Seu ciclo,<br/><em>registrado</em><br/>em uma conversa.</h1>
+    <p class="hero-sub">
+      Chega de abrir aplicativo que você esquece de usar. Com a Luma, é só mandar uma mensagem — e ela organiza tudo.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="#lista">Entrar na lista de espera</a>
+      <a class="btn-ghost" href="#como">Ver como funciona</a>
+    </div>
+  </div>
+
+  <div class="hero-visual fade-up" style="transition-delay:0.15s">
+    <div class="phone-frame">
+      <div class="phone-statusbar">
+        <span>9:41</span>
+        <span>◼◼◼ 🔋</span>
+      </div>
+      <div class="phone-header">
+        <div class="phone-avatar" aria-label="Agente Luma"></div>
+        <div class="phone-contact">
+          <div class="phone-contact-name">Luma</div>
+          <div class="phone-contact-status">Assistente de ciclo ✦</div>
+        </div>
+      </div>
+      <div class="phone-body" id="phone-body">
+        <!-- messages rendered by JS -->
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEMA -->
+<section class="problema">
+  <div class="section-inner">
+    <div class="fade-up">
+      <p class="section-tag">O problema</p>
+      <h2 class="section-h2">Você baixa o app.<br/><em>Mas esquece de abrir.</em></h2>
+      <p class="section-lead">
+        Apps de ciclo dependem de você lembrar de acessá-los, preencher campos e manter tudo atualizado. Na vida real, isso raramente acontece.
+      </p>
+    </div>
+    <div class="problema-cards">
+      <div class="pain-card fade-up" style="transition-delay:0.1s">
+        <span class="pain-icon">📱</span>
+        <h3>O app fica esquecido</h3>
+        <p>Depois de alguns dias sem abrir, o histórico fica incompleto e as previsões perdem sentido.</p>
+      </div>
+      <div class="pain-card fade-up" style="transition-delay:0.2s">
+        <span class="pain-icon">🗓</span>
+        <h3>Registro manual é chato</h3>
+        <p>Abrir, navegar até a tela certa, marcar sintomas um por um. Pouca gente faz isso no dia a dia.</p>
+      </div>
+      <div class="pain-card fade-up" style="transition-delay:0.3s">
+        <span class="pain-icon">💭</span>
+        <h3>A memória falha</h3>
+        <p>Quando você finalmente abre o app, já não lembra quando exatamente a menstruação começou ou acabou.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SOLUÇÃO -->
+<section class="solucao">
+  <div class="section-inner">
+    <div class="solucao-grid">
+      <div class="fade-up">
+        <p class="section-tag">A solução</p>
+        <h2 class="section-h2">Registre tudo do jeito que você <em>já conversa</em>.</h2>
+        <p class="section-lead" style="margin-bottom:2.5rem">
+          A Luma é uma assistente de ciclo que você acessa por mensagem. Sem instalar nada novo, sem aprender interface nova — só mandar mensagem como você já faz todo dia.
+        </p>
+        <div class="solucao-points">
+          <div class="point-row">
+            <div class="point-dot">🌙</div>
+            <div>
+              <h4>Linguagem natural</h4>
+              <p>Escreva como você fala: "menstruei hoje", "tô com cólica" ou "quando foi minha última menstruação?"</p>
+            </div>
+          </div>
+          <div class="point-row">
+            <div class="point-dot">📊</div>
+            <div>
+              <h4>Histórico organizado</h4>
+              <p>Tudo fica registrado e você pode consultar quando quiser, sem precisar lembrar onde salvou.</p>
+            </div>
+          </div>
+          <div class="point-row">
+            <div class="point-dot">🔔</div>
+            <div>
+              <h4>Lembretes opcionais</h4>
+              <p>Ative avisos sobre próxima menstruação ou anticoncepcional — só se quiser.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="fade-up solucao-visual" style="transition-delay:0.15s">
+        <div class="phone-frame">
+          <div class="phone-statusbar">
+            <span>9:41</span>
+            <span>◼︎◼︎◼︎ 🔋</span>
+          </div>
+          <div class="phone-header">
+            <div class="phone-avatar" aria-label="Agente Luma"></div>
+            <div class="phone-contact">
+              <div class="phone-contact-name">Luma</div>
+              <div class="phone-contact-status">Assistente de ciclo ✦</div>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="msg bot">
+              <div class="msg-bubble">Oi! Tô aqui quando precisar registrar algo 🌙</div>
+              <div class="msg-time">10:32</div>
+            </div>
+            <div class="msg user">
+              <div class="msg-bubble">tô com cólica forte hoje</div>
+              <div class="msg-time">10:33</div>
+            </div>
+            <div class="msg bot">
+              <div class="msg-bubble">Registrei cólica forte para hoje ✅<br/>Espero que melhore logo 💛</div>
+              <div class="msg-time">10:33</div>
+            </div>
+            <div class="convo-divider">— mais tarde —</div>
+            <div class="msg user">
+              <div class="msg-bubble">quando é minha próxima menstruação?</div>
+              <div class="msg-time">18:10</div>
+            </div>
+            <div class="msg bot">
+              <div class="msg-bubble">Pela sua média atual, ela está prevista para perto de 22/05. Mas pode variar um pouco — cada ciclo tem seu ritmo 🌿</div>
+              <div class="msg-time">18:10</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- O QUE REGISTRAR -->
+<section class="registrar">
+  <div class="section-inner">
+    <div class="fade-up">
+      <p class="section-tag">Funcionalidades</p>
+      <h2 class="section-h2">O que você poderá<br/><em>registrar e consultar</em></h2>
+      <p class="section-lead">Tudo em linguagem simples, sem formulários complicados.</p>
+    </div>
+    <div class="register-grid">
+      <div class="reg-card fade-up" style="transition-delay:0.05s">
+        <span class="reg-emoji">🔴</span>
+        <h4>Início da menstruação</h4>
+        <p>Só falar "menstruei hoje" — ela registra e inicia o ciclo.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.1s">
+        <span class="reg-emoji">✅</span>
+        <h4>Fim da menstruação</h4>
+        <p>"Acabou ontem" já é suficiente para fechar o ciclo.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.15s">
+        <span class="reg-emoji">💧</span>
+        <h4>Intensidade do fluxo</h4>
+        <p>Leve, médio ou intenso — você atualiza quando quiser.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.2s">
+        <span class="reg-emoji">😣</span>
+        <h4>Cólicas e sintomas</h4>
+        <p>Dor de cabeça, náusea, cansaço, inchaço e muito mais.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.25s">
+        <span class="reg-emoji">💭</span>
+        <h4>Humor e bem-estar</h4>
+        <p>Registre como você está se sentindo ao longo do ciclo.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.3s">
+        <span class="reg-emoji">🔔</span>
+        <h4>Lembretes</h4>
+        <p>Aviso antes da próxima menstruação ou para anticoncepcional.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.35s">
+        <span class="reg-emoji">📅</span>
+        <h4>Histórico do ciclo</h4>
+        <p>Consulte duração média, sintomas frequentes e padrões.</p>
+      </div>
+      <div class="reg-card fade-up" style="transition-delay:0.4s">
+        <span class="reg-emoji">🔒</span>
+        <h4>Registros íntimos</h4>
+        <p>Dados opcionais e privados, armazenados com cuidado.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMO FUNCIONA -->
+<section class="como" id="como">
+  <div class="section-inner">
+    <div class="fade-up" style="text-align:center">
+      <p class="section-tag">Passo a passo</p>
+      <h2 class="section-h2">Como funciona</h2>
+      <p class="section-lead" style="margin:0 auto">Simples assim.</p>
+    </div>
+    <div class="steps">
+      <div class="step fade-up" style="transition-delay:0.1s">
+        <div class="step-num">1</div>
+        <h4>Entre na lista</h4>
+        <p>Cadastre seu interesse aqui na página. É rápido e gratuito.</p>
+      </div>
+      <div class="step fade-up" style="transition-delay:0.2s">
+        <div class="step-num">2</div>
+        <h4>Receba o acesso</h4>
+        <p>Quando a Luma estiver disponível, você recebe um convite no WhatsApp.</p>
+      </div>
+      <div class="step fade-up" style="transition-delay:0.3s">
+        <div class="step-num">3</div>
+        <h4>Converse normalmente</h4>
+        <p>Mande mensagens como você faz com qualquer contato.</p>
+      </div>
+      <div class="step fade-up" style="transition-delay:0.4s">
+        <div class="step-num">4</div>
+        <h4>Tudo organizado</h4>
+        <p>A Luma registra, calcula previsões e responde quando você perguntar.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BENEFÍCIOS -->
+<section class="beneficios">
+  <div class="section-inner">
+    <div class="fade-up">
+      <p class="section-tag">Por que a Luma</p>
+      <h2 class="section-h2">Feita para a<br/><em>rotina real</em></h2>
+    </div>
+    <div class="benefits-grid">
+      <div class="benefit fade-up" style="transition-delay:0.05s">
+        <div class="benefit-icon">📲</div>
+        <h4>Sem abrir novo app</h4>
+        <p>Tudo via mensagem, no canal que você já usa todos os dias.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.1s">
+        <div class="benefit-icon">⚡</div>
+        <h4>Registro em segundos</h4>
+        <p>Uma mensagem curta já é suficiente. Sem campos, sem navegação.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.15s">
+        <div class="benefit-icon">📈</div>
+        <h4>Histórico organizado</h4>
+        <p>Seus ciclos ficam registrados e acessíveis quando você quiser.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.2s">
+        <div class="benefit-icon">🎯</div>
+        <h4>Previsões aproximadas</h4>
+        <p>A Luma estima a próxima menstruação com base no seu histórico.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.25s">
+        <div class="benefit-icon">🔔</div>
+        <h4>Lembretes opcionais</h4>
+        <p>Ative só o que faz sentido para a sua rotina.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.3s">
+        <div class="benefit-icon">💬</div>
+        <h4>Linguagem humana</h4>
+        <p>Nada de termos médicos ou menus confusos. Só conversa.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.35s">
+        <div class="benefit-icon">🔐</div>
+        <h4>Privacidade como prioridade</h4>
+        <p>Seus dados são seus. Pensado com consentimento desde o início.</p>
+      </div>
+      <div class="benefit fade-up" style="transition-delay:0.4s">
+        <div class="benefit-icon">🌙</div>
+        <h4>Simples e sem julgamentos</h4>
+        <p>Um espaço só seu, discreto e sem complicação.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRIVACIDADE -->
+<section class="privacidade">
+  <div class="section-inner">
+    <div class="fade-up">
+      <p class="section-tag">Confiança e privacidade</p>
+      <h2 class="section-h2" style="color:#fff">Seus dados de ciclo<br/><em style="color:var(--lavender)">são íntimos.</em></h2>
+      <p class="section-lead">
+        Por isso, a Luma está sendo pensada desde o início com consentimento, controle da usuária e respeito à privacidade.
+      </p>
+    </div>
+    <div class="privacy-points fade-up" style="transition-delay:0.1s">
+      <div class="privacy-item">
+        <div class="privacy-check">✓</div>
+        <p><strong>Consentimento explícito.</strong> Antes de qualquer uso, você autoriza o que pode ser armazenado — sem letras miúdas.</p>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-check">✓</div>
+        <p><strong>Controle dos seus dados.</strong> Você poderá solicitar exclusão ou exportação dos seus registros a qualquer momento.</p>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-check">✓</div>
+        <p><strong>Sem diagnósticos.</strong> A Luma organiza registros pessoais. Ela não faz diagnóstico de nenhum tipo.</p>
+      </div>
+      <div class="privacy-item">
+        <div class="privacy-check">✓</div>
+        <p><strong>Só para você.</strong> Seus registros são usados apenas para organizar o seu próprio histórico.</p>
+      </div>
+    </div>
+    <div class="privacy-disclaimer fade-up" style="transition-delay:0.2s">
+      A Luma é um assistente de organização pessoal e <strong style="color:#fff">não substitui orientação médica</strong>. Para questões de saúde, procure sempre um profissional de saúde.
+    </div>
+  </div>
+</section>
+
+<!-- PREÇOS -->
+<section class="precos" id="precos">
+  <div class="section-inner">
+    <div class="fade-up" style="text-align:center">
+      <p class="section-tag">Planos</p>
+      <h2 class="section-h2">Simples e transparente</h2>
+      <p class="section-lead">Escolha o plano que faz mais sentido para a sua rotina.</p>
+    </div>
+    <div class="plans-grid">
+
+      <!-- GRÁTIS -->
+      <div class="plan-card fade-up" style="transition-delay:0.05s">
+        <span class="plan-badge free">Acesso antecipado</span>
+        <div class="plan-name">Lista de espera</div>
+        <div class="plan-price">
+          <span class="plan-amount">Grátis</span>
+        </div>
+        <p class="plan-desc">Garanta seu lugar e seja uma das primeiras a testar a Luma quando lançarmos.</p>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check on">✓</span> Acesso antecipado</li>
+          <li><span class="check on">✓</span> Teste da primeira versão</li>
+          <li><span class="check on">✓</span> Feedback direto com a equipe</li>
+          <li><span class="check off">–</span> Lembretes automáticos</li>
+          <li><span class="check off">–</span> Lembrete de anticoncepcional</li>
+        </ul>
+        <button class="plan-cta free-btn" onclick="document.getElementById('lista').scrollIntoView({behavior:'smooth'})">Entrar na lista</button>
+        <p class="plan-note">Sem compromisso. Apenas cadastro de interesse.</p>
+      </div>
+
+      <!-- BÁSICO -->
+      <div class="plan-card fade-up" style="transition-delay:0.15s">
+        <span class="plan-badge basic">Básico</span>
+        <div class="plan-name">Básico</div>
+        <div class="plan-price">
+          <span class="plan-currency">R$</span>
+          <span class="plan-amount">5<span style="font-size:1.4rem">,90</span></span>
+          <span class="plan-period">/mês</span>
+        </div>
+        <p class="plan-desc">Tudo que você precisa para registrar seu ciclo de forma simples e sem esforço.</p>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check on">✓</span> Registro de menstruação por mensagem</li>
+          <li><span class="check on">✓</span> Registro de sintomas e fluxo</li>
+          <li><span class="check on">✓</span> Previsão da próxima menstruação</li>
+          <li><span class="check on">✓</span> Histórico do ciclo</li>
+          <li><span class="check off">–</span> Lembretes automáticos</li>
+          <li><span class="check off">–</span> Lembrete de anticoncepcional</li>
+        </ul>
+        <button class="plan-cta basic-btn" onclick="document.getElementById('lista').scrollIntoView({behavior:'smooth'})">Quero esse plano</button>
+        <p class="plan-note">Disponível no lançamento.</p>
+      </div>
+
+      <!-- COMPLETO -->
+      <div class="plan-card featured fade-up" style="transition-delay:0.25s">
+        <span class="plan-badge full">Mais escolhido</span>
+        <div class="plan-name">Essencial</div>
+        <div class="plan-price">
+          <span class="plan-currency">R$</span>
+          <span class="plan-amount">9<span style="font-size:1.4rem">,90</span></span>
+          <span class="plan-period">/mês</span>
+        </div>
+        <p class="plan-desc">Tudo do plano Básico, mais lembretes inteligentes para nunca ser pega de surpresa.</p>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check on">✓</span> Registro de menstruação por mensagem</li>
+          <li><span class="check on">✓</span> Registro de sintomas e fluxo</li>
+          <li><span class="check on">✓</span> Previsão da próxima menstruação</li>
+          <li><span class="check on">✓</span> Histórico do ciclo</li>
+          <li><span class="check on">✓</span> Aviso antes da próxima menstruação</li>
+          <li><span class="check on">✓</span> Lembrete de anticoncepcional</li>
+        </ul>
+        <button class="plan-cta full-btn" onclick="document.getElementById('lista').scrollIntoView({behavior:'smooth'})">Quero esse plano</button>
+        <p class="plan-note">Disponível no lançamento.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- EM DESENVOLVIMENTO -->
+<section class="desenvolvimento">
+  <div class="section-inner fade-up">
+    <span class="dev-badge">Em desenvolvimento</span>
+    <h2 class="section-h2">Ainda estamos construindo.<br/><em>Você pode ajudar.</em></h2>
+    <p class="section-lead">
+      A Luma ainda não está disponível. Estamos reunindo pessoas interessadas para testar a primeira versão e construir juntas uma experiência que realmente faça sentido na rotina.
+    </p>
+    <div class="dev-counter">
+      <div class="dev-stat">
+        <strong id="counter-num">0</strong>
+        <span>já na lista</span>
+      </div>
+      <div class="dev-stat">
+        <strong>1ª versão</strong>
+        <span>em construção</span>
+      </div>
+    </div>
+    <a class="btn-primary" href="#lista">Quero entrar na lista de espera</a>
+  </div>
+</section>
+
+<!-- CTA FINAL + FORM -->
+<section class="cta-final" id="lista">
+  <div class="section-inner">
+    <div class="fade-up">
+      <p class="section-tag">Lista de espera</p>
+      <h2 class="section-h2" style="color:#fff">Seja das primeiras<br/>a testar a <em style="color:var(--lavender)">Luma.</em></h2>
+      <p class="section-lead">Cadastre seu interesse. Quando a primeira versão estiver pronta, você recebe antes de todo mundo.</p>
+    </div>
+    <div class="form-wrapper fade-up" style="transition-delay:0.1s">
+
+      <!-- FORM -->
+      <div class="form-real" id="form-real">
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="f-nome">Seu nome *</label>
+            <input type="text" id="f-nome" placeholder="Como posso te chamar?" autocomplete="given-name" />
+            <span class="field-error" id="err-nome">Por favor, informe seu nome.</span>
+          </div>
+          <div class="form-field">
+            <label for="f-contato">WhatsApp *</label>
+            <input type="text" id="f-contato" placeholder="(11) 99999-9999" inputmode="tel" autocomplete="tel" />
+            <span class="field-error" id="err-contato">Por favor, informe um WhatsApp válido.</span>
+          </div>
+          <div class="form-field full">
+            <label>Qual plano você escolheria? *</label>
+            <div class="plan-selector" role="radiogroup" aria-label="Plano de interesse">
+              <label class="plan-option">
+                <input type="radio" name="f-plano" value="lista-espera" />
+                <span class="plan-option-card">
+                  <strong>Lista de espera</strong>
+                  <span>Quero acompanhar primeiro e conhecer a Luma quando lançar.</span>
+                </span>
+              </label>
+              <label class="plan-option">
+                <input type="radio" name="f-plano" value="basico" />
+                <span class="plan-option-card">
+                  <strong>Básico</strong>
+                  <span>Registro simples do ciclo por mensagem por R$ 5,90/mês.</span>
+                </span>
+              </label>
+              <label class="plan-option">
+                <input type="radio" name="f-plano" value="essencial" />
+                <span class="plan-option-card">
+                  <strong>Essencial</strong>
+                  <span>Inclui lembretes inteligentes por R$ 9,90/mês.</span>
+                </span>
+              </label>
+            </div>
+            <span class="field-error plan-error" id="err-plano">Escolha o plano que mais combina com você.</span>
+          </div>
+          <div class="form-field full">
+            <label for="f-dificuldade">Qual sua maior dificuldade com apps de ciclo? <em style="color:var(--text-light);font-style:normal;font-size:0.75rem">(opcional)</em></label>
+            <textarea id="f-dificuldade" placeholder="Escreva à vontade — sua resposta vai ajudar muito..."></textarea>
+          </div>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" id="f-consent" />
+          <label for="f-consent">
+            Concordo em ser contactada pela equipe da Luma quando o produto for lançado. Entendo que meus dados serão usados apenas para esse fim e que posso pedir exclusão a qualquer momento.
+          </label>
+        </div>
+        <span class="field-error" id="err-consent" style="margin-bottom:0.75rem">Você precisa aceitar para continuar.</span>
+        <button class="btn-submit" id="btn-submit" onclick="handleSubmit()">
+          ✦&nbsp; Quero entrar na lista de espera
+        </button>
+        <div class="form-status" id="form-status" aria-live="polite"></div>
+      </div>
+
+      <!-- SUCCESS -->
+      <div class="form-success" id="form-success">
+        <div class="success-icon">🌙</div>
+        <h3>Você está na lista!</h3>
+        <p>Obrigada por se interessar pela Luma. Quando a primeira versão estiver pronta, você será das primeiras a saber. 💛</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Luma</div>
+  <p>© 2026 Luma · Produto em desenvolvimento · Não substitui orientação médica</p>
+</footer>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = 'https://ebyfljiywmspltxycwhg.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVieWZsaml5d21zcGx0eHljd2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNjU4MTMsImV4cCI6MjA5MjY0MTgxM30.fKtAxCqpMu6k6utwGMsQqo5IeN13u29Xt9UqojSV5mY';
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  /* ── SCROLL NAV ── */
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  });
+
+  /* ── FADE-UP OBSERVER ── */
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.fade-up').forEach(el => obs.observe(el));
+
+  /* ── ANIMATED CHAT ── */
+  const messages = [
+    { type: 'user', text: 'menstruei hoje', time: '10:32' },
+    { type: 'bot',  text: 'Registrei o início da sua menstruação hoje ✅\nComo está o fluxo?', time: '10:32' },
+    { type: 'user', text: 'médio', time: '10:33' },
+    { type: 'bot',  text: 'Pronto, salvei como fluxo médio. Estou aqui se precisar registrar mais alguma coisa 💛', time: '10:33' },
+    { type: 'user', text: 'tô com uma cólica braba', time: '10:41' },
+    { type: 'bot',  text: 'Anotei cólica forte para hoje. Espero que melhore logo 🌿', time: '10:41' },
+  ];
+
+  const body = document.getElementById('phone-body');
+  let idx = 0;
+  function renderMsg(m) {
+    const el = document.createElement('div');
+    el.className = `msg ${m.type}`;
+    el.innerHTML = `<div class="msg-bubble">${m.text.replace(/\n/g,'<br/>')}</div><div class="msg-time">${m.time}</div>`;
+    el.style.opacity = '0'; el.style.transform = 'translateY(8px)';
+    body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.transition = 'opacity 0.35s, transform 0.35s';
+      el.style.opacity = '1'; el.style.transform = 'none';
+    });
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function showTyping() {
+    const t = document.createElement('div');
+    t.className = 'chat-typing'; t.id = 'typing';
+    t.innerHTML = '<span></span><span></span><span></span>';
+    body.appendChild(t);
+    body.scrollTop = body.scrollHeight;
+    return t;
+  }
+
+  async function playChat() {
+    for (let i = 0; i < messages.length; i++) {
+      await delay(i === 0 ? 900 : 1200);
+      if (messages[i].type === 'bot') {
+        const t = showTyping();
+        await delay(900);
+        t.remove();
+      }
+      renderMsg(messages[i]);
+    }
+    await delay(3000);
+    body.innerHTML = '';
+    idx = 0;
+    playChat();
+  }
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+  playChat();
+
+  const counterEl = document.getElementById('counter-num');
+  const formStatusEl = document.getElementById('form-status');
+
+  function setFormStatus(message, type = 'info') {
+    if (!message) {
+      formStatusEl.textContent = '';
+      formStatusEl.className = 'form-status';
+      return;
+    }
+
+    formStatusEl.textContent = message;
+    formStatusEl.className = `form-status show ${type}`;
+  }
+
+  function animateCounterTo(targetValue) {
+    const safeTarget = Math.max(0, Number(targetValue) || 0);
+    const startValue = Number(counterEl.textContent) || 0;
+    const duration = 900;
+    const startTime = performance.now();
+
+    function frame(now) {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const value = Math.round(startValue + (safeTarget - startValue) * eased);
+      counterEl.textContent = value.toLocaleString('pt-BR');
+      if (progress < 1) requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  async function refreshWaitlistCount() {
+    try {
+      const { data, error } = await supabaseClient.rpc('get_waitlist_count');
+      if (error) throw error;
+      animateCounterTo(data ?? 0);
+    } catch (error) {
+      console.error('Erro ao buscar contador da waitlist:', error);
+      counterEl.textContent = '—';
+    }
+  }
+
+  const countObs = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      refreshWaitlistCount();
+      countObs.disconnect();
+    }
+  }, { threshold: 0.5 });
+  countObs.observe(counterEl);
+
+  /* ── FORM ── */
+  function normalizeWhatsApp(value) {
+    const digits = value.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('55')) return digits;
+    if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+    return digits;
+  }
+
+  function isValidWhatsApp(value) {
+    const normalized = normalizeWhatsApp(value);
+    return normalized.length >= 12 && normalized.length <= 13;
+  }
+
+  function getSelectedPlan() {
+    const selected = document.querySelector('input[name="f-plano"]:checked');
+    return selected ? selected.value : '';
+  }
+
+  async function handleSubmit() {
+    const nome = document.getElementById('f-nome').value.trim();
+    const contato = document.getElementById('f-contato').value.trim();
+    const whatsappNormalizado = normalizeWhatsApp(contato);
+    const plano = getSelectedPlan();
+    const dificuldade = document.getElementById('f-dificuldade').value.trim();
+    const consent = document.getElementById('f-consent').checked;
+    const submitButton = document.getElementById('btn-submit');
+
+    document.getElementById('err-nome').classList.toggle('show', !nome);
+    document.getElementById('err-contato').classList.toggle('show', !isValidWhatsApp(contato));
+    document.getElementById('err-plano').classList.toggle('show', !plano);
+    document.getElementById('err-consent').classList.toggle('show', !consent);
+    setFormStatus('');
+
+    if (!nome || !isValidWhatsApp(contato) || !plano || !consent) return;
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'Enviando…';
+    setFormStatus('Enviando seu cadastro para a lista de espera…');
+
+    try {
+      const { data: alreadyRegistered, error: duplicateCheckError } = await supabaseClient
+        .rpc('is_waitlist_whatsapp_registered', { input_whatsapp: whatsappNormalizado });
+
+      if (duplicateCheckError) throw duplicateCheckError;
+
+      if (alreadyRegistered) {
+        setFormStatus('Esse WhatsApp já está cadastrado na lista de espera.', 'error');
+        submitButton.disabled = false;
+        submitButton.innerHTML = '✦&nbsp; Quero entrar na lista de espera';
+        return;
+      }
+
+      const payload = {
+        name: nome,
+        whatsapp: contato,
+        whatsapp_normalized: whatsappNormalizado,
+        desired_plan: plano,
+        challenge: dificuldade || null,
+        consent_accepted: consent,
+        source: 'landing-page',
+        page_path: window.location.pathname
+      };
+
+      const { error } = await supabaseClient
+        .from('waitlist_signups')
+        .insert(payload);
+
+      if (error) throw error;
+
+      document.getElementById('form-real').classList.add('hide');
+      document.getElementById('form-success').classList.add('show');
+      setFormStatus('');
+      refreshWaitlistCount();
+    } catch (error) {
+      console.error('Erro ao salvar lead no Supabase:', error);
+      const isDuplicate = error && (error.code === '23505' || String(error.message || '').toLowerCase().includes('duplicate'));
+      setFormStatus(
+        isDuplicate
+          ? 'Esse WhatsApp já está cadastrado na lista de espera.'
+          : 'Não consegui enviar agora. Verifique a configuração do Supabase e tente novamente.',
+        'error'
+      );
+      submitButton.disabled = false;
+      submitButton.innerHTML = '✦&nbsp; Quero entrar na lista de espera';
+    }
+  }
+</script>
+
+<!-- TWEAKS -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#c4a8e0",
+  "heroHeadline": "Seu ciclo, registrado em uma conversa.",
+  "ctaText": "Entrar na lista de espera",
+  "darkHero": true,
+  "showDevCounter": true
+}/*EDITMODE-END*/;
+
+function LumaTweaks() {
+  const { values, set } = useTweaks(TWEAK_DEFAULTS);
+
+  React.useEffect(() => {
+    document.documentElement.style.setProperty('--lavender', values.accentColor);
+    document.documentElement.style.setProperty('--lavender-lt', values.accentColor + '22');
+  }, [values.accentColor]);
+
+  return (
+    <TweaksPanel title="Tweaks — Luma">
+      <TweakSection title="Identidade">
+        <TweakColor label="Cor de destaque" id="accentColor" value={values.accentColor} onChange={v => set('accentColor', v)} />
+        <TweakText label="Headline do hero" id="heroHeadline" value={values.heroHeadline} onChange={v => {
+          set('heroHeadline', v);
+          const h1 = document.querySelector('.hero h1');
+          if (h1) {
+            const parts = v.split(',');
+            h1.innerHTML = parts.length > 1
+              ? `${parts[0]},<br/><em>${parts.slice(1).join(',').trim()}</em>`
+              : `<em>${v}</em>`;
+          }
+        }} />
+        <TweakText label="Texto do CTA" id="ctaText" value={values.ctaText} onChange={v => {
+          set('ctaText', v);
+          document.querySelectorAll('.btn-primary, .btn-submit').forEach(b => {
+            if (b.id === 'btn-submit') b.innerHTML = `✦&nbsp; ${v}`;
+          });
+        }} />
+      </TweakSection>
+      <TweakSection title="Seções">
+        <TweakToggle label="Mostrar contador na seção 'Em desenvolvimento'" id="showDevCounter" value={values.showDevCounter} onChange={v => {
+          set('showDevCounter', v);
+          const cnt = document.querySelector('.dev-counter');
+          if (cnt) cnt.style.display = v ? 'flex' : 'none';
+        }} />
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+const tweaksRoot = document.createElement('div');
+document.body.appendChild(tweaksRoot);
+ReactDOM.createRoot(tweaksRoot).render(<LumaTweaks />);
+</script>
+
+</body>
+</html>
