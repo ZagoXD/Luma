@@ -20,24 +20,6 @@ export function PricingSection() {
         />
         <div className="plans-grid">
           <PlanCard
-            badge="Acesso antecipado"
-            badgeClass="free"
-            name="Lista de espera"
-            price={<span className="plan-amount">Grátis</span>}
-            description="Garanta seu lugar e seja uma das primeiras a testar a Luma quando lançarmos."
-            features={[
-              { enabled: true, label: "Acesso antecipado" },
-              { enabled: true, label: "Teste da primeira versão" },
-              { enabled: true, label: "Feedback direto com a equipe" },
-              { enabled: false, label: "Lembretes automáticos" },
-              { enabled: false, label: "Lembrete de anticoncepcional" },
-            ]}
-            cta="Entrar na lista"
-            ctaClass="free-btn"
-            note="Sem compromisso. Apenas cadastro de interesse."
-            delay="0.05s"
-          />
-          <PlanCard
             badge="Básico"
             badgeClass="basic"
             name="Básico"

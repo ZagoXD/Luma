@@ -500,7 +500,7 @@
     }
     .cta-final .section-tag { color: var(--lavender); }
     .cta-final .section-h2 { color: #fff; }
-    .cta-final .section-lead { color: oklch(75% 0.04 295); margin-bottom: 3rem; }
+    .cta-final .section-lead { color: oklch(75% 0.04 295); margin: 0 auto 3rem; text-align: center; }
     .cta-final .section-inner { max-width: 920px; text-align: center; }
 
     .form-wrapper {
@@ -667,15 +667,18 @@
     /* ── PREÇOS ── */
     .precos {
       background: linear-gradient(180deg, oklch(97.6% 0.022 14) 0%, oklch(98.2% 0.016 82) 100%);
+      padding-bottom: 3rem;
     }
     .precos .section-h2 { text-align: center; margin: 0 auto 0.75rem; }
     .precos .section-tag { text-align: center; }
-    .precos .section-lead { text-align: center; margin: 0 auto 3.5rem; }
+    .precos .section-lead { text-align: center; margin: 0 auto 5.5rem; }
     .plans-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.5rem;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
       align-items: stretch;
+      max-width: 850px;
+      margin: 0 auto;
     }
     .plan-card {
       background: #fff;
@@ -684,6 +687,8 @@
       padding: 2rem 1.75rem;
       display: flex; flex-direction: column;
       transition: transform 0.2s, box-shadow 0.2s;
+      flex: 1;
+      max-width: 400px;
     }
     .plan-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px oklch(0% 0 0 / 0.08); }
     .plan-card.featured {
@@ -799,7 +804,7 @@
       .benefits-grid { grid-template-columns: repeat(2, 1fr); }
       .privacy-points { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
-      .plans-grid { grid-template-columns: 1fr; }
+      .plans-grid { flex-direction: column; align-items: center; }
       .plan-card.featured { transform: none; }
       .plan-selector { grid-template-columns: 1fr; }
     }

@@ -126,12 +126,12 @@ export function WaitlistSection() {
     <section className="cta-final" id="lista">
       <div className="section-inner">
         <div className="fade-up">
-          <p className="section-tag">Lista de espera</p>
-          <h2 className="section-h2" style={{ color: "#fff" }}>
-            Seja das primeiras
+          <p className="section-tag" style={{ textAlign: "center" }}>Lista de espera</p>
+          <h2 className="section-h2" style={{ color: "#fff", textAlign: "center" }}>
+            Seja uma das primeiras
             <br />a testar a <em style={{ color: "var(--lavender)" }}>Luma.</em>
           </h2>
-          <p className="section-lead">
+          <p className="section-lead" style={{ textAlign: "center", margin: "0 auto 3rem" }}>
             Cadastre seu interesse. Quando a primeira versão estiver pronta, você recebe antes de todo mundo.
           </p>
         </div>
@@ -161,7 +161,6 @@ export function WaitlistSection() {
                 <label>Qual plano você escolheria? *</label>
                 <div className="plan-selector" role="radiogroup" aria-label="Plano de interesse">
                   {[
-                    ["lista-espera", "Lista de espera", "Quero acompanhar primeiro e conhecer a Luma quando lançar."],
                     ["basico", "Básico", "Registro simples do ciclo por mensagem por R$ 5,90/mês."],
                     ["essencial", "Essencial", "Inclui lembretes inteligentes por R$ 9,90/mês."],
                   ].map(([value, title, text]) => (
