@@ -48,3 +48,15 @@ dist/
 build/
 out/
 
+# Web app / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/dist/
+web/build/
+web/.vercel/
+web/.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
