@@ -9,6 +9,7 @@ public sealed class ConversationService(
     LumaDbContext db,
     IConfiguration configuration,
     IOnboardingDataExtractor onboardingAi,
+    IConversationIntentExtractor conversationAi,
     IDateProvider dateProvider,
     ILogger<ConversationService> logger)
 {
@@ -17,7 +18,8 @@ public sealed class ConversationService(
     public async Task<string> HandleIncomingMessageAsync(IncomingMessage incoming)
     {
         var phone = PhoneNumber.Normalize(incoming.From);
-        var user = await db.Users.Include(existing => existing.Preference)
+        var user = await db.Users
+            .Include(existing => existing.Preference)
             .FirstOrDefaultAsync(existing => existing.PhoneNumber == phone);
 
         if (user is null)
@@ -54,10 +56,7 @@ public sealed class ConversationService(
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        logger.LogInformation(
-            "Processed message for user {UserId} at step {Step}",
-            user.Id,
-            user.OnboardingStep);
+        logger.LogInformation("Processed message for user {UserId} at step {Step}", user.Id, user.OnboardingStep);
 
         return reply;
     }
@@ -68,17 +67,12 @@ public sealed class ConversationService(
 
         if (user.OnboardingStep is OnboardingSteps.ConsentDeclined)
         {
-            if (IsAffirmative(body))
-            {
-                return await AcceptConsentAsync(user);
-            }
-
-            return InitialConsentMessage();
+            return IsAffirmative(body) ? await AcceptConsentAsync(user) : InitialConsentMessage();
         }
 
         if (user.OnboardingStep is OnboardingSteps.UnderageBlocked)
         {
-            return "Por segurança, a Luma ainda não pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
+            return "Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
         }
 
         if (user.OnboardingStep != OnboardingSteps.Completed)
@@ -86,7 +80,10 @@ public sealed class ConversationService(
             return await ContinueOnboardingAsync(user, body, rawBody);
         }
 
-        if (SafetyGuardrail.ShouldBlock(body))
+        var intent = await ExtractConversationIntentAsync(body, rawBody, Today());
+
+        if (SafetyGuardrail.ShouldBlock(body)
+            && (intent.Intent != ConversationIntents.PregnancyPositive || !IsPregnancyPositiveStatement(body)))
         {
             return SafetyGuardrail.SafeReply;
         }
@@ -94,23 +91,25 @@ public sealed class ConversationService(
         if (user.PendingAction == PendingActions.AwaitingFlowIntensity)
         {
             var pendingFlow = ParseFlowIntensity(body);
-            if (pendingFlow is null)
+            if (pendingFlow is not null && IsFlowOnlyResponse(body))
             {
-                return "Como está o fluxo?\n1. Leve\n2. Médio\n3. Intenso\n4. Prefiro não informar";
+                user.PendingAction = null;
+                await AddOrReplaceFlowEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), Today(), pendingFlow);
+
+                return pendingFlow == "unknown"
+                    ? "Tudo bem, deixei o fluxo de hoje sem informar."
+                    : $"Atualizei aqui. Hoje ficou registrado como fluxo {FlowLabel(pendingFlow)}.";
+            }
+
+            if (!LooksLikeKnownCompletedIntent(body, intent))
+            {
+                return "Como esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
             }
 
             user.PendingAction = null;
-            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.FlowUpdate, Today(), new
-            {
-                flow_intensity = pendingFlow
-            });
-
-            return pendingFlow == "unknown"
-                ? "Tudo bem, deixei o fluxo de hoje sem informar."
-                : $"Atualizado. Hoje ficou registrado como fluxo {FlowLabel(pendingFlow)}.";
         }
 
-        return await HandleCompletedUserMessageAsync(user, body, rawBody);
+        return await HandleCompletedUserMessageAsync(user, body, rawBody, intent);
     }
 
     private async Task<string> ContinueOnboardingAsync(LumaUser user, string body, string rawBody)
@@ -128,7 +127,7 @@ public sealed class ConversationService(
                 if (IsNegative(body))
                 {
                     user.OnboardingStep = OnboardingSteps.ConsentDeclined;
-                    return "Tudo bem. Sem o seu consentimento eu não posso armazenar dados do ciclo ou continuar o cadastro. Se mudar de ideia, responda \"aceito\".";
+                    return "Tudo bem. Sem o seu consentimento eu nao posso armazenar dados do ciclo ou continuar o cadastro. Se mudar de ideia, responda \"aceito\".";
                 }
 
                 return InitialConsentMessage();
@@ -147,7 +146,7 @@ public sealed class ConversationService(
                 var name = rawBody.Trim();
                 if (!IsLikelyPlainDisplayName(name))
                 {
-                    return MisunderstoodMessage("Pode responder só com seu primeiro nome ou apelido. Por exemplo: \"Nay\" ou \"Pode me chamar de Nay\".");
+                    return MisunderstoodMessage("Pode responder so com seu primeiro nome ou apelido. Por exemplo: \"Nay\" ou \"Pode me chamar de Nay\".");
                 }
 
                 user.DisplayName = name;
@@ -173,10 +172,10 @@ public sealed class ConversationService(
                 {
                     user.IsAdultConfirmed = false;
                     user.OnboardingStep = OnboardingSteps.UnderageBlocked;
-                    return "Obrigada por responder. Por segurança, a Luma ainda não pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
+                    return "Obrigada por responder. Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
                 }
 
-                return MisunderstoodMessage("Você pode responder \"sim\", \"não\" ou algo como \"tenho 23 anos\".");
+                return MisunderstoodMessage("Voce pode responder \"sim\", \"nao\" ou algo como \"tenho 23 anos\".");
 
             case OnboardingSteps.AwaitingLastPeriodStart:
                 var extractedFromPeriodStep = await ExtractOnboardingDataAsync(body, rawBody, today);
@@ -193,18 +192,15 @@ public sealed class ConversationService(
                     return NextOnboardingPrompt(user, new OnboardingExtraction { LastPeriodUnknown = true });
                 }
 
-                var date = DateParser.ParseFlexibleDate(rawBody, Today());
+                var date = DateParser.ParseFlexibleDate(rawBody, today);
                 if (date is null)
                 {
-                    return MisunderstoodMessage("Pode responder como \"10/04\", \"dia 10\", \"começou há 3 dias\", \"ontem\" ou \"não lembro\".");
+                    return MisunderstoodMessage("Pode responder como \"10/04\", \"dia 10\", \"comecou ha 3 dias\", \"ontem\" ou \"nao lembro\".");
                 }
 
                 EnsurePreference(user).LastPeriodStartDate = date.Value;
                 var onboardingCycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, date.Value, CycleStatus.Unknown);
-                await AddCycleEventAsync(user.Id, onboardingCycle.Id, CycleEventTypes.PeriodStart, date.Value, new
-                {
-                    onboarding = true
-                });
+                await AddCycleEventAsync(user.Id, onboardingCycle.Id, CycleEventTypes.PeriodStart, date.Value, new { onboarding = true });
                 user.OnboardingStep = OnboardingSteps.AwaitingAverageCycleLength;
                 return NextOnboardingPrompt(user, new OnboardingExtraction { LastPeriodStartDate = date.Value });
 
@@ -224,7 +220,7 @@ public sealed class ConversationService(
 
                 if (cycleLength is < 21 or > 45 or null)
                 {
-                    return MisunderstoodMessage("Me diga um número entre 21 e 45 dias. Se não souber, responda \"não sei\" e uso 28 dias por enquanto.");
+                    return MisunderstoodMessage("Me diga um numero entre 21 e 45 dias. Se nao souber, responda \"nao sei\" e uso 28 dias por enquanto.");
                 }
 
                 EnsurePreference(user).AverageCycleLength = cycleLength.Value;
@@ -242,12 +238,24 @@ public sealed class ConversationService(
                 var periodLength = MessageText.ExtractFirstInteger(body);
                 if (periodLength is < 2 or > 10 or null)
                 {
-                    return MisunderstoodMessage("Me diga um número entre 2 e 10 dias para a duração média da menstruação.");
+                    return MisunderstoodMessage("Me diga um numero entre 2 e 10 dias para a duracao media da menstruacao.");
                 }
 
                 EnsurePreference(user).AveragePeriodLength = periodLength.Value;
-                user.OnboardingStep = OnboardingSteps.Completed;
+                user.OnboardingStep = OnboardingSteps.AwaitingContraceptiveMethod;
                 return NextOnboardingPrompt(user, new OnboardingExtraction { AveragePeriodLength = periodLength.Value });
+
+            case OnboardingSteps.AwaitingContraceptiveMethod:
+                var extractedFromContraceptiveStep = await ExtractOnboardingDataAsync(body, rawBody, today);
+                var contraceptive = extractedFromContraceptiveStep.ContraceptiveType ?? ParseContraceptiveType(body);
+                if (contraceptive is null)
+                {
+                    return MisunderstoodMessage("Pode responder algo como \"tomo pilula\", \"uso DIU\", \"uso camisinha\", \"nao uso\" ou \"prefiro nao informar\".");
+                }
+
+                ApplyContraceptivePreference(user, contraceptive);
+                user.OnboardingStep = OnboardingSteps.Completed;
+                return NextOnboardingPrompt(user, new OnboardingExtraction { ContraceptiveType = contraceptive });
 
             default:
                 user.OnboardingStep = OnboardingSteps.AwaitingConsent;
@@ -303,10 +311,7 @@ public sealed class ConversationService(
                 {
                     EnsurePreference(user).LastPeriodStartDate = extraction.LastPeriodStartDate.Value;
                     var onboardingCycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, extraction.LastPeriodStartDate.Value, CycleStatus.Unknown);
-                    await AddCycleEventAsync(user.Id, onboardingCycle.Id, CycleEventTypes.PeriodStart, extraction.LastPeriodStartDate.Value, new
-                    {
-                        onboarding = true
-                    });
+                    await AddCycleEventAsync(user.Id, onboardingCycle.Id, CycleEventTypes.PeriodStart, extraction.LastPeriodStartDate.Value, new { onboarding = true });
                     user.OnboardingStep = OnboardingSteps.AwaitingAverageCycleLength;
                     moved = true;
                 }
@@ -322,6 +327,13 @@ public sealed class ConversationService(
             if (user.OnboardingStep == OnboardingSteps.AwaitingAveragePeriodLength && extraction.AveragePeriodLength is not null)
             {
                 EnsurePreference(user).AveragePeriodLength = extraction.AveragePeriodLength.Value;
+                user.OnboardingStep = OnboardingSteps.AwaitingContraceptiveMethod;
+                moved = true;
+            }
+
+            if (user.OnboardingStep == OnboardingSteps.AwaitingContraceptiveMethod && extraction.ContraceptiveType is not null)
+            {
+                ApplyContraceptivePreference(user, extraction.ContraceptiveType);
                 user.OnboardingStep = OnboardingSteps.Completed;
                 moved = true;
             }
@@ -331,6 +343,7 @@ public sealed class ConversationService(
     private static OnboardingExtraction ExtractDeterministicOnboardingData(string body, string rawBody, DateOnly today)
     {
         var extraction = new OnboardingExtraction();
+
         var name = TryExtractDisplayName(body, rawBody);
         if (name is not null)
         {
@@ -367,11 +380,13 @@ public sealed class ConversationService(
             extraction.AverageCycleLength = firstInteger;
         }
 
-        if ((body.Contains("dura", StringComparison.Ordinal) || body.Contains("menstruacao", StringComparison.Ordinal) || body.Contains("menstruação", StringComparison.Ordinal))
+        if ((body.Contains("dura", StringComparison.Ordinal) || body.Contains("menstruacao", StringComparison.Ordinal))
             && firstInteger is >= 2 and <= 10)
         {
             extraction.AveragePeriodLength = firstInteger;
         }
+
+        extraction.ContraceptiveType = ParseContraceptiveType(body);
 
         return extraction;
     }
@@ -390,6 +405,7 @@ public sealed class ConversationService(
         target.LastPeriodUnknown = target.LastPeriodUnknown || source.LastPeriodUnknown;
         target.AverageCycleLength ??= source.AverageCycleLength;
         target.AveragePeriodLength ??= source.AveragePeriodLength;
+        target.ContraceptiveType ??= source.ContraceptiveType;
     }
 
     private static void RemoveUnsafeInferences(OnboardingExtraction extraction, string body)
@@ -410,170 +426,144 @@ public sealed class ConversationService(
         }
     }
 
-    private static bool HasExplicitAgeEvidence(string body)
+    private async Task<ConversationIntent> ExtractConversationIntentAsync(string body, string rawBody, DateOnly today)
     {
-        return IsAffirmative(body)
-            || IsNegative(body)
-            || body.Contains("anos", StringComparison.Ordinal)
-            || body.Contains("idade", StringComparison.Ordinal)
-            || body.Contains("maior de idade", StringComparison.Ordinal)
-            || body.Contains("maior", StringComparison.Ordinal)
-            || body.Contains("18+", StringComparison.Ordinal);
+        var deterministic = ExtractDeterministicConversationIntent(body, rawBody, today);
+        if (ShouldUseAiForOnboarding(rawBody))
+        {
+            var ai = await conversationAi.ExtractAsync(rawBody, today);
+            MergeConversationIntent(deterministic, ai);
+        }
+
+        return deterministic;
     }
 
-    private static bool ShouldUseAiForOnboarding(string rawBody)
+    private static ConversationIntent ExtractDeterministicConversationIntent(string body, string rawBody, DateOnly today)
     {
-        return rawBody.Any(char.IsLetter) && rawBody.Trim().Length >= 8;
-    }
+        var intent = new ConversationIntent();
 
-    private static string? TryExtractDisplayName(string body, string rawBody)
-    {
-        var markers = new[]
+        if (IsLumaIdentityQuestion(body))
         {
-            "meu nome e ",
-            "meu nome é ",
-            "me chamo ",
-            "pode me chamar de ",
-            "sou a ",
-            "sou "
-        };
+            intent.Intent = ConversationIntents.LumaIdentityQuestion;
+            return intent;
+        }
 
-        foreach (var marker in markers)
+        if (IsLastSexualActivityQuestion(body))
         {
-            var index = body.IndexOf(marker, StringComparison.Ordinal);
-            if (index < 0)
+            intent.Intent = ConversationIntents.LastSexualActivityQuestion;
+            return intent;
+        }
+
+        if (IsPregnancyWeeksQuestion(body))
+        {
+            intent.Intent = ConversationIntents.PregnancyWeeksQuestion;
+            return intent;
+        }
+
+        if (IsPregnancyDueDateQuestion(body))
+        {
+            intent.Intent = ConversationIntents.PregnancyDueDateQuestion;
+            return intent;
+        }
+
+        if (IsPregnancyPositiveStatement(body))
+        {
+            intent.Intent = ConversationIntents.PregnancyPositive;
+            intent.Date = today;
+            intent.GestationalWeeks = ParseGestationalWeeks(body);
+            intent.LastPeriodDate = DateParser.ParseFlexibleDate(rawBody, today);
+            if (intent.GestationalWeeks is not null)
             {
-                continue;
+                intent.LastPeriodDate = today.AddDays(-(intent.GestationalWeeks.Value * 7));
             }
 
-            var normalizedNameStart = index + marker.Length;
-            var normalizedCandidate = body[normalizedNameStart..].Split(',', '.', ';', '\n').FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(normalizedCandidate))
-            {
-                continue;
-            }
-
-            var rawCandidate = rawBody.Trim().Split(',', '.', ';', '\n')
-                .FirstOrDefault(part => MessageText.Normalize(part).Contains(normalizedCandidate.Trim(), StringComparison.Ordinal));
-
-            var candidate = rawCandidate is null
-                ? normalizedCandidate.Trim()
-                : rawCandidate[(Math.Max(0, rawCandidate.Length - normalizedCandidate.Length))..].Trim();
-
-            var firstWord = candidate.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-            if (firstWord is { Length: >= 2 and <= 60 } && firstWord.All(ch => char.IsLetter(ch) || ch is '\'' or '-'))
-            {
-                return char.ToUpperInvariant(firstWord[0]) + firstWord[1..];
-            }
+            intent.EstimatedDueDate = intent.LastPeriodDate?.AddDays(280);
+            return intent;
         }
 
-        return null;
-    }
-
-    private static bool IsLikelyPlainDisplayName(string value)
-    {
-        var trimmed = value.Trim();
-        if (trimmed.Length is < 2 or > 60)
+        if (IsPregnancyBleeding(body))
         {
-            return false;
+            intent.Intent = ConversationIntents.PregnancyBleeding;
+            intent.Date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+            return intent;
         }
 
-        var normalized = MessageText.Normalize(trimmed);
-        var blockedTerms = new[]
+        if (IsPrenatalAppointment(body))
         {
-            "ciclo",
-            "menstru",
-            "idade",
-            "anos",
-            "dia ",
-            "hoje",
-            "ontem",
-            "aceito",
-            "nao",
-            "não",
-            "sim"
-        };
-
-        if (blockedTerms.Any(term => normalized.Contains(term, StringComparison.Ordinal)))
-        {
-            return false;
+            intent.Intent = ConversationIntents.PrenatalAppointment;
+            intent.Date = ParseUpcomingDate(rawBody, today) ?? today;
+            return intent;
         }
 
-        var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return words.Length <= 2 && words.All(word => word.All(ch => char.IsLetter(ch) || ch is '\'' or '-'));
-    }
-
-    private static int? TryExtractAge(string body)
-    {
-        if (!body.Contains("anos", StringComparison.Ordinal) && !body.Contains("idade", StringComparison.Ordinal))
+        if (IsUltrasound(body))
         {
-            return null;
+            intent.Intent = ConversationIntents.Ultrasound;
+            intent.Date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+            return intent;
         }
 
-        var age = MessageText.ExtractFirstInteger(body);
-        return age is >= 1 and <= 120 ? age : null;
-    }
-
-    private static string NextOnboardingPrompt(LumaUser user, OnboardingExtraction? captured = null)
-    {
-        var firstContact = captured?.DisplayName is not null;
-        var manyDetails = CountCapturedFields(captured) >= 2;
-        var prefix = string.IsNullOrWhiteSpace(user.DisplayName) ? "" : $"{user.DisplayName}, ";
-
-        return user.OnboardingStep switch
+        if (IsPregnancySymptom(body))
         {
-            OnboardingSteps.AwaitingDisplayName => "Para eu deixar nossa conversa mais pessoal, como devo te chamar? Pode mandar só seu primeiro nome ou apelido.",
-            OnboardingSteps.AwaitingAgeConfirmation => firstContact
-                ? $"Olá, {user.DisplayName}, prazer em conhecê-la. Meu nome é Luma e vou ser sua assistente de ciclo por aqui.\n\nAntes de seguirmos, você poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Não"
-                : $"{prefix}antes de continuar, você poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Não",
-            OnboardingSteps.AwaitingLastPeriodStart => manyDetails
-                ? $"{prefix}obrigada por já me passar essas informações. Agora me diz: qual foi o primeiro dia da sua última menstruação?\n\nPode responder tipo \"começou dia 10/04\" ou \"não lembro\"."
-                : $"{prefix}obrigada por confirmar. Qual foi o primeiro dia da sua última menstruação?\n\nPode responder tipo \"começou dia 10/04\" ou \"não lembro\".",
-            OnboardingSteps.AwaitingAverageCycleLength => manyDetails
-                ? $"Prazer em conhecê-la, {user.DisplayName}. Obrigada por já me passar essas informações. Para finalizar seu cadastro, me diz: seu ciclo costuma ter quantos dias?\n\nSe não souber, posso começar usando 28 dias e ir ajustando com o tempo."
-                : $"{prefix}perfeito, obrigada. Seu ciclo costuma ter quantos dias?\n\nSe não souber, posso começar usando 28 dias e ir ajustando com o tempo.",
-            OnboardingSteps.AwaitingAveragePeriodLength => manyDetails
-                ? $"{prefix}ótimo, já deixei esses dados iniciais organizados. Só falta uma coisinha: sua menstruação costuma durar quantos dias?"
-                : $"{prefix}entendi. Sua menstruação costuma durar quantos dias?",
-            OnboardingSteps.Completed => CompletedOnboardingMessage(user, captured),
-            OnboardingSteps.UnderageBlocked => "Obrigada por responder. Por segurança, a Luma ainda não pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.",
-            _ => InitialConsentMessage()
-        };
-    }
-
-    private static int CountCapturedFields(OnboardingExtraction? captured)
-    {
-        if (captured is null)
-        {
-            return 0;
+            intent.Intent = ConversationIntents.PregnancySymptom;
+            intent.Date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+            var symptom = ParseSymptoms(body).FirstOrDefault();
+            intent.Symptom = string.IsNullOrWhiteSpace(symptom.Key) ? "symptom" : symptom.Key;
+            intent.Intensity = ParseSymptomIntensity(body);
+            return intent;
         }
 
-        var count = 0;
-        if (captured.DisplayName is not null) count++;
-        if (captured.IsAdultConfirmed is not null) count++;
-        if (captured.LastPeriodStartDate is not null || captured.LastPeriodDaysAgo is not null || captured.LastPeriodUnknown) count++;
-        if (captured.AverageCycleLength is not null) count++;
-        if (captured.AveragePeriodLength is not null) count++;
-        return count;
+        if (IsSexualActivity(body))
+        {
+            intent.Intent = ConversationIntents.SexualActivity;
+            intent.Date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+            intent.Protected = ParseProtectedValue(body);
+            return intent;
+        }
+
+        if (LooksLikeQuestion(body) && !LooksLikeKnownCompletedIntent(body, new ConversationIntent()))
+        {
+            intent.Intent = ConversationIntents.OutOfScope;
+        }
+
+        return intent;
     }
 
-    private Task<string> AcceptConsentAsync(LumaUser user)
+    private static void MergeConversationIntent(ConversationIntent target, ConversationIntent? source)
     {
-        user.ConsentAcceptedAt = DateTimeOffset.UtcNow;
-        user.OnboardingStep = OnboardingSteps.AwaitingDisplayName;
+        if (source is null || source.Confidence is < 0.55)
+        {
+            return;
+        }
 
-        db.Consents.AddRange(
-            NewConsent(user.Id, "privacy_policy"),
-            NewConsent(user.Id, "terms_of_use"),
-            NewConsent(user.Id, "health_data_processing"),
-            NewConsent(user.Id, "whatsapp_contact"));
-
-        return Task.FromResult("Obrigada por confiar em mim. Para eu deixar nossa conversa mais pessoal, como devo te chamar?");
+        target.Intent ??= source.Intent;
+        target.Date ??= source.Date;
+        target.GestationalWeeks ??= source.GestationalWeeks;
+        target.LastPeriodDate ??= source.LastPeriodDate;
+        target.EstimatedDueDate ??= source.EstimatedDueDate;
+        target.Protected ??= source.Protected;
+        target.Symptom ??= source.Symptom;
+        target.Intensity ??= source.Intensity;
+        target.Confidence ??= source.Confidence;
     }
 
-    private async Task<string> HandleCompletedUserMessageAsync(LumaUser user, string body, string rawBody)
+    private async Task<string> HandleCompletedUserMessageAsync(LumaUser user, string body, string rawBody, ConversationIntent intent)
     {
         var today = Today();
+
+        if (user.PendingAction == PendingActions.AwaitingPregnancyReference)
+        {
+            return await HandlePregnancyReferenceAsync(user, body, rawBody, intent, today);
+        }
+
+        if (intent.Intent == ConversationIntents.LumaIdentityQuestion)
+        {
+            return LumaIdentityMessage();
+        }
+
+        if (intent.Intent == ConversationIntents.OutOfScope)
+        {
+            return OutOfScopeMessage();
+        }
 
         if (IsHelp(body))
         {
@@ -587,62 +577,74 @@ public sealed class ConversationService(
 
         if (body.Contains("apagar", StringComparison.Ordinal) || body.Contains("excluir", StringComparison.Ordinal))
         {
-            return "Eu posso apagar seus dados, mas essa ação precisa de confirmação. Para este MVP local, me avise no painel/admin ou implemente o fluxo definitivo antes de usar em produção.";
+            return "Eu posso apagar seus dados, mas essa acao precisa de confirmacao. Para este MVP local, me avise no painel/admin ou implemente o fluxo definitivo antes de usar em producao.";
         }
 
-        if (IsPeriodStart(body))
+        if (intent.Intent == ConversationIntents.LastSexualActivityQuestion)
         {
-            var date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
-            var periodFlow = ParseFlowIntensity(body);
-            var cycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, date);
-            EnsurePreference(user).LastPeriodStartDate = date;
+            return await BuildLastSexualActivityReplyAsync(user.Id);
+        }
 
-            await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodStart, date, new { });
+        if (intent.Intent == ConversationIntents.PregnancyWeeksQuestion)
+        {
+            return await BuildPregnancyWeeksReplyAsync(user.Id, today);
+        }
 
-            if (periodFlow is not null)
+        if (intent.Intent == ConversationIntents.PregnancyDueDateQuestion)
+        {
+            return await BuildPregnancyDueDateReplyAsync(user.Id);
+        }
+
+        if (intent.Intent == ConversationIntents.PregnancyPositive)
+        {
+            return await HandlePregnancyPositiveAsync(user, intent, today);
+        }
+
+        var activePregnancy = await GetActivePregnancyAsync(user.Id);
+        if (activePregnancy is not null)
+        {
+            if (intent.Intent == ConversationIntents.PregnancyBleeding)
             {
-                await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.FlowUpdate, date, new { flow_intensity = periodFlow });
-                return $"Registrei o início da sua menstruação em {FormatDate(date)} com fluxo {FlowLabel(periodFlow)}.";
+                return await HandlePregnancyBleedingAsync(user.Id, intent.Date ?? DateParser.ParseFlexibleDate(rawBody, today) ?? today);
             }
 
-            user.PendingAction = PendingActions.AwaitingFlowIntensity;
-            return $"Registrei o início da sua menstruação em {FormatDate(date)}.\n\nComo está o fluxo?\n1. Leve\n2. Médio\n3. Intenso\n4. Prefiro não informar";
-        }
-
-        if (IsPeriodEnd(body))
-        {
-            var date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
-            var cycle = await db.Cycles
-                .Where(existing => existing.UserId == user.Id && existing.Status == CycleStatus.Ongoing)
-                .OrderByDescending(existing => existing.StartDate)
-                .FirstOrDefaultAsync();
-
-            if (cycle is null)
+            if (intent.Intent == ConversationIntents.PrenatalAppointment)
             {
-                await AddCycleEventAsync(user.Id, null, CycleEventTypes.PeriodEnd, date, new { });
-                return $"Registrei que sua menstruação terminou em {FormatDate(date)}. Ainda não encontrei um ciclo aberto para calcular a duração.";
+                var date = intent.Date ?? ParseUpcomingDate(rawBody, today) ?? today;
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.PrenatalAppointment, date, new { pregnancy_id = activePregnancy.Id });
+                return $"Registrei sua consulta de pre-natal em {FormatDate(date)}. Leve esse historico como apoio, mas mantenha sempre o acompanhamento com seu medico ou obstetra.";
             }
 
-            cycle.EndDate = date;
-            cycle.Status = CycleStatus.Finished;
-            cycle.UpdatedAt = DateTimeOffset.UtcNow;
-            await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodEnd, date, new { });
+            if (intent.Intent == ConversationIntents.Ultrasound)
+            {
+                var date = intent.Date ?? DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.Ultrasound, date, new { pregnancy_id = activePregnancy.Id });
+                return $"Registrei o ultrassom em {FormatDate(date)}. Fico feliz em te ajudar a organizar esse acompanhamento por aqui.";
+            }
 
-            var days = Math.Max(1, date.DayNumber - cycle.StartDate.DayNumber + 1);
-            var nextPeriod = cycle.StartDate.AddDays(EnsurePreference(user).AverageCycleLength);
-            return $"Registrei que sua menstruação terminou em {FormatDate(date)}. Ela durou cerca de {days} dias neste ciclo. Pela sua média atual, a próxima menstruação está prevista para perto de {FormatDate(nextPeriod)}.";
+            if (intent.Intent == ConversationIntents.PregnancySymptom)
+            {
+                var symptom = intent.Symptom ?? ParseSymptoms(body).FirstOrDefault().Key ?? "symptom";
+                var intensity = intent.Intensity ?? ParseSymptomIntensity(body);
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.PregnancySymptom, intent.Date ?? today, new
+                {
+                    pregnancy_id = activePregnancy.Id,
+                    symptom,
+                    intensity
+                });
+
+                return "Registrei esse sintoma na sua gravidez. Se vier com dor forte, febre, tontura, sangramento, perda de liquido ou mal-estar importante, fale com seu medico ou obstetra.";
+            }
         }
 
-        var symptom = ParseSymptom(body);
-        if (symptom is not null)
+        if (IsLastSymptomQuestion(body))
         {
-            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.Symptom, today, new
-            {
-                symptom = symptom.Value.Key,
-                intensity = symptom.Value.Intensity
-            });
+            return await BuildLastSymptomReplyAsync(user.Id);
+        }
 
-            return $"Registrei {symptom.Value.Label} para hoje. Se vier com dor muito forte, sangramento intenso, febre, tontura ou mal-estar importante, procure orientação médica.";
+        if (IsLastPeriodQuestion(body))
+        {
+            return BuildLastPeriodReply(user);
         }
 
         if (IsDelayQuestion(body))
@@ -655,29 +657,115 @@ public sealed class ConversationService(
             return BuildNextPeriodReply(user);
         }
 
-        if (IsSexualActivity(body))
+        if (IsPeriodStart(body))
+        {
+            var date = InferPeriodStartDate(body, rawBody, today);
+            var periodFlow = ParseFlowIntensity(body);
+            var cycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, date);
+            EnsurePreference(user).LastPeriodStartDate = date;
+
+            await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodStart, date, new { });
+
+            if (periodFlow is not null)
+            {
+                await AddOrReplaceFlowEventAsync(user.Id, cycle.Id, date, periodFlow);
+                return $"Registrei o inicio da sua menstruacao em {FormatDate(date)} com fluxo {FlowLabel(periodFlow)}. Vou considerar esse como o inicio do seu ciclo atual.";
+            }
+
+            user.PendingAction = PendingActions.AwaitingFlowIntensity;
+            return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
+        }
+
+        if (IsPeriodEnd(body))
         {
             var date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
-            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.SexualActivity, date, new { });
-            return $"Registrei a relação em {FormatDate(date)}. Esse dado fica salvo apenas para seu histórico; eu não uso isso para afirmar gravidez ou diagnóstico.";
+            var cycle = await db.Cycles
+                .Where(existing => existing.UserId == user.Id && existing.Status == CycleStatus.Ongoing)
+                .OrderByDescending(existing => existing.StartDate)
+                .FirstOrDefaultAsync();
+
+            if (cycle is null)
+            {
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.PeriodEnd, date, new { needs_period_start = true });
+                return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ainda nao encontrei um ciclo aberto para calcular a duracao; se puder, me diga quando ela comecou.";
+            }
+
+            if (date < cycle.StartDate)
+            {
+                return $"A data de termino ficou antes do inicio do ciclo ({FormatDate(cycle.StartDate)}). Pode me mandar a data de termino de novo?";
+            }
+
+            cycle.EndDate = date;
+            cycle.Status = CycleStatus.Finished;
+            cycle.UpdatedAt = DateTimeOffset.UtcNow;
+            await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodEnd, date, new { });
+
+            var days = Math.Max(1, date.DayNumber - cycle.StartDate.DayNumber + 1);
+            var nextPeriod = cycle.StartDate.AddDays(EnsurePreference(user).AverageCycleLength);
+            return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ela durou cerca de {days} dias neste ciclo. Pela sua media atual, a proxima menstruacao esta prevista para perto de {FormatDate(nextPeriod)}.";
+        }
+
+        var symptoms = ParseSymptoms(body);
+        if (symptoms.Count > 0)
+        {
+            foreach (var symptom in symptoms)
+            {
+                await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.Symptom, today, new
+                {
+                    symptom = symptom.Key,
+                    intensity = symptom.Intensity
+                });
+            }
+
+            var labels = string.Join(" e ", symptoms.Select(symptom => symptom.Label));
+            return $"Registrei {labels} para hoje. Obrigada por me contar. Se vier com dor muito forte, sangramento intenso, febre, tontura ou mal-estar importante, procure orientacao medica.";
         }
 
         var flow = ParseFlowIntensity(body);
         if (flow is not null)
         {
-            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.FlowUpdate, today, new { flow_intensity = flow });
-            return flow == "unknown"
-                ? "Tudo bem, deixei o fluxo de hoje sem informar."
+            var updated = await HasCycleEventAsync(user.Id, CycleEventTypes.FlowUpdate, today);
+            await AddOrReplaceFlowEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), today, flow);
+            if (flow == "unknown")
+            {
+                return "Tudo bem, deixei o fluxo de hoje sem informar.";
+            }
+
+            return updated
+                ? $"Atualizei aqui. Hoje ficou registrado como fluxo {FlowLabel(flow)}."
                 : $"Registrei fluxo {FlowLabel(flow)} para hoje.";
         }
 
-        return MisunderstoodMessage("Você pode tentar de um jeito mais direto, como \"menstruei hoje\", \"acabou ontem\", \"fluxo intenso\", \"tô com cólica forte\" ou \"quando é minha próxima menstruação?\".");
+        var mood = ParseMood(body);
+        if (mood is not null)
+        {
+            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.Mood, today, new
+            {
+                mood = mood.Value.Key
+            });
+
+            return $"Registrei que voce esta se sentindo {mood.Value.Label} hoje. Isso fica guardado so como historico para te ajudar a perceber padroes ao longo dos ciclos.";
+        }
+
+        if (intent.Intent == ConversationIntents.SexualActivity || IsSexualActivity(body))
+        {
+            var date = intent.Date ?? DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+            var metadata = BuildSexualActivityMetadata(body, intent);
+            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.SexualActivity, date, metadata);
+            return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu nao uso isso para afirmar gravidez ou diagnostico.";
+        }
+
+        if (LooksLikeQuestion(body))
+        {
+            return OutOfScopeMessage();
+        }
+
+        return MisunderstoodMessage("Voce pode tentar de um jeito mais direto, como \"menstruei hoje\", \"acabou ontem\", \"fluxo intenso\", \"to com colica forte\", \"tive relacao ontem\", \"estou gravida de 8 semanas\" ou \"quando e minha proxima menstruacao?\".");
     }
 
     private async Task<Cycle> CreateOrUpdateCycleFromLastPeriodAsync(Guid userId, DateOnly date, string status = CycleStatus.Ongoing)
     {
-        var existing = await db.Cycles
-            .FirstOrDefaultAsync(cycle => cycle.UserId == userId && cycle.StartDate == date);
+        var existing = await db.Cycles.FirstOrDefaultAsync(cycle => cycle.UserId == userId && cycle.StartDate == date);
 
         if (existing is not null)
         {
@@ -712,6 +800,21 @@ public sealed class ConversationService(
             .FirstOrDefaultAsync();
     }
 
+    private async Task<bool> HasCycleEventAsync(Guid userId, string type, DateOnly date)
+    {
+        return await db.CycleEvents.AnyAsync(ev => ev.UserId == userId && ev.Type == type && ev.Date == date);
+    }
+
+    private async Task AddOrReplaceFlowEventAsync(Guid userId, Guid? cycleId, DateOnly date, string flow)
+    {
+        var existing = await db.CycleEvents
+            .Where(ev => ev.UserId == userId && ev.Type == CycleEventTypes.FlowUpdate && ev.Date == date)
+            .ToListAsync();
+
+        db.CycleEvents.RemoveRange(existing);
+        await AddCycleEventAsync(userId, cycleId, CycleEventTypes.FlowUpdate, date, new { flow_intensity = flow });
+    }
+
     private Task AddCycleEventAsync(Guid userId, Guid? cycleId, string type, DateOnly date, object metadata)
     {
         db.CycleEvents.Add(new CycleEvent
@@ -743,9 +846,31 @@ public sealed class ConversationService(
         return user.Preference;
     }
 
+    private static void ApplyContraceptivePreference(LumaUser user, string contraceptiveType)
+    {
+        var preference = EnsurePreference(user);
+        preference.ContraceptiveType = contraceptiveType;
+        preference.UsesHormonalContraceptive = contraceptiveType is "pill" or "injection" or "hormonal_iud" or "implant";
+        preference.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    private Task<string> AcceptConsentAsync(LumaUser user)
+    {
+        user.ConsentAcceptedAt = DateTimeOffset.UtcNow;
+        user.OnboardingStep = OnboardingSteps.AwaitingDisplayName;
+
+        db.Consents.AddRange(
+            NewConsent(user.Id, "privacy_policy"),
+            NewConsent(user.Id, "terms_of_use"),
+            NewConsent(user.Id, "health_data_processing"),
+            NewConsent(user.Id, "whatsapp_contact"));
+
+        return Task.FromResult("Obrigada por confiar em mim. Para eu deixar nossa conversa mais pessoal, como devo te chamar?");
+    }
+
     private static string InitialConsentMessage()
     {
-        return "Oi! Eu sou sua assistente de ciclo pelo WhatsApp.\n\nAntes de começar: eu posso te ajudar a registrar menstruação, sintomas, lembretes e histórico. Não substituo orientação médica e não faço diagnósticos.\n\nPara continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saúde menstrual.\n\nVocê aceita?\n1. Aceito\n2. Não aceito";
+        return "Oi! Eu sou sua assistente de ciclo pelo WhatsApp.\n\nAntes de comecar: eu posso te ajudar a registrar menstruacao, sintomas, lembretes e historico. Nao substituo orientacao medica e nao faco diagnosticos.\n\nPara continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saude menstrual.\n\nVoce aceita?\n1. Aceito\n2. Nao aceito";
     }
 
     private static string MisunderstoodMessage(string hint)
@@ -753,25 +878,63 @@ public sealed class ConversationService(
         return $"Não entendi sua resposta. Poderia tentar de novo, talvez de uma maneira mais direta?\n\n{hint}";
     }
 
+    private static string NextOnboardingPrompt(LumaUser user, OnboardingExtraction? captured = null)
+    {
+        var firstContact = captured?.DisplayName is not null;
+        var manyDetails = CountCapturedFields(captured) >= 2;
+        var prefix = string.IsNullOrWhiteSpace(user.DisplayName) ? "" : $"{user.DisplayName}, ";
+
+        return user.OnboardingStep switch
+        {
+            OnboardingSteps.AwaitingDisplayName => "Para eu deixar nossa conversa mais pessoal, como devo te chamar? Pode mandar so seu primeiro nome ou apelido.",
+            OnboardingSteps.AwaitingAgeConfirmation => firstContact
+                ? $"Ola, {user.DisplayName}, prazer em conhece-la. Meu nome e Luma e vou ser sua assistente de ciclo por aqui.\n\nAntes de seguirmos, voce poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Nao"
+                : $"{prefix}antes de continuar, voce poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Nao",
+            OnboardingSteps.AwaitingLastPeriodStart => manyDetails
+                ? $"{prefix}obrigada por ja me passar essas informacoes. Agora me diz: qual foi o primeiro dia da sua ultima menstruacao?\n\nPode responder tipo \"comecou dia 10/04\" ou \"nao lembro\"."
+                : $"{prefix}obrigada por confirmar. Qual foi o primeiro dia da sua ultima menstruacao?\n\nPode responder tipo \"comecou dia 10/04\" ou \"nao lembro\".",
+            OnboardingSteps.AwaitingAverageCycleLength => manyDetails
+                ? $"Prazer em conhece-la, {user.DisplayName}. Obrigada por ja me passar essas informacoes. Para finalizar seu cadastro, me diz: seu ciclo costuma ter quantos dias?\n\nSe nao souber, posso comecar usando 28 dias e ir ajustando com o tempo."
+                : $"{prefix}perfeito, obrigada. Seu ciclo costuma ter quantos dias?\n\nSe nao souber, posso comecar usando 28 dias e ir ajustando com o tempo.",
+            OnboardingSteps.AwaitingAveragePeriodLength => manyDetails
+                ? $"{prefix}otimo, ja deixei esses dados iniciais organizados. So falta uma coisinha: sua menstruacao costuma durar quantos dias?"
+                : $"{prefix}entendi. Sua menstruacao costuma durar quantos dias?",
+            OnboardingSteps.AwaitingContraceptiveMethod => $"{prefix}para deixar seu cadastro mais completo, voce usa algum metodo contraceptivo? Pode responder, se quiser, algo como:\n\n1. Nao uso\n2. Pilula\n3. Injecao\n4. DIU hormonal\n5. DIU de cobre\n6. Implante\n7. Camisinha\n8. Outro\n9. Prefiro nao informar",
+            OnboardingSteps.Completed => CompletedOnboardingMessage(user, captured),
+            OnboardingSteps.UnderageBlocked => "Obrigada por responder. Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.",
+            _ => InitialConsentMessage()
+        };
+    }
+
     private static string CompletedOnboardingMessage(LumaUser user, OnboardingExtraction? captured = null)
     {
         var name = string.IsNullOrWhiteSpace(user.DisplayName) ? "" : $"{user.DisplayName}, ";
         var intro = CountCapturedFields(captured) >= 2
-            ? $"{name}pronto. Obrigada por já me passar tudo isso; seu cadastro inicial ficou completo."
+            ? $"{name}pronto. Obrigada por ja me passar tudo isso; seu cadastro inicial ficou completo."
             : $"{name}pronto. Seu cadastro inicial ficou completo.";
 
-        return $"{intro}\n\nA partir de agora, pode falar comigo de um jeito bem natural. Por exemplo:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"tô com cólica forte\"\n\"tive relação dia 20\"\n\"quando é minha próxima menstruação?\"\n\nEu vou te ajudar a organizar seus registros, sempre como estimativa e sem substituir orientação médica.";
+        return $"{intro}\n\nA partir de agora, pode falar comigo de um jeito bem natural. Por exemplo:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo intenso\"\n\"to com colica forte\"\n\"hoje estou irritada\"\n\"tive relacao dia 20\"\n\"quando e minha proxima menstruacao?\"\n\nEu vou te ajudar a organizar seus registros, sempre como estimativa e sem substituir orientacao medica.";
     }
 
     private static string HelpMessage()
     {
-        return "Você pode me mandar frases simples como:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo leve\"\n\"tô com cólica forte\"\n\"minha menstruação está atrasada?\"\n\"quando é minha próxima menstruação?\"";
+        return "Voce pode me mandar frases simples como:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo leve\"\n\"to com colica forte\"\n\"hoje estou ansiosa\"\n\"tive relacao dia 20\"\n\"minha menstruacao esta atrasada?\"\n\"quando e minha proxima menstruacao?\"";
+    }
+
+    private static string LumaIdentityMessage()
+    {
+        return "Eu sou a Luma, uma IA de apoio para ciclo menstrual e gravidez pelo WhatsApp. Meu intuito e te ajudar a registrar menstruacao, sintomas, humor, relacoes, historico e dados de acompanhamento da gravidez de um jeito simples e acolhedor.\n\nEu nao faco diagnosticos, nao confirmo gravidez, nao digo se sangramentos sao normais e nao substituo orientacao medica. Quando algo puder envolver risco, vou te orientar a procurar um profissional de saude.";
+    }
+
+    private static string OutOfScopeMessage()
+    {
+        return "Desculpa, nao posso opinar sobre isso. Eu consigo te ajudar com registros e duvidas seguras sobre ciclo menstrual, menstruacao, sintomas, historico, relacoes registradas, gravidez e funcionamento da Luma, sempre sem fazer diagnosticos.";
     }
 
     private static string GreetingMessage(LumaUser user)
     {
         var name = string.IsNullOrWhiteSpace(user.DisplayName) ? "" : $", {user.DisplayName}";
-        return $"Oi{name}. Estou por aqui.\n\nVocê pode me mandar algo como:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"tô com cólica forte\"\n\"quando é minha próxima menstruação?\"";
+        return $"Oi{name}. Estou por aqui.\n\nPode falar comigo de forma natural, como \"menstruei hoje\", \"acabou ontem\", \"to com colica forte\" ou \"quando e minha proxima menstruacao?\".";
     }
 
     private static string BuildDelayReply(LumaUser user, DateOnly today)
@@ -779,7 +942,7 @@ public sealed class ConversationService(
         var preference = EnsurePreference(user);
         if (preference.LastPeriodStartDate is null)
         {
-            return "Ainda não tenho a data da sua última menstruação para calcular atraso. Você pode me dizer algo como \"menstruei dia 10/04\".";
+            return "Ainda nao tenho a data da sua ultima menstruacao para calcular atraso. Voce pode me dizer algo como \"menstruei dia 10/04\".";
         }
 
         var expected = preference.LastPeriodStartDate.Value.AddDays(preference.AverageCycleLength);
@@ -787,10 +950,10 @@ public sealed class ConversationService(
 
         if (delayDays <= 0)
         {
-            return $"Pela sua previsão atual, sua próxima menstruação está prevista para perto de {FormatDate(expected)}. Isso é só uma estimativa baseada nos seus registros.";
+            return $"Pela sua previsao atual, ainda nao parece atrasada. Sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Isso e so uma estimativa baseada nos seus registros.";
         }
 
-        return $"Pela sua previsão atual, sua menstruação está cerca de {delayDays} dias atrasada.\n\nIsso pode acontecer por vários motivos, como variação natural do ciclo, estresse, alterações de rotina ou outros fatores. Se houver chance de gravidez ou sintomas preocupantes, o ideal é fazer um teste ou procurar orientação médica.";
+        return $"Pela sua previsao atual, sua menstruacao esta cerca de {delayDays} dias atrasada.\n\nIsso pode acontecer por varios motivos, como variacao natural do ciclo, estresse, alteracoes de rotina ou outros fatores. Se houver chance de gravidez ou sintomas preocupantes, o ideal e fazer um teste ou procurar orientacao medica.";
     }
 
     private static string BuildNextPeriodReply(LumaUser user)
@@ -798,11 +961,325 @@ public sealed class ConversationService(
         var preference = EnsurePreference(user);
         if (preference.LastPeriodStartDate is null)
         {
-            return "Ainda não tenho a data da sua última menstruação para estimar a próxima. Você pode me dizer algo como \"menstruei dia 10/04\".";
+            return "Ainda nao tenho a data da sua ultima menstruacao para estimar a proxima. Voce pode me dizer algo como \"menstruei dia 10/04\".";
         }
 
         var expected = preference.LastPeriodStartDate.Value.AddDays(preference.AverageCycleLength);
-        return $"Pela sua média atual, sua próxima menstruação está prevista para perto de {FormatDate(expected)}. Essa é uma estimativa, não uma certeza.";
+        return $"Pela sua media atual, sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Essa e uma estimativa, nao uma certeza.";
+    }
+
+    private static string BuildLastPeriodReply(LumaUser user)
+    {
+        var preference = EnsurePreference(user);
+        return preference.LastPeriodStartDate is null
+            ? "Ainda nao tenho uma ultima menstruacao registrada. Pode me mandar algo como \"menstruei dia 10/04\"."
+            : $"Sua ultima menstruacao registrada foi em {FormatDate(preference.LastPeriodStartDate.Value)}.";
+    }
+
+    private async Task<string> BuildLastSymptomReplyAsync(Guid userId)
+    {
+        var ev = await db.CycleEvents
+            .Where(ev => ev.UserId == userId && ev.Type == CycleEventTypes.Symptom)
+            .OrderByDescending(ev => ev.Date)
+            .ThenByDescending(ev => ev.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (ev is null)
+        {
+            return "Ainda nao tenho sintomas registrados no seu historico.";
+        }
+
+        using var json = JsonDocument.Parse(ev.MetadataJson);
+        var symptom = json.RootElement.TryGetProperty("symptom", out var value)
+            ? SymptomLabel(value.GetString())
+            : "um sintoma";
+
+        return $"Seu ultimo sintoma registrado foi {symptom} em {FormatDate(ev.Date)}.";
+    }
+
+    private async Task<string> BuildLastSexualActivityReplyAsync(Guid userId)
+    {
+        var ev = await db.CycleEvents
+            .Where(ev => ev.UserId == userId && ev.Type == CycleEventTypes.SexualActivity)
+            .OrderByDescending(ev => ev.Date)
+            .ThenByDescending(ev => ev.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        return ev is null
+            ? "Ainda nao tenho nenhuma relacao registrada no seu historico."
+            : $"Sua ultima relacao registrada foi em {FormatDate(ev.Date)}. Esse dado aparece aqui apenas como historico pessoal, sem eu usar para afirmar gravidez ou diagnostico.";
+    }
+
+    private async Task<Pregnancy?> GetActivePregnancyAsync(Guid userId)
+    {
+        return await db.Pregnancies
+            .Where(pregnancy => pregnancy.UserId == userId && pregnancy.Status == PregnancyStatus.Active)
+            .OrderByDescending(pregnancy => pregnancy.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<string> HandlePregnancyPositiveAsync(LumaUser user, ConversationIntent intent, DateOnly today)
+    {
+        var pregnancy = await GetActivePregnancyAsync(user.Id);
+        if (pregnancy is null)
+        {
+            pregnancy = new Pregnancy
+            {
+                UserId = user.Id,
+                Status = PregnancyStatus.Active,
+                StartReference = "positive_test"
+            };
+            db.Pregnancies.Add(pregnancy);
+        }
+
+        ApplyPregnancyReference(pregnancy, intent, today);
+        await AddCycleEventAsync(user.Id, null, CycleEventTypes.PregnancyPositive, today, new
+        {
+            pregnancy_id = pregnancy.Id,
+            gestational_weeks = pregnancy.GestationalWeeksAtRegistration,
+            last_period_date = pregnancy.LastPeriodDate,
+            estimated_due_date = pregnancy.EstimatedDueDate
+        });
+
+        if (pregnancy.LastPeriodDate is not null || pregnancy.GestationalWeeksAtRegistration is not null || pregnancy.EstimatedDueDate is not null)
+        {
+            user.PendingAction = null;
+            return PregnancySummaryMessage(pregnancy);
+        }
+
+        user.PendingAction = PendingActions.AwaitingPregnancyReference;
+        return "Obrigada por me contar. Posso te ajudar a organizar essas informacoes por aqui, sempre como apoio aos seus registros e sem substituir seu pre-natal.\n\nPara eu organizar seu acompanhamento, voce sabe alguma dessas informacoes?\n\n1. Data da ultima menstruacao\n2. Quantas semanas de gravidez\n3. Data provavel do parto\n4. Ainda nao sei";
+    }
+
+    private async Task<string> HandlePregnancyReferenceAsync(LumaUser user, string body, string rawBody, ConversationIntent intent, DateOnly today)
+    {
+        var pregnancy = await GetActivePregnancyAsync(user.Id);
+        if (pregnancy is null)
+        {
+            pregnancy = new Pregnancy
+            {
+                UserId = user.Id,
+                Status = PregnancyStatus.Active
+            };
+            db.Pregnancies.Add(pregnancy);
+        }
+
+        if (DateParser.IsUnknown(body) || body is "4")
+        {
+            pregnancy.StartReference = "unknown";
+            pregnancy.UpdatedAt = DateTimeOffset.UtcNow;
+            user.PendingAction = null;
+            return "Tudo bem. Deixei registrado que voce ainda nao sabe a referencia da gravidez. Quando souber a data da ultima menstruacao, semanas ou data provavel do parto, pode me mandar por aqui.";
+        }
+
+        var reference = intent;
+        reference.LastPeriodDate ??= IsLastPeriodReference(body) ? DateParser.ParseFlexibleDate(rawBody, today) : null;
+        reference.GestationalWeeks ??= ParseGestationalWeeks(body);
+        reference.EstimatedDueDate ??= IsDueDateReference(body) ? ParseUpcomingDate(rawBody, today) : null;
+
+        if (reference.LastPeriodDate is null && reference.GestationalWeeks is null && reference.EstimatedDueDate is null)
+        {
+            return MisunderstoodMessage("Pode responder como \"minha ultima menstruacao foi dia 01/03\", \"estou de 8 semanas\", \"minha DPP e 06/12\" ou \"ainda nao sei\".");
+        }
+
+        ApplyPregnancyReference(pregnancy, reference, today);
+        user.PendingAction = null;
+        return PregnancySummaryMessage(pregnancy);
+    }
+
+    private static void ApplyPregnancyReference(Pregnancy pregnancy, ConversationIntent intent, DateOnly today)
+    {
+        if (intent.GestationalWeeks is not null)
+        {
+            pregnancy.GestationalWeeksAtRegistration = intent.GestationalWeeks;
+            pregnancy.LastPeriodDate = today.AddDays(-(intent.GestationalWeeks.Value * 7));
+            pregnancy.EstimatedDueDate = pregnancy.LastPeriodDate.Value.AddDays(280);
+            pregnancy.StartReference = "gestational_weeks";
+        }
+
+        if (intent.LastPeriodDate is not null)
+        {
+            pregnancy.LastPeriodDate = intent.LastPeriodDate;
+            pregnancy.EstimatedDueDate = intent.LastPeriodDate.Value.AddDays(280);
+            pregnancy.GestationalWeeksAtRegistration = Math.Max(0, (today.DayNumber - intent.LastPeriodDate.Value.DayNumber) / 7);
+            pregnancy.StartReference = "last_period";
+        }
+
+        if (intent.EstimatedDueDate is not null)
+        {
+            pregnancy.EstimatedDueDate = intent.EstimatedDueDate;
+            pregnancy.StartReference = "estimated_due_date";
+        }
+
+        pregnancy.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    private static string PregnancySummaryMessage(Pregnancy pregnancy)
+    {
+        var parts = new List<string>
+        {
+            "Pronto, deixei sua gravidez registrada para acompanhamento por aqui."
+        };
+
+        if (pregnancy.GestationalWeeksAtRegistration is not null)
+        {
+            parts.Add($"Pelos dados informados, a estimativa inicial e de cerca de {pregnancy.GestationalWeeksAtRegistration} semanas.");
+        }
+
+        if (pregnancy.EstimatedDueDate is not null)
+        {
+            parts.Add($"A data provavel do parto fica por volta de {FormatDate(pregnancy.EstimatedDueDate.Value)}.");
+        }
+
+        parts.Add("Vou tratar esses dados sempre como estimativas e apoio ao seu historico, sem substituir seu pre-natal.");
+        return string.Join("\n\n", parts);
+    }
+
+    private async Task<string> BuildPregnancyWeeksReplyAsync(Guid userId, DateOnly today)
+    {
+        var pregnancy = await GetActivePregnancyAsync(userId);
+        if (pregnancy?.LastPeriodDate is null)
+        {
+            return "Ainda nao tenho dados suficientes para estimar as semanas de gravidez. Voce pode me mandar a data da ultima menstruacao, quantas semanas tem hoje ou a data provavel do parto.";
+        }
+
+        var weeks = Math.Max(0, (today.DayNumber - pregnancy.LastPeriodDate.Value.DayNumber) / 7);
+        return $"Pelos seus registros, voce esta com cerca de {weeks} semanas de gravidez. Essa e uma estimativa; confirme sempre no pre-natal.";
+    }
+
+    private async Task<string> BuildPregnancyDueDateReplyAsync(Guid userId)
+    {
+        var pregnancy = await GetActivePregnancyAsync(userId);
+        if (pregnancy?.EstimatedDueDate is null)
+        {
+            return "Ainda nao tenho dados suficientes para estimar a data provavel do parto. Voce pode me mandar a data da ultima menstruacao ou quantas semanas tem hoje.";
+        }
+
+        return $"Pelos seus registros, a data provavel do parto esta por volta de {FormatDate(pregnancy.EstimatedDueDate.Value)}. Essa e uma estimativa e deve ser confirmada no seu pre-natal.";
+    }
+
+    private async Task<string> HandlePregnancyBleedingAsync(Guid userId, DateOnly date)
+    {
+        await AddCycleEventAsync(userId, null, CycleEventTypes.PregnancyBleeding, date, new { });
+        return "Registrei o sangramento para seu historico.\n\nSangramentos na gravidez podem ter varias causas, algumas simples e outras que precisam de avaliacao. Como voce esta gravida, e mais seguro entrar em contato com seu medico ou obstetra, principalmente se o sangramento for intenso, vier com dor forte, tontura, febre ou mal-estar.";
+    }
+
+    private static int CountCapturedFields(OnboardingExtraction? captured)
+    {
+        if (captured is null)
+        {
+            return 0;
+        }
+
+        var count = 0;
+        if (captured.DisplayName is not null) count++;
+        if (captured.IsAdultConfirmed is not null) count++;
+        if (captured.LastPeriodStartDate is not null || captured.LastPeriodDaysAgo is not null || captured.LastPeriodUnknown) count++;
+        if (captured.AverageCycleLength is not null) count++;
+        if (captured.AveragePeriodLength is not null) count++;
+        if (captured.ContraceptiveType is not null) count++;
+        return count;
+    }
+
+    private static bool HasExplicitAgeEvidence(string body)
+    {
+        return IsAffirmative(body)
+            || IsNegative(body)
+            || body.Contains("anos", StringComparison.Ordinal)
+            || body.Contains("idade", StringComparison.Ordinal)
+            || body.Contains("maior de idade", StringComparison.Ordinal)
+            || body.Contains("maior", StringComparison.Ordinal)
+            || body.Contains("18+", StringComparison.Ordinal);
+    }
+
+    private static bool ShouldUseAiForOnboarding(string rawBody)
+    {
+        return rawBody.Any(char.IsLetter) && rawBody.Trim().Length >= 8;
+    }
+
+    private static string? TryExtractDisplayName(string body, string rawBody)
+    {
+        var markers = new[]
+        {
+            "meu nome e ",
+            "me chamo ",
+            "pode me chamar de ",
+            "sou a ",
+            "sou "
+        };
+
+        foreach (var marker in markers)
+        {
+            var index = body.IndexOf(marker, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                continue;
+            }
+
+            var normalizedCandidate = body[(index + marker.Length)..].Split(',', '.', ';', '\n').FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(normalizedCandidate))
+            {
+                continue;
+            }
+
+            var rawCandidate = rawBody.Trim().Split(',', '.', ';', '\n')
+                .FirstOrDefault(part => MessageText.Normalize(part).Contains(normalizedCandidate.Trim(), StringComparison.Ordinal));
+
+            var candidate = rawCandidate is null
+                ? normalizedCandidate.Trim()
+                : rawCandidate[Math.Max(0, rawCandidate.Length - normalizedCandidate.Length)..].Trim();
+
+            var firstWord = candidate.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (firstWord is { Length: >= 2 and <= 60 } && firstWord.All(ch => char.IsLetter(ch) || ch is '\'' or '-'))
+            {
+                return char.ToUpperInvariant(firstWord[0]) + firstWord[1..];
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsLikelyPlainDisplayName(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length is < 2 or > 60)
+        {
+            return false;
+        }
+
+        var normalized = MessageText.Normalize(trimmed);
+        var blockedTerms = new[]
+        {
+            "ciclo",
+            "menstru",
+            "idade",
+            "anos",
+            "dia ",
+            "hoje",
+            "ontem",
+            "aceito",
+            "nao",
+            "sim"
+        };
+
+        if (blockedTerms.Any(term => normalized.Contains(term, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length <= 2 && words.All(word => word.All(ch => char.IsLetter(ch) || ch is '\'' or '-'));
+    }
+
+    private static int? TryExtractAge(string body)
+    {
+        if (!body.Contains("anos", StringComparison.Ordinal) && !body.Contains("idade", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var age = MessageText.ExtractFirstInteger(body);
+        return age is >= 1 and <= 120 ? age : null;
     }
 
     private static bool IsAffirmative(string body)
@@ -814,9 +1291,8 @@ public sealed class ConversationService(
 
     private static bool IsNegative(string body)
     {
-        return body is "2" or "nao" or "não" or "n"
-            || body.Contains("nao aceito", StringComparison.Ordinal)
-            || body.Contains("não aceito", StringComparison.Ordinal);
+        return body is "2" or "nao" or "n"
+            || body.Contains("nao aceito", StringComparison.Ordinal);
     }
 
     private static bool IsHelp(string body)
@@ -826,19 +1302,19 @@ public sealed class ConversationService(
 
     private static bool IsGreeting(string body)
     {
-        return body is "oi" or "ola" or "olá" or "bom dia" or "boa tarde" or "boa noite"
+        return body is "oi" or "ola" or "bom dia" or "boa tarde" or "boa noite"
             || body.StartsWith("oi ", StringComparison.Ordinal)
-            || body.StartsWith("ola ", StringComparison.Ordinal)
-            || body.StartsWith("olá ", StringComparison.Ordinal);
+            || body.StartsWith("ola ", StringComparison.Ordinal);
     }
 
     private static bool IsPeriodStart(string body)
     {
         return body.Contains("menstruei", StringComparison.Ordinal)
             || body.Contains("menstruacao comecou", StringComparison.Ordinal)
-            || body.Contains("menstruação começou", StringComparison.Ordinal)
             || body.Contains("comecou minha menstruacao", StringComparison.Ordinal)
-            || body.Contains("desceu", StringComparison.Ordinal);
+            || body.Contains("comecei a menstruar", StringComparison.Ordinal)
+            || body.Contains("desceu", StringComparison.Ordinal)
+            || body.Contains("veio", StringComparison.Ordinal) && body.Contains("menstru", StringComparison.Ordinal);
     }
 
     private static bool IsPeriodEnd(string body)
@@ -856,76 +1332,469 @@ public sealed class ConversationService(
     private static bool IsNextPeriodQuestion(string body)
     {
         return body.Contains("proxima", StringComparison.Ordinal)
-            || body.Contains("próxima", StringComparison.Ordinal)
             || body.Contains("quando", StringComparison.Ordinal) && body.Contains("menstru", StringComparison.Ordinal);
+    }
+
+    private static bool IsLastPeriodQuestion(string body)
+    {
+        return body.Contains("ultima menstruacao", StringComparison.Ordinal)
+            || body.Contains("ultima vez que menstruei", StringComparison.Ordinal)
+            || body.Contains("quando foi minha ultima", StringComparison.Ordinal) && body.Contains("menstru", StringComparison.Ordinal);
+    }
+
+    private static bool IsLastSymptomQuestion(string body)
+    {
+        return body.Contains("ultimo sintoma", StringComparison.Ordinal)
+            || body.Contains("sintoma registrado", StringComparison.Ordinal);
+    }
+
+    private static bool IsLastSexualActivityQuestion(string body)
+    {
+        return (body.Contains("ultima", StringComparison.Ordinal) || body.Contains("quando", StringComparison.Ordinal))
+            && (body.Contains("relacao sexual", StringComparison.Ordinal)
+                || body.Contains("relacao", StringComparison.Ordinal)
+                || body.Contains("sexo", StringComparison.Ordinal)
+                || body.Contains("transa", StringComparison.Ordinal));
     }
 
     private static bool IsSexualActivity(string body)
     {
         return body.Contains("relacao", StringComparison.Ordinal)
-            || body.Contains("relação", StringComparison.Ordinal)
-            || body.Contains("sexo", StringComparison.Ordinal);
+            || body.Contains("sexo", StringComparison.Ordinal)
+            || body.Contains("transa", StringComparison.Ordinal);
+    }
+
+    private static bool IsPregnancyPositiveStatement(string body)
+    {
+        if (LooksLikeQuestion(body)
+            && !body.Contains("teste deu positivo", StringComparison.Ordinal)
+            && !body.Contains("descobri", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return body.Contains("descobri que estou gravida", StringComparison.Ordinal)
+            || body.Contains("estou gravida", StringComparison.Ordinal)
+            || body.Contains("to gravida", StringComparison.Ordinal)
+            || body.Contains("tou gravida", StringComparison.Ordinal)
+            || body.Contains("gravida de", StringComparison.Ordinal)
+            || body.Contains("teste deu positivo", StringComparison.Ordinal)
+            || body.Contains("meu teste deu positivo", StringComparison.Ordinal);
+    }
+
+    private static bool IsPregnancyBleeding(string body)
+    {
+        return body.Contains("sangramento", StringComparison.Ordinal)
+            || body.Contains("sangrei", StringComparison.Ordinal)
+            || body.Contains("sangrando", StringComparison.Ordinal);
+    }
+
+    private static bool IsPregnancySymptom(string body)
+    {
+        return body.Contains("nausea", StringComparison.Ordinal)
+            || body.Contains("enjoo", StringComparison.Ordinal)
+            || body.Contains("azia", StringComparison.Ordinal)
+            || body.Contains("tontura", StringComparison.Ordinal)
+            || body.Contains("sono", StringComparison.Ordinal)
+            || body.Contains("cansaco", StringComparison.Ordinal)
+            || body.Contains("colica", StringComparison.Ordinal)
+            || body.Contains("dor", StringComparison.Ordinal);
+    }
+
+    private static bool IsPrenatalAppointment(string body)
+    {
+        return body.Contains("pre natal", StringComparison.Ordinal)
+            || body.Contains("prenatal", StringComparison.Ordinal)
+            || body.Contains("obstetra", StringComparison.Ordinal)
+            || body.Contains("consulta", StringComparison.Ordinal) && body.Contains("gest", StringComparison.Ordinal);
+    }
+
+    private static bool IsUltrasound(string body)
+    {
+        return body.Contains("ultrassom", StringComparison.Ordinal)
+            || body.Contains("ultra", StringComparison.Ordinal);
+    }
+
+    private static bool IsPregnancyWeeksQuestion(string body)
+    {
+        return (body.Contains("quantas semanas", StringComparison.Ordinal)
+                || body.Contains("de quantas semanas", StringComparison.Ordinal)
+                || body.Contains("semanas estou", StringComparison.Ordinal))
+            && !IsPregnancyPositiveStatement(body);
+    }
+
+    private static bool IsPregnancyDueDateQuestion(string body)
+    {
+        return body.Contains("data provavel do parto", StringComparison.Ordinal)
+            || body.Contains("dpp", StringComparison.Ordinal)
+            || body.Contains("quando nasce", StringComparison.Ordinal)
+            || body.Contains("quando e o parto", StringComparison.Ordinal);
+    }
+
+    private static bool IsLumaIdentityQuestion(string body)
+    {
+        return body.Contains("quem e voce", StringComparison.Ordinal)
+            || body.Contains("quem voce e", StringComparison.Ordinal)
+            || body.Contains("o que voce faz", StringComparison.Ordinal)
+            || body.Contains("o que e a luma", StringComparison.Ordinal)
+            || body.Contains("quem e a luma", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeQuestion(string body)
+    {
+        return body.Contains("?", StringComparison.Ordinal)
+            || body.StartsWith("qual ", StringComparison.Ordinal)
+            || body.StartsWith("quando ", StringComparison.Ordinal)
+            || body.StartsWith("quem ", StringComparison.Ordinal)
+            || body.StartsWith("como ", StringComparison.Ordinal)
+            || body.StartsWith("posso ", StringComparison.Ordinal)
+            || body.StartsWith("devo ", StringComparison.Ordinal)
+            || body.StartsWith("sera ", StringComparison.Ordinal)
+            || body.StartsWith("luma,", StringComparison.Ordinal);
+    }
+
+    private static int? ParseGestationalWeeks(string body)
+    {
+        if (!body.Contains("semana", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var weeks = MessageText.ExtractFirstInteger(body);
+        return weeks is >= 1 and <= 45 ? weeks : null;
+    }
+
+    private static bool IsLastPeriodReference(string body)
+    {
+        return body.Contains("ultima menstruacao", StringComparison.Ordinal)
+            || body.Contains("menstruei", StringComparison.Ordinal)
+            || body.Contains("dum", StringComparison.Ordinal);
+    }
+
+    private static bool IsDueDateReference(string body)
+    {
+        return body.Contains("data provavel", StringComparison.Ordinal)
+            || body.Contains("dpp", StringComparison.Ordinal)
+            || body.Contains("parto", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeKnownCompletedIntent(string body, ConversationIntent? intent = null)
+    {
+        if (!string.IsNullOrWhiteSpace(intent?.Intent) && intent.Intent != ConversationIntents.OutOfScope)
+        {
+            return true;
+        }
+
+        return IsHelp(body)
+            || IsGreeting(body)
+            || IsPeriodStart(body)
+            || IsPeriodEnd(body)
+            || IsDelayQuestion(body)
+            || IsNextPeriodQuestion(body)
+            || IsLastPeriodQuestion(body)
+            || IsLastSymptomQuestion(body)
+            || IsLastSexualActivityQuestion(body)
+            || IsSexualActivity(body)
+            || IsPregnancyPositiveStatement(body)
+            || IsPregnancyBleeding(body)
+            || IsPrenatalAppointment(body)
+            || IsUltrasound(body)
+            || IsPregnancyWeeksQuestion(body)
+            || IsPregnancyDueDateQuestion(body)
+            || IsLumaIdentityQuestion(body)
+            || ParseFlowIntensity(body) is not null
+            || ParseSymptoms(body).Count > 0
+            || ParseMood(body) is not null;
+    }
+
+    private static bool IsFlowOnlyResponse(string body)
+    {
+        return ParseFlowIntensity(body) is not null
+            && !IsPeriodStart(body)
+            && !IsPeriodEnd(body)
+            && ParseSymptoms(body).Count == 0
+            && ParseMood(body) is null
+            && !IsSexualActivity(body)
+            && !IsDelayQuestion(body)
+            && !IsNextPeriodQuestion(body)
+            && !IsLastPeriodQuestion(body)
+            && !IsLastSymptomQuestion(body)
+            && !IsLastSexualActivityQuestion(body)
+            && !IsPregnancyPositiveStatement(body)
+            && !IsPregnancyBleeding(body)
+            && !IsPrenatalAppointment(body)
+            && !IsUltrasound(body)
+            && !IsPregnancyWeeksQuestion(body)
+            && !IsPregnancyDueDateQuestion(body);
+    }
+
+    private static DateOnly InferPeriodStartDate(string body, string rawBody, DateOnly today)
+    {
+        if (body.Contains("ontem", StringComparison.Ordinal)
+            && (body.Contains("desceu", StringComparison.Ordinal)
+                || body.Contains("menstruei", StringComparison.Ordinal)
+                || body.Contains("veio", StringComparison.Ordinal)
+                || body.Contains("comecou", StringComparison.Ordinal)))
+        {
+            return today.AddDays(-1);
+        }
+
+        return DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+    }
+
+    private static DateOnly? ParseUpcomingDate(string rawBody, DateOnly today)
+    {
+        var parsed = DateParser.ParseFlexibleDate(rawBody, today);
+        if (parsed is null)
+        {
+            return null;
+        }
+
+        while (parsed.Value < today.AddMonths(-6))
+        {
+            parsed = parsed.Value.AddYears(1);
+        }
+
+        return parsed;
+    }
+
+    private static string? ParseContraceptiveType(string body)
+    {
+        if (body.Contains("prefiro nao", StringComparison.Ordinal) || body.Contains("nao informar", StringComparison.Ordinal))
+        {
+            return "prefer_not_say";
+        }
+
+        if (body is "1" || body.Contains("nao uso", StringComparison.Ordinal) || body.Contains("nenhum", StringComparison.Ordinal))
+        {
+            return "none";
+        }
+
+        if (body is "2" || body.Contains("pilula", StringComparison.Ordinal) || body.Contains("anticoncepcional", StringComparison.Ordinal))
+        {
+            return "pill";
+        }
+
+        if (body is "3" || body.Contains("injec", StringComparison.Ordinal))
+        {
+            return "injection";
+        }
+
+        if (body is "4" || body.Contains("diu hormonal", StringComparison.Ordinal) || body.Contains("mirena", StringComparison.Ordinal))
+        {
+            return "hormonal_iud";
+        }
+
+        if (body is "5" || body.Contains("diu de cobre", StringComparison.Ordinal) || body.Contains("diu cobre", StringComparison.Ordinal))
+        {
+            return "copper_iud";
+        }
+
+        if (body.Contains("diu", StringComparison.Ordinal))
+        {
+            return "hormonal_iud";
+        }
+
+        if (body is "6" || body.Contains("implante", StringComparison.Ordinal))
+        {
+            return "implant";
+        }
+
+        if (body is "7" || body.Contains("camisinha", StringComparison.Ordinal) || body.Contains("preservativo", StringComparison.Ordinal))
+        {
+            return "condom";
+        }
+
+        if (body is "8" || body.Contains("outro", StringComparison.Ordinal))
+        {
+            return "other";
+        }
+
+        if (body is "9")
+        {
+            return "prefer_not_say";
+        }
+
+        return null;
     }
 
     private static string? ParseFlowIntensity(string body)
     {
-        if (body is "1" || body.Contains("leve", StringComparison.Ordinal))
+        if (body is "4" || body.Contains("prefiro nao", StringComparison.Ordinal))
         {
-            return "light";
+            return "unknown";
         }
 
-        if (body is "2" || body.Contains("medio", StringComparison.Ordinal) || body.Contains("médio", StringComparison.Ordinal) || body.Contains("moderado", StringComparison.Ordinal))
-        {
-            return "medium";
-        }
-
-        if (body is "3" || body.Contains("intenso", StringComparison.Ordinal) || body.Contains("forte", StringComparison.Ordinal) || body.Contains("muito", StringComparison.Ordinal))
+        if (body is "3"
+            || body.Contains("intenso", StringComparison.Ordinal)
+            || body.Contains("intensa", StringComparison.Ordinal)
+            || body.Contains("forte", StringComparison.Ordinal)
+            || body.Contains("muito", StringComparison.Ordinal))
         {
             return "intense";
         }
 
-        if (body is "4" || body.Contains("prefiro nao", StringComparison.Ordinal) || body.Contains("prefiro não", StringComparison.Ordinal))
+        if (body is "2" || body.Contains("medio", StringComparison.Ordinal) || body.Contains("moderado", StringComparison.Ordinal))
         {
-            return "unknown";
+            return "medium";
+        }
+
+        if (body is "1" || body.Contains("leve", StringComparison.Ordinal) || body.Contains("pouco", StringComparison.Ordinal))
+        {
+            return "light";
         }
 
         return null;
     }
 
-    private static (string Key, string Label, string Intensity)? ParseSymptom(string body)
+    private static List<(string Key, string Label, string Intensity)> ParseSymptoms(string body)
     {
-        var intensity = body.Contains("forte", StringComparison.Ordinal) || body.Contains("absurda", StringComparison.Ordinal)
-            ? "strong"
-            : body.Contains("leve", StringComparison.Ordinal)
-                ? "light"
-                : "moderate";
+        var intensity = ParseSymptomIntensity(body);
+        var symptoms = new List<(string Key, string Label, string Intensity)>();
 
-        if (body.Contains("colica", StringComparison.Ordinal) || body.Contains("cólica", StringComparison.Ordinal))
+        AddSymptomIf(body, symptoms, "colica", "cramp", "colica", intensity);
+        AddSymptomIf(body, symptoms, "dor de cabeca", "headache", "dor de cabeca", intensity);
+        AddSymptomIf(body, symptoms, "nausea", "nausea", "nausea", intensity);
+        AddSymptomIf(body, symptoms, "enjoo", "nausea", "nausea", intensity);
+        AddSymptomIf(body, symptoms, "sensibilidade nos seios", "breast_tenderness", "sensibilidade nos seios", intensity);
+        AddSymptomIf(body, symptoms, "seios doloridos", "breast_tenderness", "sensibilidade nos seios", intensity);
+        AddSymptomIf(body, symptoms, "inchaco", "bloating", "inchaco", intensity);
+        AddSymptomIf(body, symptoms, "acne", "acne", "acne", intensity);
+        AddSymptomIf(body, symptoms, "dor lombar", "back_pain", "dor lombar", intensity);
+        AddSymptomIf(body, symptoms, "sangramento fora", "spotting", "sangramento fora do periodo", intensity);
+        AddSymptomIf(body, symptoms, "corrimento", "discharge", "corrimento", intensity);
+        AddSymptomIf(body, symptoms, "cansaco", "tiredness", "cansaco", intensity);
+        AddSymptomIf(body, symptoms, "insonia", "insomnia", "insonia", intensity);
+        AddSymptomIf(body, symptoms, "desejo alimentar", "food_craving", "desejo alimentar", intensity);
+
+        return symptoms
+            .GroupBy(symptom => symptom.Key)
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private static void AddSymptomIf(string body, List<(string Key, string Label, string Intensity)> symptoms, string needle, string key, string label, string intensity)
+    {
+        if (body.Contains(needle, StringComparison.Ordinal))
         {
-            return ("cramp", $"cólica {IntensityLabel(intensity)}", intensity);
+            symptoms.Add((key, $"{label} {IntensityLabel(intensity)}", intensity));
+        }
+    }
+
+    private static string ParseSymptomIntensity(string body)
+    {
+        if (body.Contains("absurda", StringComparison.Ordinal)
+            || body.Contains("absurdo", StringComparison.Ordinal)
+            || body.Contains("forte", StringComparison.Ordinal)
+            || body.Contains("intensa", StringComparison.Ordinal)
+            || body.Contains("muito", StringComparison.Ordinal))
+        {
+            return "strong";
         }
 
-        if (body.Contains("dor de cabeca", StringComparison.Ordinal) || body.Contains("dor de cabeça", StringComparison.Ordinal))
+        if (body.Contains("leve", StringComparison.Ordinal))
         {
-            return ("headache", $"dor de cabeça {IntensityLabel(intensity)}", intensity);
+            return "light";
         }
 
-        if (body.Contains("nausea", StringComparison.Ordinal) || body.Contains("náusea", StringComparison.Ordinal) || body.Contains("enjoo", StringComparison.Ordinal))
+        return "moderate";
+    }
+
+    private static (string Key, string Label)? ParseMood(string body)
+    {
+        if (body.Contains("irritada", StringComparison.Ordinal) || body.Contains("irritado", StringComparison.Ordinal))
         {
-            return ("nausea", $"náusea {IntensityLabel(intensity)}", intensity);
+            return ("irritable", "irritada");
         }
 
-        if (body.Contains("inchaco", StringComparison.Ordinal) || body.Contains("inchaço", StringComparison.Ordinal))
+        if (body.Contains("triste", StringComparison.Ordinal))
         {
-            return ("bloating", $"inchaço {IntensityLabel(intensity)}", intensity);
+            return ("sad", "triste");
         }
 
-        if (body.Contains("dor lombar", StringComparison.Ordinal))
+        if (body.Contains("ansiosa", StringComparison.Ordinal) || body.Contains("ansioso", StringComparison.Ordinal))
         {
-            return ("back_pain", $"dor lombar {IntensityLabel(intensity)}", intensity);
+            return ("anxious", "ansiosa");
+        }
+
+        if (body.Contains("sensivel", StringComparison.Ordinal))
+        {
+            return ("sensitive", "sensivel");
+        }
+
+        if (body.Contains("cansada", StringComparison.Ordinal) || body.Contains("cansado", StringComparison.Ordinal))
+        {
+            return ("tired", "cansada");
+        }
+
+        if (body.Contains("com energia", StringComparison.Ordinal) || body.Contains("disposta", StringComparison.Ordinal))
+        {
+            return ("energetic", "com energia");
+        }
+
+        if (body.Contains("bem", StringComparison.Ordinal) || body.Contains("feliz", StringComparison.Ordinal))
+        {
+            return ("well", "bem");
         }
 
         return null;
+    }
+
+    private static string ParseProtectedValue(string body)
+    {
+        if (body.Contains("sem camisinha", StringComparison.Ordinal) || body.Contains("sem protecao", StringComparison.Ordinal) || body.Contains("desproteg", StringComparison.Ordinal))
+        {
+            return "no";
+        }
+
+        if (body.Contains("camisinha", StringComparison.Ordinal) || body.Contains("preservativo", StringComparison.Ordinal) || body.Contains("com protecao", StringComparison.Ordinal))
+        {
+            return "yes";
+        }
+
+        if (body.Contains("prefiro nao", StringComparison.Ordinal))
+        {
+            return "prefer_not_say";
+        }
+
+        return "unknown";
+    }
+
+    private static object BuildSexualActivityMetadata(string body, ConversationIntent intent)
+    {
+        var protectedValue = intent.Protected ?? ParseProtectedValue(body);
+        var method = body.Contains("camisinha", StringComparison.Ordinal) || body.Contains("preservativo", StringComparison.Ordinal)
+            ? "condom"
+            : body.Contains("pilula", StringComparison.Ordinal) || body.Contains("anticoncepcional", StringComparison.Ordinal)
+                ? "pill"
+                : "unknown";
+
+        return new
+        {
+            protected_value = protectedValue,
+            @protected = protectedValue,
+            contraceptive_method = method
+        };
+    }
+
+    private static string SymptomLabel(string? key)
+    {
+        return key switch
+        {
+            "cramp" => "colica",
+            "headache" => "dor de cabeca",
+            "nausea" => "nausea",
+            "breast_tenderness" => "sensibilidade nos seios",
+            "bloating" => "inchaco",
+            "acne" => "acne",
+            "back_pain" => "dor lombar",
+            "spotting" => "sangramento fora do periodo",
+            "discharge" => "corrimento",
+            "tiredness" => "cansaco",
+            "insomnia" => "insonia",
+            "food_craving" => "desejo alimentar",
+            _ => "um sintoma"
+        };
     }
 
     private static string IntensityLabel(string intensity)
@@ -943,9 +1812,9 @@ public sealed class ConversationService(
         return flow switch
         {
             "light" => "leve",
-            "medium" => "médio",
+            "medium" => "medio",
             "intense" => "intenso",
-            _ => "não informado"
+            _ => "nao informado"
         };
     }
 

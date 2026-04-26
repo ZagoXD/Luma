@@ -20,5 +20,14 @@ public static class CycleEventTypes
     public const string Symptom = "symptom";
     public const string Mood = "mood";
     public const string SexualActivity = "sexual_activity";
+    public const string ContraceptiveTaken = "contraceptive_taken";
+    public const string ContraceptiveMissed = "contraceptive_missed";
+    public const string ContraceptiveChanged = "contraceptive_changed";
+    public const string PregnancyPositive = "pregnancy_positive";
+    public const string PregnancyBleeding = "pregnancy_bleeding";
+    public const string PregnancySymptom = "pregnancy_symptom";
+    public const string PrenatalAppointment = "prenatal_appointment";
+    public const string Ultrasound = "ultrasound";
+    public const string PregnancyNote = "pregnancy_note";
     public const string Note = "note";
 }

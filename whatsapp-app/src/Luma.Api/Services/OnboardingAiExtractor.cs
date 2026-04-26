@@ -40,7 +40,8 @@ Responda somente JSON valido, sem markdown, com este formato:
   "last_period_days_ago": number|null,
   "last_period_unknown": boolean,
   "average_cycle_length": number|null,
-  "average_period_length": number|null
+  "average_period_length": number|null,
+  "contraceptive_type": "pill"|"injection"|"hormonal_iud"|"copper_iud"|"implant"|"condom"|"none"|"other"|"prefer_not_say"|null
 }
 
 Regras:
@@ -51,6 +52,7 @@ Regras:
 - last_period_unknown: true quando disser que nao lembra ou nao sabe a ultima menstruacao.
 - average_cycle_length: intervalo/duracao do ciclo em dias, geralmente entre 21 e 45.
 - average_period_length: duracao da menstruacao em dias, geralmente entre 2 e 10.
+- contraceptive_type: metodo contraceptivo explicitamente informado. Exemplos: pilula = pill, injecao = injection, DIU hormonal = hormonal_iud, DIU de cobre = copper_iud, implante = implant, camisinha/preservativo = condom, nao uso = none, prefiro nao informar = prefer_not_say.
 - Se houver duvida, use null.
 
 Mensagem da usuaria:
@@ -110,7 +112,8 @@ Mensagem da usuaria:
             IsAdultConfirmed = ai.IsAdultConfirmed,
             LastPeriodUnknown = ai.LastPeriodUnknown,
             AverageCycleLength = ai.AverageCycleLength is >= 21 and <= 45 ? ai.AverageCycleLength : null,
-            AveragePeriodLength = ai.AveragePeriodLength is >= 2 and <= 10 ? ai.AveragePeriodLength : null
+            AveragePeriodLength = ai.AveragePeriodLength is >= 2 and <= 10 ? ai.AveragePeriodLength : null,
+            ContraceptiveType = NormalizeContraceptiveType(ai.ContraceptiveType)
         };
 
         if (ai.LastPeriodDaysAgo is >= 0 and <= 120)
@@ -143,6 +146,15 @@ Mensagem da usuaria:
         return trimmed;
     }
 
+    private static string? NormalizeContraceptiveType(string? value)
+    {
+        return value switch
+        {
+            "pill" or "injection" or "hormonal_iud" or "copper_iud" or "implant" or "condom" or "none" or "other" or "prefer_not_say" => value,
+            _ => null
+        };
+    }
+
     private sealed class OllamaGenerateResponse
     {
         public string? Response { get; set; }
@@ -170,5 +182,8 @@ Mensagem da usuaria:
 
         [JsonPropertyName("average_period_length")]
         public int? AveragePeriodLength { get; set; }
+
+        [JsonPropertyName("contraceptive_type")]
+        public string? ContraceptiveType { get; set; }
     }
 }

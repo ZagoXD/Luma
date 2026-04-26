@@ -9,6 +9,7 @@ public sealed class OnboardingExtraction
     public bool LastPeriodUnknown { get; set; }
     public int? AverageCycleLength { get; set; }
     public int? AveragePeriodLength { get; set; }
+    public string? ContraceptiveType { get; set; }
 
     public bool HasAnyValue()
     {
@@ -18,6 +19,7 @@ public sealed class OnboardingExtraction
             || LastPeriodDaysAgo is not null
             || LastPeriodUnknown
             || AverageCycleLength is not null
-            || AveragePeriodLength is not null;
+            || AveragePeriodLength is not null
+            || ContraceptiveType is not null;
     }
 }

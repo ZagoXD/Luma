@@ -23,6 +23,7 @@ public static class OnboardingSteps
     public const string AwaitingLastPeriodStart = "awaiting_last_period_start";
     public const string AwaitingAverageCycleLength = "awaiting_average_cycle_length";
     public const string AwaitingAveragePeriodLength = "awaiting_average_period_length";
+    public const string AwaitingContraceptiveMethod = "awaiting_contraceptive_method";
     public const string Completed = "completed";
     public const string ConsentDeclined = "consent_declined";
     public const string UnderageBlocked = "underage_blocked";
@@ -31,4 +32,5 @@ public static class OnboardingSteps
 public static class PendingActions
 {
     public const string AwaitingFlowIntensity = "awaiting_flow_intensity";
+    public const string AwaitingPregnancyReference = "awaiting_pregnancy_reference";
 }

@@ -10,6 +10,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<ConsentRecord> Consents => Set<ConsentRecord>();
     public DbSet<Cycle> Cycles => Set<Cycle>();
     public DbSet<CycleEvent> CycleEvents => Set<CycleEvent>();
+    public DbSet<Pregnancy> Pregnancies => Set<Pregnancy>();
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -63,6 +64,15 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(ev => ev.Type).HasMaxLength(64).IsRequired();
             entity.Property(ev => ev.Source).HasMaxLength(32).IsRequired();
             entity.Property(ev => ev.MetadataJson).HasColumnType("jsonb").IsRequired();
+        });
+
+        modelBuilder.Entity<Pregnancy>(entity =>
+        {
+            entity.ToTable("pregnancies");
+            entity.HasKey(pregnancy => pregnancy.Id);
+            entity.HasIndex(pregnancy => new { pregnancy.UserId, pregnancy.Status });
+            entity.Property(pregnancy => pregnancy.Status).HasMaxLength(32).IsRequired();
+            entity.Property(pregnancy => pregnancy.StartReference).HasMaxLength(64);
         });
 
         modelBuilder.Entity<ConversationMessage>(entity =>

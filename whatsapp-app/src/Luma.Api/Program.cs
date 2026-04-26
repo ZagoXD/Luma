@@ -18,6 +18,7 @@ builder.Services.AddDbContext<LumaDbContext>(options =>
 });
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
 builder.Services.AddHttpClient<IOnboardingDataExtractor, OnboardingAiExtractor>();
+builder.Services.AddHttpClient<IConversationIntentExtractor, OllamaConversationIntentExtractor>();
 builder.Services.AddSingleton<IDateProvider, SystemDateProvider>();
 builder.Services.AddScoped<ConversationService>();
 
@@ -33,6 +34,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LumaDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await EnsureRuntimeSchemaAsync(db);
 }
 
 app.MapGet("/health", async (LumaDbContext db) =>
@@ -111,6 +113,7 @@ app.MapGet("/admin/users", async (LumaDbContext db) =>
                     user.Preference.AveragePeriodLength,
                     user.Preference.LastPeriodStartDate,
                     user.Preference.UsesHormonalContraceptive,
+                    user.Preference.ContraceptiveType,
                     user.Preference.RemindersEnabled
                 }
         })
@@ -145,5 +148,28 @@ app.MapGet("/admin/users/{id:guid}/events", async (Guid id, LumaDbContext db) =>
 .WithOpenApi();
 
 app.Run();
+
+static async Task EnsureRuntimeSchemaAsync(LumaDbContext db)
+{
+    if (!db.Database.IsNpgsql())
+    {
+        return;
+    }
+
+    await db.Database.ExecuteSqlRawAsync("""
+CREATE TABLE IF NOT EXISTS pregnancies (
+    "Id" uuid PRIMARY KEY,
+    "UserId" uuid NOT NULL,
+    "Status" character varying(32) NOT NULL,
+    "StartReference" character varying(64),
+    "LastPeriodDate" date,
+    "GestationalWeeksAtRegistration" integer,
+    "EstimatedDueDate" date,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "IX_pregnancies_UserId_Status" ON pregnancies ("UserId", "Status");
+""");
+}
 
 public sealed record DevIncomingMessage(string From, string Body);
