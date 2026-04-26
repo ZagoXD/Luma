@@ -5,6 +5,7 @@ Backend inicial da Luma para cadastro conversacional pelo WhatsApp, usando:
 - ASP.NET Core 8
 - PostgreSQL
 - Entity Framework Core
+- Ollama
 - Docker Compose
 - Twilio WhatsApp Sandbox via webhook TwiML
 
@@ -21,6 +22,8 @@ Em geral, para desenvolvimento local, os valores padrão já funcionam. O arquiv
 ```powershell
 docker compose up -d --build
 ```
+
+Na primeira subida, o Docker também baixa a imagem do Ollama e faz pull do modelo configurado em `OLLAMA_MODEL`. Isso pode demorar alguns minutos.
 
 API local:
 
@@ -55,9 +58,10 @@ API_HOST_PORT=5050
 ASPNETCORE_ENVIRONMENT=Development
 LUMA_STORE_MESSAGE_BODIES=false
 OLLAMA_ENABLED=true
-OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=llama3.2
 OLLAMA_TIMEOUT_SECONDS=20
+OLLAMA_HOST_PORT=11434
 ```
 
 No estado atual, não há segredo da Twilio no backend. A Twilio chama o webhook e a API responde com TwiML na própria requisição.
@@ -160,7 +164,7 @@ Apagar banco local:
 docker compose down -v
 ```
 
-## IA local
+## IA local via Docker
 
 O onboarding do MVP usa regras determinísticas com fallback para Ollama durante a coleta de dados. Isso permite interpretar mensagens naturais depois do consentimento, como:
 
@@ -172,22 +176,24 @@ meu ciclo costuma ter 30 dias e a menstruação dura 5 dias
 
 Por privacidade, a Luma ainda exige consentimento explícito antes de salvar qualquer dado da usuária.
 
-No Docker, a API acessa o Ollama local pelo endereço:
+O Ollama sobe junto no Docker Compose:
 
 ```txt
-http://host.docker.internal:11434
+api -> http://ollama:11434
 ```
 
-No Windows, se o `ollama` não estiver no PATH, use:
+O serviço `ollama-pull` baixa automaticamente o modelo definido em:
+
+```txt
+OLLAMA_MODEL=llama3.2
+```
+
+Para verificar os modelos dentro do container:
 
 ```powershell
-& 'C:\Users\gugu_\AppData\Local\Programs\Ollama\ollama.exe' list
+docker exec luma-ollama ollama list
 ```
 
-Modelo usado:
-
-```powershell
-ollama pull llama3.2
-```
+Em produção, não exponha a porta `11434` publicamente. A API deve falar com o Ollama pela rede interna do Docker.
 
 Próxima evolução: usar o Ollama também como `IMessageIntentParser` para mensagens livres após o cadastro e como `IResponseHumanizer`, mantendo a regra do produto: o sistema decide, a IA escreve.
