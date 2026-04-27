@@ -1,19 +1,22 @@
 import { ChatMessage, PhoneFrame } from "@/components/molecules/PhoneFrame";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
+import { MessageSquareText, BarChart3, BellDot } from "lucide-react";
+
+const iconProps = { size: 18, strokeWidth: 1.75 };
 
 const points = [
   {
-    icon: "🌙",
+    icon: <MessageSquareText {...iconProps} />,
     title: "Linguagem natural",
     text: 'Escreva como você fala: "menstruei hoje", "tô com cólica" ou "quando foi minha última menstruação?"',
   },
   {
-    icon: "📊",
+    icon: <BarChart3 {...iconProps} />,
     title: "Histórico organizado",
     text: "Tudo fica registrado e você pode consultar quando quiser, sem precisar lembrar onde salvou.",
   },
   {
-    icon: "🔔",
+    icon: <BellDot {...iconProps} />,
     title: "Lembretes opcionais",
     text: "Ative avisos sobre próxima menstruação ou anticoncepcional — só se quiser.",
   },
@@ -34,7 +37,7 @@ export function SolutionSection() {
               }
               lead="A Luma é uma assistente de ciclo que você acessa por mensagem. Sem instalar nada novo, sem aprender interface nova — só mandar mensagem como você já faz todo dia."
             />
-            <div className="solucao-points">
+            <div className="solucao-points" style={{ marginTop: "2rem" }}>
               {points.map((point) => (
                 <div className="point-row" key={point.title}>
                   <div className="point-dot">{point.icon}</div>

@@ -1,21 +1,22 @@
 import { PainCard } from "@/components/molecules/Cards";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
+import { PhoneOff, ClipboardX, BrainCog } from "lucide-react";
 
 const cards = [
   {
-    icon: "📱",
+    icon: <PhoneOff size={22} strokeWidth={1.75} />,
     title: "O app fica esquecido",
     text: "Depois de alguns dias sem abrir, o histórico fica incompleto e as previsões perdem sentido.",
     delay: "0.1s",
   },
   {
-    icon: "🗓",
+    icon: <ClipboardX size={22} strokeWidth={1.75} />,
     title: "Registro manual é chato",
     text: "Abrir, navegar até a tela certa, marcar sintomas um por um. Pouca gente faz isso no dia a dia.",
     delay: "0.2s",
   },
   {
-    icon: "💭",
+    icon: <BrainCog size={22} strokeWidth={1.75} />,
     title: "A memória falha",
     text: "Quando você finalmente abre o app, já não lembra quando exatamente a menstruação começou ou acabou.",
     delay: "0.3s",
