@@ -17,7 +17,7 @@ export function SectionHeading({ tag, title, lead, centered, darkTitle }: Sectio
         {title}
       </h2>
       {lead ? (
-        <p className="section-lead" style={centered ? { margin: "0 auto" } : undefined}>
+        <p className="section-lead" style={centered ? { marginLeft: "auto", marginRight: "auto" } : undefined}>
           {lead}
         </p>
       ) : null}

@@ -1,3 +1,7 @@
+"use client";
+
+import { Check, Minus } from "lucide-react";
+
 type PlanCardProps = {
   badge: string;
   badgeClass: string;
@@ -10,6 +14,7 @@ type PlanCardProps = {
   note: string;
   featured?: boolean;
   delay: string;
+  planValue: string;
 };
 
 export function PlanCard({
@@ -24,7 +29,24 @@ export function PlanCard({
   note,
   featured,
   delay,
+  planValue,
 }: PlanCardProps) {
+  function handleSelectPlan() {
+    // Seleciona o radio do plano no formulário
+    const radio = document.querySelector<HTMLInputElement>(
+      `input[name="plano"][value="${planValue}"]`
+    );
+    if (radio) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    // Scroll suave até o formulário
+    const target = document.getElementById("lista");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth" });
+    }
+  }
+
   return (
     <div className={`plan-card ${featured ? "featured " : ""}fade-up`} style={{ transitionDelay: delay }}>
       <span className={`plan-badge ${badgeClass}`}>{badge}</span>
@@ -35,12 +57,14 @@ export function PlanCard({
       <ul className="plan-features">
         {features.map((feature) => (
           <li key={feature.label}>
-            <span className={`check ${feature.enabled ? "on" : "off"}`}>{feature.enabled ? "✓" : "–"}</span>{" "}
+            <span className={`check ${feature.enabled ? "on" : "off"}`}>
+              {feature.enabled ? <Check size={10} strokeWidth={3} /> : <Minus size={10} strokeWidth={3} />}
+            </span>{" "}
             {feature.label}
           </li>
         ))}
       </ul>
-      <button className={`plan-cta ${ctaClass}`} data-scroll-target="lista">
+      <button className={`plan-cta ${ctaClass}`} onClick={handleSelectPlan}>
         {cta}
       </button>
       <p className="plan-note">{note}</p>

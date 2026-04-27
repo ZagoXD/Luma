@@ -23,6 +23,7 @@ export function PricingSection() {
             badge="Básico"
             badgeClass="basic"
             name="Básico"
+            planValue="basico"
             price={
               <>
                 <span className="plan-currency">R$</span>
@@ -47,6 +48,7 @@ export function PricingSection() {
             badge="Mais escolhido"
             badgeClass="full"
             name="Essencial"
+            planValue="essencial"
             price={
               <>
                 <span className="plan-currency">R$</span>

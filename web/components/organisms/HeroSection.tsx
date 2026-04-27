@@ -14,8 +14,7 @@ export function HeroSection() {
           em uma conversa.
         </h1>
         <p className="hero-sub">
-          Chega de abrir aplicativo que você esquece de usar. Com a Luma, é só mandar uma mensagem — e ela organiza
-          tudo.
+          Chega de abrir aplicativo que você esquece de usar. Com a Luma, você usa direto pelo WhatsApp: é só mandar uma mensagem e ela organiza tudo.
         </p>
         <div className="hero-actions">
           <ButtonLink variant="primary" href="#lista">

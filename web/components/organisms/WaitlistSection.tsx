@@ -132,7 +132,7 @@ export function WaitlistSection() {
             <br />a testar a <em style={{ color: "var(--lavender)" }}>Luma.</em>
           </h2>
           <p className="section-lead" style={{ textAlign: "center", margin: "0 auto 3rem" }}>
-            Cadastre seu interesse. Quando a primeira versão estiver pronta, você recebe antes de todo mundo.
+            Cadastre seu interesse gratuitamente. Quando a primeira versão estiver pronta, você recebe antes de todo mundo.
           </p>
         </div>
         <div className="form-wrapper fade-up" style={{ transitionDelay: "0.1s" }}>

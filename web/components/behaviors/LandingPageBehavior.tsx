@@ -29,7 +29,7 @@ export function LandingPageBehavior() {
       },
       { threshold: 0.12 },
     );
-    document.querySelectorAll(".fade-up").forEach((el) => fadeObserver.observe(el));
+    document.querySelectorAll(".fade-up, .zoom-fade, .slide-side, .slide-side-r").forEach((el) => fadeObserver.observe(el));
 
     const scrollButtons = document.querySelectorAll<HTMLElement>("[data-scroll-target]");
     const onScrollButtonClick = (event: Event) => {
