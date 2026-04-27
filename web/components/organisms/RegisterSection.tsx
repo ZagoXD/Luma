@@ -1,10 +1,11 @@
 import { FeatureCard } from "@/components/molecules/Cards";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
 import { CircleDot, CircleCheck, Droplets, HeartPulse, Smile, Bell, CalendarDays, Lock } from "lucide-react";
+import type { ReactNode } from "react";
 
 const iconProps = { size: 20, strokeWidth: 1.75 };
 
-const items = [
+const items: [ReactNode, string, string][] = [
   [<CircleDot {...iconProps} />, "Início da menstruação", 'Só falar "menstruei hoje" — ela registra e inicia o ciclo.'],
   [<CircleCheck {...iconProps} />, "Fim da menstruação", '"Acabou ontem" já é suficiente para fechar o ciclo.'],
   [<Droplets {...iconProps} />, "Intensidade do fluxo", "Leve, médio ou intenso — você atualiza quando quiser."],

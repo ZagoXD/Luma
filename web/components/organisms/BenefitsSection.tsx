@@ -1,10 +1,11 @@
 import { BenefitCard } from "@/components/molecules/Cards";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
 import { MessageCircle, Zap, BarChart2, Target, BellRing, MessagesSquare, ShieldCheck, Moon } from "lucide-react";
+import type { ReactNode } from "react";
 
 const iconProps = { size: 20, strokeWidth: 1.75 };
 
-const benefits = [
+const benefits: [ReactNode, string, string][] = [
   [<MessageCircle {...iconProps} />, "Sem abrir novo app", "Tudo via mensagem, no canal que você já usa todos os dias."],
   [<Zap {...iconProps} />, "Registro em segundos", "Uma mensagem curta já é suficiente. Sem campos, sem navegação."],
   [<BarChart2 {...iconProps} />, "Histórico organizado", "Seus ciclos ficam registrados e acessíveis quando você quiser."],
