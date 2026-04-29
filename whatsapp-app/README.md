@@ -5,7 +5,8 @@ Backend inicial da Luma para cadastro conversacional pelo WhatsApp, usando:
 - ASP.NET Core 8
 - PostgreSQL
 - Entity Framework Core
-- Ollama
+- OpenAI API
+- Ollama opcional para fallback/local-dev
 - Docker Compose
 - Twilio WhatsApp Sandbox via webhook TwiML
 
@@ -23,7 +24,7 @@ Em geral, para desenvolvimento local, os valores padrão já funcionam. O arquiv
 docker compose up -d --build
 ```
 
-Na primeira subida, o Docker também baixa a imagem do Ollama e faz pull do modelo configurado em `OLLAMA_MODEL`. Isso pode demorar alguns minutos.
+Na primeira subida, o Docker também pode baixar a imagem do Ollama e fazer pull do modelo configurado em `OLLAMA_MODEL`. Com `LUMA_AI_PROVIDER=openai`, a conversa usa OpenAI API; o Ollama fica como alternativa local.
 
 API local:
 
@@ -57,6 +58,12 @@ POSTGRES_HOST_PORT=5433
 API_HOST_PORT=5050
 ASPNETCORE_ENVIRONMENT=Development
 LUMA_STORE_MESSAGE_BODIES=false
+LUMA_AI_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_TIMEOUT_SECONDS=12
+OPENAI_MAX_OUTPUT_TOKENS=700
+OPENAI_REASONING_EFFORT=none
 OLLAMA_ENABLED=true
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=llama3.2
@@ -164,9 +171,35 @@ Apagar banco local:
 docker compose down -v
 ```
 
+## IA via OpenAI API
+
+Para usar a Luma com o mesmo comportamento em desenvolvimento e produção:
+
+```txt
+LUMA_AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5.4-mini
+```
+
+A API usa a Responses API com saídas estruturadas para:
+
+- extrair dados de cadastro;
+- interpretar intenções livres;
+- selecionar tools que o backend valida e executa;
+- humanizar a resposta final da Luma quando não for guardrail fixo.
+
+O backend continua autoritativo: a IA sugere a ação, mas a API valida LGPD, maioridade, limites médicos e escrita no banco.
+
 ## IA local via Docker
 
-O onboarding do MVP usa regras determinísticas com fallback para Ollama durante a coleta de dados. Isso permite interpretar mensagens naturais depois do consentimento, como:
+O Ollama permanece disponível para fallback/local-dev. Para usá-lo como provedor principal:
+
+```txt
+LUMA_AI_PROVIDER=ollama
+OLLAMA_ENABLED=true
+```
+
+O onboarding do MVP também usa regras determinísticas com fallback de IA durante a coleta de dados. Isso permite interpretar mensagens naturais depois do consentimento, como:
 
 ```txt
 Olá, meu nome é Julia
@@ -196,4 +229,4 @@ docker exec luma-ollama ollama list
 
 Em produção, não exponha a porta `11434` publicamente. A API deve falar com o Ollama pela rede interna do Docker.
 
-Próxima evolução: usar o Ollama também como `IMessageIntentParser` para mensagens livres após o cadastro e como `IResponseHumanizer`, mantendo a regra do produto: o sistema decide, a IA escreve.
+Regra do produto: o sistema decide e valida; a IA interpreta e escreve.

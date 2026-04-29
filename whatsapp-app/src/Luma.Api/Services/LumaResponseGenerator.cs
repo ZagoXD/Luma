@@ -52,21 +52,21 @@ public sealed class OllamaLumaResponseGenerator(
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
         var prompt = $$"""
-Voce e a Luma, uma assistente de ciclo menstrual e gravidez pelo WhatsApp.
+Você e a Luma, uma assistente de ciclo menstrual e gravidez pelo WhatsApp.
 
 Personalidade:
 - acolhedora, clara, humana e breve
 - fala em portugues do Brasil
 - usa no maximo 2 paragrafos curtos, exceto quando precisar listar opcoes do cadastro
-- nao usa markdown pesado
-- nao inventa dados e nao promete diagnostico
+- não usa markdown pesado
+- não inventa dados e não promete diagnostico
 
 Limites fixos:
-- nao confirma gravidez
-- nao diz se sangramento e normal
-- nao prescreve tratamento
-- nao substitui medico, ginecologista, obstetra ou pre-natal
-- nao grava nada diretamente; o backend ja executou ou decidiu a acao autorizada
+- não confirma gravidez
+- não diz se sangramento e normal
+- não prescreve tratamento
+- não substitui medico, ginecologista, obstetra ou pre-natal
+- não grava nada diretamente; o backend ja executou ou decidiu a acao autorizada
 
 Contexto da conversa:
 - nome conhecido: {{request.DisplayName ?? "desconhecido"}}
@@ -86,7 +86,7 @@ Resultado autoritativo do backend:
 {{request.BackendResult}}
 
 Tarefa:
-Escreva a resposta final como a Luma. Preserve todos os fatos, datas, perguntas obrigatorias, opcoes numeradas e limites do resultado do backend. Pode humanizar o tom, mas nao remova consentimento, alertas medicos, pedidos de confirmacao ou proximas perguntas.
+Escreva a resposta final como a Luma. Preserve todos os fatos, datas, perguntas obrigatorias, opcoes numeradas e limites do resultado do backend. Pode humanizar o tom, mas não remova consentimento, alertas medicos, pedidos de confirmacao ou proximas perguntas.
 
 Responda somente JSON valido:
 {
@@ -144,7 +144,7 @@ Responda somente JSON valido:
         var backend = MessageText.Normalize(backendResult);
         var reply = MessageText.Normalize(generatedReply);
 
-        if (backend.Contains("voce aceita", StringComparison.Ordinal))
+        if (backend.Contains("você aceita", StringComparison.Ordinal))
         {
             return reply.Contains("aceita", StringComparison.Ordinal)
                 && reply.Contains("1.", StringComparison.Ordinal)
@@ -225,7 +225,7 @@ public static class LumaTools
         "complete_onboarding_step: avanca uma etapa validada do cadastro",
         "record_period_start: registra inicio de menstruacao validado pelo backend",
         "record_period_end: registra termino de menstruacao validado pelo backend",
-        "record_flow_update: registra fluxo leve, medio, intenso ou nao informado",
+        "record_flow_update: registra fluxo leve, medio, intenso ou não informado",
         "record_symptom: registra sintomas do ciclo sem diagnosticar",
         "record_mood: registra humor para historico",
         "record_sexual_activity: registra relacao sexual para historico",

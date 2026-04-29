@@ -17,10 +17,29 @@ builder.Services.AddDbContext<LumaDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
-builder.Services.AddHttpClient<IOnboardingDataExtractor, OnboardingAiExtractor>();
-builder.Services.AddHttpClient<IConversationIntentExtractor, OllamaConversationIntentExtractor>();
-builder.Services.AddHttpClient<ILumaToolAgent, OllamaLumaToolAgent>();
-builder.Services.AddHttpClient<ILumaResponseGenerator, OllamaLumaResponseGenerator>();
+builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
+builder.Services.AddHttpClient<OpenAiResponsesClient>();
+
+var configuredAiProvider = builder.Configuration["Luma:AiProvider"];
+var hasOpenAiKey = !string.IsNullOrWhiteSpace(builder.Configuration["OpenAI:ApiKey"]);
+var aiProvider = string.IsNullOrWhiteSpace(configuredAiProvider)
+    ? hasOpenAiKey ? "openai" : "ollama"
+    : configuredAiProvider.Trim().ToLowerInvariant();
+if (aiProvider == "openai")
+{
+    builder.Services.AddScoped<IOnboardingDataExtractor, OpenAiOnboardingDataExtractor>();
+    builder.Services.AddScoped<IConversationIntentExtractor, OpenAiConversationIntentExtractor>();
+    builder.Services.AddScoped<ILumaToolAgent, OpenAiLumaToolAgent>();
+    builder.Services.AddScoped<ILumaResponseGenerator, OpenAiLumaResponseGenerator>();
+}
+else
+{
+    builder.Services.AddHttpClient<IOnboardingDataExtractor, OnboardingAiExtractor>();
+    builder.Services.AddHttpClient<IConversationIntentExtractor, OllamaConversationIntentExtractor>();
+    builder.Services.AddHttpClient<ILumaToolAgent, OllamaLumaToolAgent>();
+    builder.Services.AddHttpClient<ILumaResponseGenerator, OllamaLumaResponseGenerator>();
+}
+
 builder.Services.AddSingleton<IDateProvider, SystemDateProvider>();
 builder.Services.AddScoped<ConversationService>();
 

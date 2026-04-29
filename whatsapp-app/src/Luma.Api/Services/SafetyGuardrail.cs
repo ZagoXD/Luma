@@ -2,7 +2,7 @@ namespace Luma.Api.Services;
 
 public static class SafetyGuardrail
 {
-    public const string SafeReply = "Nao consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnostico, gravidez, sangramentos ou decisoes medicas o ideal e procurar um profissional de saude.";
+    public const string SafeReply = "Não consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnostico, gravidez, sangramentos ou decisoes medicas o ideal e procurar um profissional de saude.";
 
     public static bool ShouldBlock(string normalizedBody)
     {
@@ -20,8 +20,8 @@ public static class SafetyGuardrail
             || normalizedBody.Contains("infeccao", StringComparison.Ordinal)
             || normalizedBody.Contains("endometriose", StringComparison.Ordinal)
             || normalizedBody.Contains("periodo seguro", StringComparison.Ordinal)
-            || normalizedBody.Contains("nao preciso procurar medico", StringComparison.Ordinal)
-            || normalizedBody.Contains("nao precisa procurar medico", StringComparison.Ordinal))
+            || normalizedBody.Contains("não preciso procurar medico", StringComparison.Ordinal)
+            || normalizedBody.Contains("não precisa procurar medico", StringComparison.Ordinal))
         {
             return true;
         }

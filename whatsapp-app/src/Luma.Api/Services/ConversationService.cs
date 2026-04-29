@@ -46,7 +46,7 @@ public sealed class ConversationService(
         });
 
         var backendReply = await BuildReplyAsync(user, incoming.Body);
-        var reply = await BuildFinalReplyAsync(user, incoming.Body, backendReply);
+        var reply = PortugueseReplyPolisher.Apply(await BuildFinalReplyAsync(user, incoming.Body, backendReply));
 
         db.Messages.Add(new ConversationMessage
         {
@@ -103,7 +103,7 @@ public sealed class ConversationService(
 
         if (user.OnboardingStep is OnboardingSteps.UnderageBlocked)
         {
-            return "Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
+            return "Por seguranca, a Luma ainda não pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
         }
 
         if (user.OnboardingStep != OnboardingSteps.Completed)
@@ -117,6 +117,11 @@ public sealed class ConversationService(
             && (intent.Intent != ConversationIntents.PregnancyPositive || !IsPregnancyPositiveStatement(body)))
         {
             return SafetyGuardrail.SafeReply;
+        }
+
+        if (IsAveragePeriodLengthQuestion(body) || TryParseAveragePeriodLengthPreferenceUpdate(body, out _))
+        {
+            return await HandleCompletedUserMessageAsync(user, body, rawBody, intent);
         }
 
         if (user.PendingAction == PendingActions.AwaitingFlowIntensity)
@@ -134,7 +139,7 @@ public sealed class ConversationService(
 
             if (!LooksLikeKnownCompletedIntent(body, intent))
             {
-                return "Como esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
+                return "Como esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro não informar";
             }
 
             user.PendingAction = null;
@@ -148,6 +153,12 @@ public sealed class ConversationService(
         if (SafetyGuardrail.ShouldBlock(body) && !IsPregnancyPositiveStatement(body))
         {
             return SafetyGuardrail.SafeReply;
+        }
+
+        if (user.OnboardingStep == OnboardingSteps.Completed
+            && (IsAveragePeriodLengthQuestion(body) || TryParseAveragePeriodLengthPreferenceUpdate(body, out _)))
+        {
+            return null;
         }
 
         if (user.OnboardingStep == OnboardingSteps.AwaitingConsent && IsGreeting(body))
@@ -195,6 +206,11 @@ public sealed class ConversationService(
                 return await ExecuteRecordPeriodStartToolAsync(user, tool, today);
 
             case "record_period_end":
+                if (IsAveragePeriodLengthQuestion(body) || TryParseAveragePeriodLengthPreferenceUpdate(body, out _))
+                {
+                    return null;
+                }
+
                 return await ExecuteRecordPeriodEndToolAsync(user, tool, today);
 
             case "record_flow_update":
@@ -355,7 +371,7 @@ public sealed class ConversationService(
         }
 
         user.PendingAction = PendingActions.AwaitingFlowIntensity;
-        return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
+        return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro não informar";
     }
 
     private async Task<string?> ExecuteRecordPeriodEndToolAsync(LumaUser user, LumaToolCall tool, DateOnly today)
@@ -374,7 +390,7 @@ public sealed class ConversationService(
         if (cycle is null)
         {
             await AddCycleEventAsync(user.Id, null, CycleEventTypes.PeriodEnd, date, new { needs_period_start = true, agent_tool = true });
-            return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ainda nao encontrei um ciclo aberto para calcular a duracao; se puder, me diga quando ela comecou.";
+            return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ainda não encontrei um ciclo aberto para calcular a duracao; se puder, me diga quando ela comecou.";
         }
 
         if (date < cycle.StartDate)
@@ -414,7 +430,7 @@ public sealed class ConversationService(
             agent_tool = true
         });
 
-        return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu nao uso isso para afirmar gravidez ou diagnostico.";
+        return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu não uso isso para afirmar gravidez ou diagnostico.";
     }
 
     private async Task<string> ContinueOnboardingAsync(LumaUser user, string body, string rawBody)
@@ -432,7 +448,7 @@ public sealed class ConversationService(
                 if (IsNegative(body))
                 {
                     user.OnboardingStep = OnboardingSteps.ConsentDeclined;
-                    return "Tudo bem. Sem o seu consentimento eu nao posso armazenar dados do ciclo ou continuar o cadastro. Se mudar de ideia, responda \"aceito\".";
+                    return "Tudo bem. Sem o seu consentimento eu não posso armazenar dados do ciclo ou continuar o cadastro. Se mudar de ideia, responda \"aceito\".";
                 }
 
                 return InitialConsentMessage();
@@ -483,7 +499,7 @@ public sealed class ConversationService(
                 {
                     user.IsAdultConfirmed = false;
                     user.OnboardingStep = OnboardingSteps.UnderageBlocked;
-                    return "Obrigada por responder. Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
+                    return "Obrigada por responder. Por seguranca, a Luma ainda não pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
                 }
 
                 var ageStepOutOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
@@ -492,7 +508,7 @@ public sealed class ConversationService(
                     return ageStepOutOfOrderReply;
                 }
 
-                return MisunderstoodMessage("Voce pode responder \"sim\", \"nao\" ou algo como \"tenho 23 anos\".");
+                return MisunderstoodMessage("Você pode responder \"sim\", \"não\" ou algo como \"tenho 23 anos\".");
 
             case OnboardingSteps.AwaitingLastPeriodStart:
                 var extractedFromPeriodStep = await ExtractOnboardingDataAsync(body, rawBody, today);
@@ -518,7 +534,7 @@ public sealed class ConversationService(
                         return periodStepOutOfOrderReply;
                     }
 
-                    return MisunderstoodMessage("Pode responder como \"10/04\", \"dia 10\", \"comecou ha 3 dias\", \"ontem\" ou \"nao lembro\".");
+                    return MisunderstoodMessage("Pode responder como \"10/04\", \"dia 10\", \"comecou ha 3 dias\", \"ontem\" ou \"não lembro\".");
                 }
 
                 EnsurePreference(user).LastPeriodStartDate = date.Value;
@@ -549,7 +565,7 @@ public sealed class ConversationService(
                         return cycleStepOutOfOrderReply;
                     }
 
-                    return MisunderstoodMessage("Me diga um numero entre 21 e 45 dias. Se nao souber, responda \"nao sei\" e uso 28 dias por enquanto.");
+                    return MisunderstoodMessage("Me diga um numero entre 21 e 45 dias. Se não souber, responda \"não sei\" e uso 28 dias por enquanto.");
                 }
 
                 EnsurePreference(user).AverageCycleLength = cycleLength.Value;
@@ -591,7 +607,7 @@ public sealed class ConversationService(
                         return contraceptiveStepOutOfOrderReply;
                     }
 
-                    return MisunderstoodMessage("Pode responder algo como \"tomo pilula\", \"uso DIU\", \"uso camisinha\", \"nao uso\" ou \"prefiro nao informar\".");
+                    return MisunderstoodMessage("Pode responder algo como \"tomo pilula\", \"uso DIU\", \"uso camisinha\", \"não uso\" ou \"prefiro não informar\".");
                 }
 
                 ApplyContraceptivePreference(user, contraceptive);
@@ -976,19 +992,17 @@ public sealed class ConversationService(
             return pendingIntentReply;
         }
 
-        if (intent.Intent == ConversationIntents.LumaIdentityQuestion)
+        if (IsAveragePeriodLengthQuestion(body))
         {
-            return LumaIdentityMessage();
+            return BuildAveragePeriodLengthReply(user);
         }
 
-        if (intent.Intent == ConversationIntents.KnowledgeQuestion && LumaKnowledgeBase.Search(body) is { } knowledgeReply)
+        if (TryParseAveragePeriodLengthPreferenceUpdate(body, out var averagePeriodLength))
         {
-            return knowledgeReply;
-        }
-
-        if (intent.Intent == ConversationIntents.OutOfScope)
-        {
-            return OutOfScopeMessage();
+            EnsurePreference(user).AveragePeriodLength = averagePeriodLength;
+            EnsurePreference(user).UpdatedAt = DateTimeOffset.UtcNow;
+            var prefix = string.IsNullOrWhiteSpace(user.DisplayName) ? "" : $"{user.DisplayName}, ";
+            return $"{prefix}atualizei aqui: vou considerar que sua menstruacao costuma durar cerca de {averagePeriodLength} dias, em media.";
         }
 
         if (IsHelp(body))
@@ -1004,6 +1018,21 @@ public sealed class ConversationService(
         if (body.Contains("apagar", StringComparison.Ordinal) || body.Contains("excluir", StringComparison.Ordinal))
         {
             return "Eu posso apagar seus dados, mas essa acao precisa de confirmacao. Para este MVP local, me avise no painel/admin ou implemente o fluxo definitivo antes de usar em producao.";
+        }
+
+        if (intent.Intent == ConversationIntents.LumaIdentityQuestion)
+        {
+            return LumaIdentityMessage();
+        }
+
+        if (intent.Intent == ConversationIntents.KnowledgeQuestion && LumaKnowledgeBase.Search(body) is { } knowledgeReply)
+        {
+            return knowledgeReply;
+        }
+
+        if (intent.Intent == ConversationIntents.OutOfScope)
+        {
+            return OutOfScopeMessage();
         }
 
         if (intent.Intent == ConversationIntents.LastSexualActivityQuestion)
@@ -1099,7 +1128,7 @@ public sealed class ConversationService(
             }
 
             user.PendingAction = PendingActions.AwaitingFlowIntensity;
-            return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
+            return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro não informar";
         }
 
         if (intent.Intent == ConversationIntents.PeriodEnd || IsPeriodEnd(body))
@@ -1113,7 +1142,7 @@ public sealed class ConversationService(
             if (cycle is null)
             {
                 await AddCycleEventAsync(user.Id, null, CycleEventTypes.PeriodEnd, date, new { needs_period_start = true });
-                return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ainda nao encontrei um ciclo aberto para calcular a duracao; se puder, me diga quando ela comecou.";
+                return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ainda não encontrei um ciclo aberto para calcular a duracao; se puder, me diga quando ela comecou.";
             }
 
             if (date < cycle.StartDate)
@@ -1170,7 +1199,7 @@ public sealed class ConversationService(
                 mood = mood.Value.Key
             });
 
-            return $"Registrei que voce esta se sentindo {mood.Value.Label} hoje. Isso fica guardado so como historico para te ajudar a perceber padroes ao longo dos ciclos.";
+            return $"Registrei que você esta se sentindo {mood.Value.Label} hoje. Isso fica guardado so como historico para te ajudar a perceber padroes ao longo dos ciclos.";
         }
 
         if (intent.Intent == ConversationIntents.SexualActivity || IsSexualActivity(body))
@@ -1178,7 +1207,7 @@ public sealed class ConversationService(
             var date = intent.Date ?? DateParser.ParseFlexibleDate(rawBody, today) ?? today;
             var metadata = BuildSexualActivityMetadata(body, intent);
             await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.SexualActivity, date, metadata);
-            return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu nao uso isso para afirmar gravidez ou diagnostico.";
+            return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu não uso isso para afirmar gravidez ou diagnostico.";
         }
 
         if (LooksLikeQuestion(body))
@@ -1186,7 +1215,7 @@ public sealed class ConversationService(
             return OutOfScopeMessage();
         }
 
-        return MisunderstoodMessage("Voce pode tentar de um jeito mais direto, como \"menstruei hoje\", \"acabou ontem\", \"fluxo intenso\", \"to com colica forte\", \"tive relacao ontem\", \"estou gravida de 8 semanas\" ou \"quando e minha proxima menstruacao?\".");
+        return MisunderstoodMessage("Você pode tentar de um jeito mais direto, como \"menstruei hoje\", \"acabou ontem\", \"fluxo intenso\", \"to com colica forte\", \"tive relacao ontem\", \"estou gravida de 8 semanas\" ou \"quando e minha proxima menstruacao?\".");
     }
 
     private async Task<Cycle> CreateOrUpdateCycleFromLastPeriodAsync(Guid userId, DateOnly date, string status = CycleStatus.Ongoing)
@@ -1324,7 +1353,7 @@ public sealed class ConversationService(
             pending.Status = PendingIntentStatus.Dismissed;
             pending.CompletedAt = DateTimeOffset.UtcNow;
             pending.UpdatedAt = DateTimeOffset.UtcNow;
-            return "Tudo bem, nao registrei aquela informacao. Quando quiser, pode me mandar de novo de um jeito natural.";
+            return "Tudo bem, não registrei aquela informacao. Quando quiser, pode me mandar de novo de um jeito natural.";
         }
 
         if (!IsAffirmative(body))
@@ -1362,7 +1391,7 @@ public sealed class ConversationService(
                 contraceptive_method = "unknown"
             });
 
-            return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu nao uso isso para afirmar gravidez ou diagnostico.";
+            return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu não uso isso para afirmar gravidez ou diagnostico.";
         }
 
         if (pending.Intent == ConversationIntents.PregnancyPositive)
@@ -1373,7 +1402,7 @@ public sealed class ConversationService(
         pending.Status = PendingIntentStatus.Dismissed;
         pending.CompletedAt = DateTimeOffset.UtcNow;
         pending.UpdatedAt = DateTimeOffset.UtcNow;
-        return "Eu tinha guardado uma intencao anterior, mas ainda nao consigo executar esse tipo de registro com seguranca. Pode me mandar de novo depois do cadastro, de forma direta?";
+        return "Eu tinha guardado uma intencao anterior, mas ainda não consigo executar esse tipo de registro com seguranca. Pode me mandar de novo depois do cadastro, de forma direta?";
     }
 
     private static ConsentRecord NewConsent(Guid userId, string type)
@@ -1428,7 +1457,7 @@ public sealed class ConversationService(
 
     private static string InitialConsentMessage()
     {
-        return "Oi! Eu sou sua assistente de ciclo pelo WhatsApp.\n\nAntes de comecar: eu posso te ajudar a registrar menstruacao, sintomas, lembretes e historico. Nao substituo orientacao medica e nao faco diagnosticos.\n\nPara continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saude menstrual.\n\nVoce aceita?\n1. Aceito\n2. Nao aceito";
+        return "Oi! Eu sou sua assistente de ciclo pelo WhatsApp.\n\nAntes de comecar: eu posso te ajudar a registrar menstruacao, sintomas, lembretes e historico. Não substituo orientacao medica e não faco diagnosticos.\n\nPara continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saude menstrual.\n\nVocê aceita?\n1. Aceito\n2. Não aceito";
     }
 
     private static string MisunderstoodMessage(string hint)
@@ -1446,20 +1475,20 @@ public sealed class ConversationService(
         {
             OnboardingSteps.AwaitingDisplayName => "Para eu deixar nossa conversa mais pessoal, como devo te chamar? Pode mandar so seu primeiro nome ou apelido.",
             OnboardingSteps.AwaitingAgeConfirmation => firstContact
-                ? $"Ola, {user.DisplayName}, prazer em conhece-la. Meu nome e Luma e vou ser sua assistente de ciclo por aqui.\n\nAntes de seguirmos, voce poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Nao"
-                : $"{prefix}antes de continuar, voce poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Nao",
+                ? $"Ola, {user.DisplayName}, prazer em conhece-la. Meu nome e Luma e vou ser sua assistente de ciclo por aqui.\n\nAntes de seguirmos, você poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Não"
+                : $"{prefix}antes de continuar, você poderia me confirmar se tem 18 anos ou mais?\n1. Sim\n2. Não",
             OnboardingSteps.AwaitingLastPeriodStart => manyDetails
-                ? $"{prefix}obrigada por ja me passar essas informacoes. Agora me diz: qual foi o primeiro dia da sua ultima menstruacao?\n\nPode responder tipo \"comecou dia 10/04\" ou \"nao lembro\"."
-                : $"{prefix}obrigada por confirmar. Qual foi o primeiro dia da sua ultima menstruacao?\n\nPode responder tipo \"comecou dia 10/04\" ou \"nao lembro\".",
+                ? $"{prefix}obrigada por ja me passar essas informacoes. Agora me diz: qual foi o primeiro dia da sua ultima menstruacao?\n\nPode responder tipo \"comecou dia 10/04\" ou \"não lembro\"."
+                : $"{prefix}obrigada por confirmar. Qual foi o primeiro dia da sua ultima menstruacao?\n\nPode responder tipo \"comecou dia 10/04\" ou \"não lembro\".",
             OnboardingSteps.AwaitingAverageCycleLength => manyDetails
-                ? $"Prazer em conhece-la, {user.DisplayName}. Obrigada por ja me passar essas informacoes. Para finalizar seu cadastro, me diz: seu ciclo costuma ter quantos dias?\n\nSe nao souber, posso comecar usando 28 dias e ir ajustando com o tempo."
-                : $"{prefix}perfeito, obrigada. Seu ciclo costuma ter quantos dias?\n\nSe nao souber, posso comecar usando 28 dias e ir ajustando com o tempo.",
+                ? $"Prazer em conhece-la, {user.DisplayName}. Obrigada por ja me passar essas informacoes. Para finalizar seu cadastro, me diz: seu ciclo costuma ter quantos dias?\n\nSe não souber, posso comecar usando 28 dias e ir ajustando com o tempo."
+                : $"{prefix}perfeito, obrigada. Seu ciclo costuma ter quantos dias?\n\nSe não souber, posso comecar usando 28 dias e ir ajustando com o tempo.",
             OnboardingSteps.AwaitingAveragePeriodLength => manyDetails
                 ? $"{prefix}otimo, ja deixei esses dados iniciais organizados. So falta uma coisinha: sua menstruacao costuma durar quantos dias?"
                 : $"{prefix}entendi. Sua menstruacao costuma durar quantos dias?",
-            OnboardingSteps.AwaitingContraceptiveMethod => $"{prefix}para deixar seu cadastro mais completo, voce usa algum metodo contraceptivo? Pode responder, se quiser, algo como:\n\n1. Nao uso\n2. Pilula\n3. Injecao\n4. DIU hormonal\n5. DIU de cobre\n6. Implante\n7. Camisinha\n8. Outro\n9. Prefiro nao informar",
+            OnboardingSteps.AwaitingContraceptiveMethod => $"{prefix}para deixar seu cadastro mais completo, você usa algum metodo contraceptivo? Pode responder, se quiser, algo como:\n\n1. Não uso\n2. Pilula\n3. Injecao\n4. DIU hormonal\n5. DIU de cobre\n6. Implante\n7. Camisinha\n8. Outro\n9. Prefiro não informar",
             OnboardingSteps.Completed => CompletedOnboardingMessage(user, captured),
-            OnboardingSteps.UnderageBlocked => "Obrigada por responder. Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.",
+            OnboardingSteps.UnderageBlocked => "Obrigada por responder. Por seguranca, a Luma ainda não pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.",
             _ => InitialConsentMessage()
         };
     }
@@ -1481,10 +1510,10 @@ public sealed class ConversationService(
 
         var understood = pending.Intent switch
         {
-            ConversationIntents.PeriodStart => $"Entendi, ja vi que voce quer registrar o inicio da menstruacao {dateLabel}.",
-            ConversationIntents.SexualActivity => $"Entendi, ja vi que voce quer registrar uma relacao {dateLabel}.",
-            ConversationIntents.PregnancyPositive => "Entendi, ja vi que voce quer me contar sobre uma gravidez.",
-            _ => "Entendi o que voce quer registrar."
+            ConversationIntents.PeriodStart => $"Entendi, ja vi que você quer registrar o inicio da menstruacao {dateLabel}.",
+            ConversationIntents.SexualActivity => $"Entendi, ja vi que você quer registrar uma relacao {dateLabel}.",
+            ConversationIntents.PregnancyPositive => "Entendi, ja vi que você quer me contar sobre uma gravidez.",
+            _ => "Entendi o que você quer registrar."
         };
 
         return $"{understood} Antes disso, preciso terminar seu cadastro rapidinho para salvar tudo do jeito certo e com seguranca.\n\n{nextPrompt}";
@@ -1495,26 +1524,26 @@ public sealed class ConversationService(
         var dateLabel = FormatRelativeDateForReply(pending.Date ?? today, today);
         return pending.Intent switch
         {
-            ConversationIntents.PeriodStart => $"Voce tinha me contado que sua menstruacao comecou {dateLabel}. Quer que eu registre isso agora?\n1. Sim\n2. Nao",
-            ConversationIntents.SexualActivity => $"Voce tinha me contado que teve uma relacao {dateLabel}. Quer que eu registre isso agora?\n1. Sim\n2. Nao",
-            ConversationIntents.PregnancyPositive => "Voce tinha me contado sobre uma gravidez. Quer que eu registre isso agora?\n1. Sim\n2. Nao",
-            _ => "Voce tinha me contado algo antes de terminar o cadastro. Quer que eu registre isso agora?\n1. Sim\n2. Nao"
+            ConversationIntents.PeriodStart => $"Você tinha me contado que sua menstruacao comecou {dateLabel}. Quer que eu registre isso agora?\n1. Sim\n2. Não",
+            ConversationIntents.SexualActivity => $"Você tinha me contado que teve uma relacao {dateLabel}. Quer que eu registre isso agora?\n1. Sim\n2. Não",
+            ConversationIntents.PregnancyPositive => "Você tinha me contado sobre uma gravidez. Quer que eu registre isso agora?\n1. Sim\n2. Não",
+            _ => "Você tinha me contado algo antes de terminar o cadastro. Quer que eu registre isso agora?\n1. Sim\n2. Não"
         };
     }
 
     private static string HelpMessage()
     {
-        return "Voce pode me mandar frases simples como:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo leve\"\n\"to com colica forte\"\n\"hoje estou ansiosa\"\n\"tive relacao dia 20\"\n\"minha menstruacao esta atrasada?\"\n\"quando e minha proxima menstruacao?\"";
+        return "Você pode me mandar frases simples como:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo leve\"\n\"to com colica forte\"\n\"hoje estou ansiosa\"\n\"tive relacao dia 20\"\n\"minha menstruacao esta atrasada?\"\n\"quando e minha proxima menstruacao?\"";
     }
 
     private static string LumaIdentityMessage()
     {
-        return "Eu sou a Luma, uma IA de apoio para ciclo menstrual e gravidez pelo WhatsApp. Meu intuito e te ajudar a registrar menstruacao, sintomas, humor, relacoes, historico e dados de acompanhamento da gravidez de um jeito simples e acolhedor.\n\nEu nao faco diagnosticos, nao confirmo gravidez, nao digo se sangramentos sao normais e nao substituo orientacao medica. Quando algo puder envolver risco, vou te orientar a procurar um profissional de saude.";
+        return "Eu sou a Luma, uma IA de apoio para ciclo menstrual e gravidez pelo WhatsApp. Meu intuito e te ajudar a registrar menstruacao, sintomas, humor, relacoes, historico e dados de acompanhamento da gravidez de um jeito simples e acolhedor.\n\nEu não faco diagnosticos, não confirmo gravidez, não digo se sangramentos sao normais e não substituo orientacao medica. Quando algo puder envolver risco, vou te orientar a procurar um profissional de saude.";
     }
 
     private static string OutOfScopeMessage()
     {
-        return "Desculpa, nao posso opinar sobre isso. Eu consigo te ajudar com registros e duvidas seguras sobre ciclo menstrual, menstruacao, sintomas, historico, relacoes registradas, gravidez e funcionamento da Luma, sempre sem fazer diagnosticos.";
+        return "Desculpa, não posso opinar sobre isso. Eu consigo te ajudar com registros e duvidas seguras sobre ciclo menstrual, menstruacao, sintomas, historico, relacoes registradas, gravidez e funcionamento da Luma, sempre sem fazer diagnosticos.";
     }
 
     private static string GreetingMessage(LumaUser user)
@@ -1528,7 +1557,7 @@ public sealed class ConversationService(
         var preference = EnsurePreference(user);
         if (preference.LastPeriodStartDate is null)
         {
-            return "Ainda nao tenho a data da sua ultima menstruacao para calcular atraso. Voce pode me dizer algo como \"menstruei dia 10/04\".";
+            return "Ainda não tenho a data da sua ultima menstruacao para calcular atraso. Você pode me dizer algo como \"menstruei dia 10/04\".";
         }
 
         var expected = preference.LastPeriodStartDate.Value.AddDays(preference.AverageCycleLength);
@@ -1536,7 +1565,7 @@ public sealed class ConversationService(
 
         if (delayDays <= 0)
         {
-            return $"Pela sua previsao atual, ainda nao parece atrasada. Sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Isso e so uma estimativa baseada nos seus registros.";
+            return $"Pela sua previsao atual, ainda não parece atrasada. Sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Isso e so uma estimativa baseada nos seus registros.";
         }
 
         return $"Pela sua previsao atual, sua menstruacao esta cerca de {delayDays} dias atrasada.\n\nIsso pode acontecer por varios motivos, como variacao natural do ciclo, estresse, alteracoes de rotina ou outros fatores. Se houver chance de gravidez ou sintomas preocupantes, o ideal e fazer um teste ou procurar orientacao medica.";
@@ -1547,19 +1576,26 @@ public sealed class ConversationService(
         var preference = EnsurePreference(user);
         if (preference.LastPeriodStartDate is null)
         {
-            return "Ainda nao tenho a data da sua ultima menstruacao para estimar a proxima. Voce pode me dizer algo como \"menstruei dia 10/04\".";
+            return "Ainda não tenho a data da sua ultima menstruacao para estimar a proxima. Você pode me dizer algo como \"menstruei dia 10/04\".";
         }
 
         var expected = preference.LastPeriodStartDate.Value.AddDays(preference.AverageCycleLength);
-        return $"Pela sua media atual, sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Essa e uma estimativa, nao uma certeza.";
+        return $"Pela sua media atual, sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Essa e uma estimativa, não uma certeza.";
     }
 
     private static string BuildLastPeriodReply(LumaUser user)
     {
         var preference = EnsurePreference(user);
         return preference.LastPeriodStartDate is null
-            ? "Ainda nao tenho uma ultima menstruacao registrada. Pode me mandar algo como \"menstruei dia 10/04\"."
+            ? "Ainda não tenho uma ultima menstruacao registrada. Pode me mandar algo como \"menstruei dia 10/04\"."
             : $"Sua ultima menstruacao registrada foi em {FormatDate(preference.LastPeriodStartDate.Value)}.";
+    }
+
+    private static string BuildAveragePeriodLengthReply(LumaUser user)
+    {
+        var preference = EnsurePreference(user);
+        var prefix = string.IsNullOrWhiteSpace(user.DisplayName) ? "" : $"{user.DisplayName}, ";
+        return $"{prefix}sua menstruacao costuma durar cerca de {preference.AveragePeriodLength} dias, em media.";
     }
 
     private async Task<string> BuildLastSymptomReplyAsync(Guid userId)
@@ -1572,7 +1608,7 @@ public sealed class ConversationService(
 
         if (ev is null)
         {
-            return "Ainda nao tenho sintomas registrados no seu historico.";
+            return "Ainda não tenho sintomas registrados no seu historico.";
         }
 
         using var json = JsonDocument.Parse(ev.MetadataJson);
@@ -1592,7 +1628,7 @@ public sealed class ConversationService(
             .FirstOrDefaultAsync();
 
         return ev is null
-            ? "Ainda nao tenho nenhuma relacao registrada no seu historico."
+            ? "Ainda não tenho nenhuma relacao registrada no seu historico."
             : $"Sua ultima relacao registrada foi em {FormatDate(ev.Date)}. Esse dado aparece aqui apenas como historico pessoal, sem eu usar para afirmar gravidez ou diagnostico.";
     }
 
@@ -1634,7 +1670,7 @@ public sealed class ConversationService(
         }
 
         user.PendingAction = PendingActions.AwaitingPregnancyReference;
-        return "Obrigada por me contar. Posso te ajudar a organizar essas informacoes por aqui, sempre como apoio aos seus registros e sem substituir seu pre-natal.\n\nPara eu organizar seu acompanhamento, voce sabe alguma dessas informacoes?\n\n1. Data da ultima menstruacao\n2. Quantas semanas de gravidez\n3. Data provavel do parto\n4. Ainda nao sei";
+        return "Obrigada por me contar. Posso te ajudar a organizar essas informacoes por aqui, sempre como apoio aos seus registros e sem substituir seu pre-natal.\n\nPara eu organizar seu acompanhamento, você sabe alguma dessas informacoes?\n\n1. Data da ultima menstruacao\n2. Quantas semanas de gravidez\n3. Data provavel do parto\n4. Ainda não sei";
     }
 
     private async Task<string> HandlePregnancyReferenceAsync(LumaUser user, string body, string rawBody, ConversationIntent intent, DateOnly today)
@@ -1655,7 +1691,7 @@ public sealed class ConversationService(
             pregnancy.StartReference = "unknown";
             pregnancy.UpdatedAt = DateTimeOffset.UtcNow;
             user.PendingAction = null;
-            return "Tudo bem. Deixei registrado que voce ainda nao sabe a referencia da gravidez. Quando souber a data da ultima menstruacao, semanas ou data provavel do parto, pode me mandar por aqui.";
+            return "Tudo bem. Deixei registrado que você ainda não sabe a referencia da gravidez. Quando souber a data da ultima menstruacao, semanas ou data provavel do parto, pode me mandar por aqui.";
         }
 
         var reference = intent;
@@ -1665,7 +1701,7 @@ public sealed class ConversationService(
 
         if (reference.LastPeriodDate is null && reference.GestationalWeeks is null && reference.EstimatedDueDate is null)
         {
-            return MisunderstoodMessage("Pode responder como \"minha ultima menstruacao foi dia 01/03\", \"estou de 8 semanas\", \"minha DPP e 06/12\" ou \"ainda nao sei\".");
+            return MisunderstoodMessage("Pode responder como \"minha ultima menstruacao foi dia 01/03\", \"estou de 8 semanas\", \"minha DPP e 06/12\" ou \"ainda não sei\".");
         }
 
         ApplyPregnancyReference(pregnancy, reference, today);
@@ -1726,11 +1762,11 @@ public sealed class ConversationService(
         var pregnancy = await GetActivePregnancyAsync(userId);
         if (pregnancy?.LastPeriodDate is null)
         {
-            return "Ainda nao tenho dados suficientes para estimar as semanas de gravidez. Voce pode me mandar a data da ultima menstruacao, quantas semanas tem hoje ou a data provavel do parto.";
+            return "Ainda não tenho dados suficientes para estimar as semanas de gravidez. Você pode me mandar a data da ultima menstruacao, quantas semanas tem hoje ou a data provavel do parto.";
         }
 
         var weeks = Math.Max(0, (today.DayNumber - pregnancy.LastPeriodDate.Value.DayNumber) / 7);
-        return $"Pelos seus registros, voce esta com cerca de {weeks} semanas de gravidez. Essa e uma estimativa; confirme sempre no pre-natal.";
+        return $"Pelos seus registros, você esta com cerca de {weeks} semanas de gravidez. Essa e uma estimativa; confirme sempre no pre-natal.";
     }
 
     private async Task<string> BuildPregnancyDueDateReplyAsync(Guid userId)
@@ -1738,7 +1774,7 @@ public sealed class ConversationService(
         var pregnancy = await GetActivePregnancyAsync(userId);
         if (pregnancy?.EstimatedDueDate is null)
         {
-            return "Ainda nao tenho dados suficientes para estimar a data provavel do parto. Voce pode me mandar a data da ultima menstruacao ou quantas semanas tem hoje.";
+            return "Ainda não tenho dados suficientes para estimar a data provavel do parto. Você pode me mandar a data da ultima menstruacao ou quantas semanas tem hoje.";
         }
 
         return $"Pelos seus registros, a data provavel do parto esta por volta de {FormatDate(pregnancy.EstimatedDueDate.Value)}. Essa e uma estimativa e deve ser confirmada no seu pre-natal.";
@@ -1747,7 +1783,7 @@ public sealed class ConversationService(
     private async Task<string> HandlePregnancyBleedingAsync(Guid userId, DateOnly date)
     {
         await AddCycleEventAsync(userId, null, CycleEventTypes.PregnancyBleeding, date, new { });
-        return "Registrei o sangramento para seu historico.\n\nSangramentos na gravidez podem ter varias causas, algumas simples e outras que precisam de avaliacao. Como voce esta gravida, e mais seguro entrar em contato com seu medico ou obstetra, principalmente se o sangramento for intenso, vier com dor forte, tontura, febre ou mal-estar.";
+        return "Registrei o sangramento para seu historico.\n\nSangramentos na gravidez podem ter varias causas, algumas simples e outras que precisam de avaliacao. Como você esta gravida, e mais seguro entrar em contato com seu medico ou obstetra, principalmente se o sangramento for intenso, vier com dor forte, tontura, febre ou mal-estar.";
     }
 
     private static int CountCapturedFields(OnboardingExtraction? captured)
@@ -1844,7 +1880,7 @@ public sealed class ConversationService(
             "hoje",
             "ontem",
             "aceito",
-            "nao",
+            "não",
             "sim"
         };
 
@@ -1880,8 +1916,8 @@ public sealed class ConversationService(
 
     private static bool IsNegative(string body)
     {
-        return body is "2" or "nao" or "n"
-            || body.Contains("nao aceito", StringComparison.Ordinal);
+        return body is "2" or "não" or "n"
+            || body.Contains("não aceito", StringComparison.Ordinal);
     }
 
     private static bool IsHelp(string body)
@@ -1916,6 +1952,58 @@ public sealed class ConversationService(
         return body.Contains("acabou", StringComparison.Ordinal)
             || body.Contains("parou", StringComparison.Ordinal)
             || body.Contains("terminou", StringComparison.Ordinal);
+    }
+
+    private static bool IsAveragePeriodLengthQuestion(string body)
+    {
+        if (body.Contains("ciclo", StringComparison.Ordinal) || !HasAveragePeriodLengthSubject(body))
+        {
+            return false;
+        }
+
+        return body.Contains("quantos dias", StringComparison.Ordinal)
+            && (body.Contains("costuma durar", StringComparison.Ordinal)
+                || body.Contains("dura", StringComparison.Ordinal)
+                || body.Contains("duracao", StringComparison.Ordinal)
+                || body.Contains("media", StringComparison.Ordinal));
+    }
+
+    private static bool TryParseAveragePeriodLengthPreferenceUpdate(string body, out int days)
+    {
+        days = 0;
+        if (body.Contains("ciclo", StringComparison.Ordinal) || !HasAveragePeriodLengthSubject(body))
+        {
+            return false;
+        }
+
+        var looksLikePreference = body.Contains("costuma", StringComparison.Ordinal)
+            || body.Contains("em media", StringComparison.Ordinal)
+            || body.Contains("na media", StringComparison.Ordinal)
+            || body.Contains("normalmente", StringComparison.Ordinal)
+            || body.Contains("geralmente", StringComparison.Ordinal)
+            || body.Contains("duracao media", StringComparison.Ordinal);
+
+        if (!looksLikePreference)
+        {
+            return false;
+        }
+
+        var firstInteger = MessageText.ExtractFirstInteger(body);
+        if (firstInteger is < 2 or > 10 or null)
+        {
+            return false;
+        }
+
+        days = firstInteger.Value;
+        return true;
+    }
+
+    private static bool HasAveragePeriodLengthSubject(string body)
+    {
+        return body.Contains("menstru", StringComparison.Ordinal)
+            || body.Contains("ela costuma durar", StringComparison.Ordinal)
+            || body.Contains("ela dura", StringComparison.Ordinal)
+            || body.Contains("duracao media", StringComparison.Ordinal);
     }
 
     private static bool IsDelayQuestion(string body)
@@ -2027,9 +2115,9 @@ public sealed class ConversationService(
 
     private static bool IsLumaIdentityQuestion(string body)
     {
-        return body.Contains("quem e voce", StringComparison.Ordinal)
-            || body.Contains("quem voce e", StringComparison.Ordinal)
-            || body.Contains("o que voce faz", StringComparison.Ordinal)
+        return body.Contains("quem e você", StringComparison.Ordinal)
+            || body.Contains("quem você e", StringComparison.Ordinal)
+            || body.Contains("o que você faz", StringComparison.Ordinal)
             || body.Contains("o que e a luma", StringComparison.Ordinal)
             || body.Contains("quem e a luma", StringComparison.Ordinal);
     }
@@ -2160,8 +2248,8 @@ public sealed class ConversationService(
     private static bool IsFixedGuardrailReply(string reply)
     {
         var normalized = MessageText.Normalize(reply);
-        return normalized.Contains("nao consigo confirmar", StringComparison.Ordinal)
-            || normalized.Contains("nao posso afirmar", StringComparison.Ordinal)
+        return normalized.Contains("não consigo confirmar", StringComparison.Ordinal)
+            || normalized.Contains("não posso afirmar", StringComparison.Ordinal)
             || normalized.Contains("procure atendimento", StringComparison.Ordinal)
             || normalized.Contains("menores de 18 anos", StringComparison.Ordinal)
             || normalized.Contains("sem o seu consentimento", StringComparison.Ordinal);
@@ -2175,7 +2263,7 @@ public sealed class ConversationService(
         }
 
         var normalized = MessageText.Normalize(reply);
-        return normalized.Contains("voce aceita?", StringComparison.Ordinal)
+        return normalized.Contains("você aceita?", StringComparison.Ordinal)
             || normalized.Contains("como devo te chamar", StringComparison.Ordinal)
             || normalized.Contains("18 anos ou mais", StringComparison.Ordinal)
             || normalized.Contains("primeiro dia da sua ultima menstruacao", StringComparison.Ordinal)
@@ -2248,12 +2336,12 @@ public sealed class ConversationService(
 
     private static string? ParseContraceptiveType(string body)
     {
-        if (body.Contains("prefiro nao", StringComparison.Ordinal) || body.Contains("nao informar", StringComparison.Ordinal))
+        if (body.Contains("prefiro não", StringComparison.Ordinal) || body.Contains("não informar", StringComparison.Ordinal))
         {
             return "prefer_not_say";
         }
 
-        if (body is "1" || body.Contains("nao uso", StringComparison.Ordinal) || body.Contains("nenhum", StringComparison.Ordinal))
+        if (body is "1" || body.Contains("não uso", StringComparison.Ordinal) || body.Contains("nenhum", StringComparison.Ordinal))
         {
             return "none";
         }
@@ -2308,7 +2396,7 @@ public sealed class ConversationService(
 
     private static string? ParseFlowIntensity(string body)
     {
-        if (body is "4" || body.Contains("prefiro nao", StringComparison.Ordinal))
+        if (body is "4" || body.Contains("prefiro não", StringComparison.Ordinal))
         {
             return "unknown";
         }
@@ -2440,7 +2528,7 @@ public sealed class ConversationService(
             return "yes";
         }
 
-        if (body.Contains("prefiro nao", StringComparison.Ordinal))
+        if (body.Contains("prefiro não", StringComparison.Ordinal))
         {
             return "prefer_not_say";
         }
@@ -2502,7 +2590,7 @@ public sealed class ConversationService(
             "light" => "leve",
             "medium" => "medio",
             "intense" => "intenso",
-            _ => "nao informado"
+            _ => "não informado"
         };
     }
 

@@ -37,7 +37,7 @@ public static class LumaKnowledgeBase
         new(
             "Limites medicos",
             ["diagnostico", "gravida", "gravidez", "normal", "risco", "sangramento", "dor forte", "febre"],
-            "A Luma nao faz diagnosticos, nao confirma gravidez, nao diz se sangramento e normal e nao substitui medico, ginecologista, obstetra ou pre-natal. Em sinais de alerta, deve orientar procurar atendimento profissional."),
+            "A Luma não faz diagnosticos, não confirma gravidez, não diz se sangramento e normal e não substitui medico, ginecologista, obstetra ou pre-natal. Em sinais de alerta, deve orientar procurar atendimento profissional."),
         new(
             "Ciclo menstrual",
             ["menstruacao", "menstruei", "ciclo", "fluxo", "colica", "sintoma", "humor", "atrasada"],
@@ -45,7 +45,7 @@ public static class LumaKnowledgeBase
         new(
             "Relacao sexual",
             ["relacao", "sexo", "transa", "camisinha", "protecao"],
-            "Registros de relacao sexual ficam apenas no historico da usuaria. A Luma nao usa isso para afirmar gravidez, periodo fertil seguro ou risco individual."),
+            "Registros de relacao sexual ficam apenas no historico da usuaria. A Luma não usa isso para afirmar gravidez, periodo fertil seguro ou risco individual."),
         new(
             "Gravidez",
             ["pre natal", "prenatal", "obstetra", "ultrassom", "semanas", "dpp", "parto"],

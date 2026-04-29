@@ -55,6 +55,13 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-luma};Username=${POSTGRES_USER:-luma};Password=${POSTGRES_PASSWORD:-luma_dev_password}
       Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
+      Luma__AiProvider: ${LUMA_AI_PROVIDER:-}
+      OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+      OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OpenAI__Model: ${OPENAI_MODEL:-gpt-5.4-mini}
+      OpenAI__TimeoutSeconds: ${OPENAI_TIMEOUT_SECONDS:-12}
+      OpenAI__MaxOutputTokens: ${OPENAI_MAX_OUTPUT_TOKENS:-700}
+      OpenAI__ReasoningEffort: ${OPENAI_REASONING_EFFORT:-none}
       Ollama__Enabled: ${OLLAMA_ENABLED:-true}
       Ollama__BaseUrl: ${OLLAMA_BASE_URL:-http://ollama:11434}
       Ollama__Model: ${OLLAMA_MODEL:-llama3.2}

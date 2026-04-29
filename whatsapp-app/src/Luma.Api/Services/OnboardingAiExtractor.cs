@@ -28,8 +28,8 @@ public sealed class OnboardingAiExtractor(
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
         var prompt = $$"""
-Voce e um extrator de dados para onboarding de uma assistente menstrual chamada Luma.
-Extraia apenas dados explicitamente informados pela usuaria. Nao invente.
+Você e um extrator de dados para onboarding de uma assistente menstrual chamada Luma.
+Extraia apenas dados explicitamente informados pela usuaria. Não invente.
 Hoje e {{today:yyyy-MM-dd}}.
 
 Responda somente JSON valido, sem markdown, com este formato:
@@ -49,10 +49,10 @@ Regras:
 - is_adult_confirmed: true quando disser que tem 18 anos ou mais, ou informar idade >= 18. false se idade < 18 ou negar.
 - last_period_start_date: primeiro dia da ultima menstruacao quando houver uma data absoluta, como 10/04, dia 10 de abril, ou dia 30 do mes passado. Se a usuaria disser apenas "dia 10", interprete como a ocorrencia mais recente desse dia no calendario: se hoje e dia 25/04/2026, "dia 10" = 2026-04-10; se hoje e dia 08/04/2026, "dia 10" = 2026-03-10.
 - last_period_days_ago: numero de dias atras quando a usuaria usar data relativa. Exemplos: hoje = 0, ontem = 1, anteontem/antes de ontem = 2, antes de antes de ontem = 3, "ha uns 5 dias" = 5, "fazem 3 dias" = 3.
-- last_period_unknown: true quando disser que nao lembra ou nao sabe a ultima menstruacao.
+- last_period_unknown: true quando disser que não lembra ou não sabe a ultima menstruacao.
 - average_cycle_length: intervalo/duracao do ciclo em dias, geralmente entre 21 e 45.
 - average_period_length: duracao da menstruacao em dias, geralmente entre 2 e 10.
-- contraceptive_type: metodo contraceptivo explicitamente informado. Exemplos: pilula = pill, injecao = injection, DIU hormonal = hormonal_iud, DIU de cobre = copper_iud, implante = implant, camisinha/preservativo = condom, nao uso = none, prefiro nao informar = prefer_not_say.
+- contraceptive_type: metodo contraceptivo explicitamente informado. Exemplos: pilula = pill, injecao = injection, DIU hormonal = hormonal_iud, DIU de cobre = copper_iud, implante = implant, camisinha/preservativo = condom, não uso = none, prefiro não informar = prefer_not_say.
 - Se houver duvida, use null.
 
 Mensagem da usuaria:

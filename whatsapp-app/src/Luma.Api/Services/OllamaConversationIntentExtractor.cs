@@ -32,19 +32,19 @@ public sealed class OllamaConversationIntentExtractor(
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
         var prompt = $$"""
-Voce e o extrator de intencoes da Luma, uma assistente de ciclo menstrual e gravidez pelo WhatsApp.
-Extraia apenas a intencao e entidades explicitamente informadas. Nao diagnostique, nao invente.
+Você e o extrator de intencoes da Luma, uma assistente de ciclo menstrual e gravidez pelo WhatsApp.
+Extraia apenas a intencao e entidades explicitamente informadas. Não diagnostique, não invente.
 Hoje e {{today:yyyy-MM-dd}}.
 
 Contexto atual da conversa:
 - nome conhecido: {{context?.DisplayName ?? "desconhecido"}}
 - etapa de cadastro/conversa: {{context?.OnboardingStep ?? "desconhecida"}}
-- cadastro completo: {{(context?.HasCompletedOnboarding == true ? "sim" : "nao")}}
-- consentimento aceito: {{(context?.HasAcceptedConsent == true ? "sim" : "nao")}}
+- cadastro completo: {{(context?.HasCompletedOnboarding == true ? "sim" : "não")}}
+- consentimento aceito: {{(context?.HasAcceptedConsent == true ? "sim" : "não")}}
 - acao pendente no backend: {{context?.PendingAction ?? "nenhuma"}}
 
 Ferramentas autorizadas pelo backend, apenas como intencao sugerida: get_user_profile, get_onboarding_state, save_pending_intent, complete_onboarding_step, record_period_start, record_period_end, record_flow_update, record_symptom, record_mood, record_sexual_activity, start_pregnancy_mode, record_pregnancy_bleeding, record_pregnancy_symptom, record_prenatal_appointment, record_ultrasound, calculate_next_period, calculate_delay, get_last_period, get_last_symptom, get_last_sexual_activity, search_luma_knowledge_base.
-Voce nao executa ferramentas nem grava dados; apenas sugere a intencao para o backend validar.
+Você não executa ferramentas nem grava dados; apenas sugere a intencao para o backend validar.
 
 Responda somente JSON valido, sem markdown:
 {
@@ -70,8 +70,8 @@ Regras:
 - Use pregnancy_symptom para sintomas de gravidez como nausea, cansaco, azia, tontura, colica, dor.
 - Use prenatal_appointment para consulta de pre-natal/obstetra.
 - Use ultrasound para ultrassom.
-- Use luma_identity_question para "quem e voce", "o que voce faz", "o que e a Luma".
-- Use knowledge_question para perguntas sobre privacidade, consentimento, LGPD, limites da Luma, ciclo menstrual ou gravidez que nao sejam pedido de diagnostico.
+- Use luma_identity_question para "quem e você", "o que você faz", "o que e a Luma".
+- Use knowledge_question para perguntas sobre privacidade, consentimento, LGPD, limites da Luma, ciclo menstrual ou gravidez que não sejam pedido de diagnostico.
 - Use out_of_scope para perguntas fora de ciclo menstrual, gravidez, sintomas, registros, privacidade ou funcionamento da Luma.
 - Datas relativas: hoje={{today:yyyy-MM-dd}}, ontem={{today.AddDays(-1):yyyy-MM-dd}}.
 - Se houver duvida, use null e confidence baixo.

@@ -70,7 +70,7 @@ public sealed class OllamaLumaToolAgent(
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
         var prompt = $$"""
-Voce e a Luma agente. Escolha UMA tool. Responda so JSON.
+Você e a Luma agente. Escolha UMA tool. Responda so JSON.
 Hoje={{request.Today:yyyy-MM-dd}}
 Etapa={{request.Context.OnboardingStep}}; CadastroCompleto={{request.Context.HasCompletedOnboarding}}; Pendencia={{request.Context.PendingAction ?? "nenhuma"}}
 Mensagem={{request.UserMessage}}
@@ -194,11 +194,11 @@ Formato:
     private static bool IsExplicitConsentDenial(string message)
     {
         var normalized = MessageText.Normalize(message);
-        return normalized.Contains("nao", StringComparison.Ordinal)
+        return normalized.Contains("não", StringComparison.Ordinal)
             || normalized.Contains("nunca", StringComparison.Ordinal)
             || normalized.Contains("recuso", StringComparison.Ordinal)
-            || normalized.Contains("nao aceito", StringComparison.Ordinal)
-            || normalized.Contains("prefiro nao", StringComparison.Ordinal);
+            || normalized.Contains("não aceito", StringComparison.Ordinal)
+            || normalized.Contains("prefiro não", StringComparison.Ordinal);
     }
 
     private static bool IsPlainGreeting(string message)

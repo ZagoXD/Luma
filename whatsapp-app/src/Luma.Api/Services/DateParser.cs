@@ -35,9 +35,9 @@ public static partial class DateParser
 
     public static bool IsUnknown(string normalized)
     {
-        return normalized.Contains("nao lembro", StringComparison.Ordinal)
+        return normalized.Contains("não lembro", StringComparison.Ordinal)
             || normalized.Contains("não lembro", StringComparison.Ordinal)
-            || normalized.Contains("nao sei", StringComparison.Ordinal)
+            || normalized.Contains("não sei", StringComparison.Ordinal)
             || normalized.Contains("não sei", StringComparison.Ordinal)
             || normalized.Contains("esqueci", StringComparison.Ordinal);
     }

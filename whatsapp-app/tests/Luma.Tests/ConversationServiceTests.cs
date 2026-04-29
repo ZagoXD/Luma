@@ -11,6 +11,30 @@ namespace Luma.Tests;
 public sealed class ConversationServiceTests
 {
     [Fact]
+    public async Task Outbound_replies_are_polished_with_portuguese_accents()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db, new FakeExtractor(_ => null));
+
+        var reply = await SendAsync(service, "+5516992000069", "Ola");
+
+        Assert.Contains("começar", reply);
+        Assert.Contains("menstruação", reply);
+        Assert.Contains("histórico", reply);
+        Assert.Contains("Não substituo orientação médica", reply);
+        Assert.Contains("saúde menstrual", reply);
+        Assert.Contains("Você aceita?", reply);
+    }
+
+    [Fact]
+    public void Portuguese_reply_polisher_keeps_logic_free_text_user_friendly()
+    {
+        var reply = PortugueseReplyPolisher.Apply("Não faco diagnostico. Como esta o fluxo? 2. Medio. Sua proxima menstruacao esta prevista.");
+
+        Assert.Equal("Não faço diagnóstico. Como está o fluxo? 2. Médio. Sua próxima menstruação está prevista.", reply);
+    }
+
+    [Fact]
     public async Task Name_step_discards_unsafe_ai_age_inference()
     {
         await using var db = CreateDbContext();
@@ -159,7 +183,7 @@ public sealed class ConversationServiceTests
 
         var reply = await SendAsync(service, "+5516992000065", "Ola");
 
-        Assert.Contains("voce aceita", MessageText.Normalize(reply));
+        Assert.Contains("você aceita", MessageText.Normalize(reply));
         Assert.Empty(responseGenerator.Requests);
     }
 
@@ -167,13 +191,13 @@ public sealed class ConversationServiceTests
     public async Task Fixed_medical_guardrail_does_not_go_through_luma_ai_response_generator()
     {
         await using var db = CreateDbContext();
-        var responseGenerator = new FakeResponseGenerator(_ => "isso nao deveria aparecer");
+        var responseGenerator = new FakeResponseGenerator(_ => "isso não deveria aparecer");
         var service = await CreateCompletedUserServiceAsync(db, "+5516992000061", responseGenerator: responseGenerator);
 
         responseGenerator.Requests.Clear();
         var reply = await SendAsync(service, "+5516992000061", "Estou gravida?");
 
-        Assert.Contains("nao consigo confirmar", MessageText.Normalize(reply));
+        Assert.Contains("não consigo confirmar", MessageText.Normalize(reply));
         Assert.Empty(responseGenerator.Requests);
     }
 
@@ -186,7 +210,7 @@ public sealed class ConversationServiceTests
         var phone = "+5516992000054";
         await SendAsync(service, phone, "Ola");
         await SendAsync(service, phone, "Aceito");
-        var reply = await SendAsync(service, phone, "Voce pode me chamar de Nay, e eu tenho 21 anos");
+        var reply = await SendAsync(service, phone, "Você pode me chamar de Nay, e eu tenho 21 anos");
 
         var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
         Assert.Equal("Nay", user.DisplayName);
@@ -230,17 +254,17 @@ public sealed class ConversationServiceTests
         Assert.Equal(OnboardingSteps.AwaitingDisplayName, user.OnboardingStep);
         Assert.Equal(ConversationIntents.PeriodStart, pending.Intent);
         Assert.Equal(new DateOnly(2026, 4, 25), pending.Date);
-        Assert.Contains("ja vi que voce quer registrar o inicio da menstruacao hoje", MessageText.Normalize(pendingReply));
+        Assert.Contains("ja vi que você quer registrar o inicio da menstruacao hoje", MessageText.Normalize(pendingReply));
         Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id).ToListAsync());
 
         await SendAsync(service, phone, "Julia");
         await SendAsync(service, phone, "Sim, tenho 25 anos");
-        await SendAsync(service, phone, "nao lembro");
+        await SendAsync(service, phone, "não lembro");
         await SendAsync(service, phone, "28 dias");
         await SendAsync(service, phone, "5 dias");
-        var completedReply = await SendAsync(service, phone, "Prefiro nao informar");
+        var completedReply = await SendAsync(service, phone, "Prefiro não informar");
 
-        Assert.Contains("voce tinha me contado que sua menstruacao comecou hoje", MessageText.Normalize(completedReply));
+        Assert.Contains("você tinha me contado que sua menstruacao comecou hoje", MessageText.Normalize(completedReply));
         Assert.Contains("quer que eu registre isso agora", MessageText.Normalize(completedReply));
         Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id).ToListAsync());
 
@@ -289,7 +313,7 @@ public sealed class ConversationServiceTests
         await using var db = CreateDbContext();
         var service = await CreateCompletedUserServiceAsync(db, "+5516992000052");
 
-        var reply = await SendAsync(service, "+5516992000052", "Luma, como voce protege meus dados?");
+        var reply = await SendAsync(service, "+5516992000052", "Luma, como você protege meus dados?");
 
         var normalized = MessageText.Normalize(reply);
         Assert.Contains("privacidade", normalized);
@@ -301,8 +325,8 @@ public sealed class ConversationServiceTests
     [InlineData("Tomo pilula anticoncepcional", true, "pill")]
     [InlineData("Uso DIU hormonal", true, "hormonal_iud")]
     [InlineData("Uso camisinha", false, "condom")]
-    [InlineData("Nao uso nenhum metodo", false, "none")]
-    [InlineData("Prefiro nao informar", false, "prefer_not_say")]
+    [InlineData("Não uso nenhum metodo", false, "none")]
+    [InlineData("Prefiro não informar", false, "prefer_not_say")]
     public async Task Onboarding_collects_optional_contraceptive_method(string answer, bool usesHormonal, string expectedType)
     {
         await using var db = CreateDbContext();
@@ -432,7 +456,7 @@ public sealed class ConversationServiceTests
         var metadata = JsonDocument.Parse(ev.MetadataJson).RootElement;
         Assert.Equal(new DateOnly(2026, 4, 20), ev.Date);
         Assert.Equal("yes", metadata.GetProperty("protected").GetString());
-        Assert.Contains("nao uso isso para afirmar gravidez", MessageText.Normalize(reply));
+        Assert.Contains("não uso isso para afirmar gravidez", MessageText.Normalize(reply));
     }
 
     [Fact]
@@ -470,9 +494,9 @@ public sealed class ConversationServiceTests
 
     [Theory]
     [InlineData("quando e minha proxima menstruacao?", "prevista para perto de 23/05")]
-    [InlineData("minha menstruacao esta atrasada?", "ainda nao parece atrasada")]
+    [InlineData("minha menstruacao esta atrasada?", "ainda não parece atrasada")]
     [InlineData("quando foi minha ultima menstruacao?", "ultima menstruacao registrada foi em 25/04")]
-    [InlineData("qual foi meu ultimo sintoma registrado?", "ainda nao tenho sintomas registrados")]
+    [InlineData("qual foi meu ultimo sintoma registrado?", "ainda não tenho sintomas registrados")]
     public async Task Completed_user_answers_basic_history_and_calculation_questions(string question, string expected)
     {
         await using var db = CreateDbContext();
@@ -481,6 +505,62 @@ public sealed class ConversationServiceTests
         var reply = await SendAsync(service, "+5516992000027", question);
 
         Assert.Contains(expected, MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Completed_user_answers_average_period_length_from_profile()
+    {
+        await using var db = CreateDbContext();
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000066");
+
+        var reply = await SendAsync(service, "+5516992000066", "Quantos dias costuma durar minha menstruacao?");
+
+        Assert.Contains("sua menstruacao costuma durar cerca de 5 dias", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Completed_user_updates_average_period_length_without_ending_current_period()
+    {
+        await using var db = CreateDbContext();
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000067");
+
+        await SendAsync(service, "+5516992000067", "menstruei ontem");
+        var reply = await SendAsync(service, "+5516992000067", "Eu disse que ela costuma durar 3 dias");
+
+        var user = await db.Users.Include(user => user.Preference).SingleAsync(user => user.PhoneNumber == "+5516992000067");
+        var cycle = await db.Cycles.SingleAsync(cycle => cycle.UserId == user.Id && cycle.StartDate == new DateOnly(2026, 4, 24));
+        Assert.Equal(3, user.Preference?.AveragePeriodLength);
+        Assert.Equal(CycleStatus.Ongoing, cycle.Status);
+        Assert.Null(cycle.EndDate);
+        Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id && ev.Type == CycleEventTypes.PeriodEnd).ToListAsync());
+        Assert.Contains("atualizei", MessageText.Normalize(reply));
+        Assert.Contains("3 dias", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Agent_period_end_tool_is_ignored_for_average_period_length_update()
+    {
+        await using var db = CreateDbContext();
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("costuma", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "record_period_end",
+                    Date = new DateOnly(2026, 4, 25),
+                    Confidence = 0.95
+                }
+                : null);
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000068", toolAgent: agent);
+
+        await SendAsync(service, "+5516992000068", "menstruei ontem");
+        var reply = await SendAsync(service, "+5516992000068", "Minha menstruacao costuma durar 3 dias na media");
+
+        var user = await db.Users.Include(user => user.Preference).SingleAsync(user => user.PhoneNumber == "+5516992000068");
+        var cycle = await db.Cycles.SingleAsync(cycle => cycle.UserId == user.Id && cycle.StartDate == new DateOnly(2026, 4, 24));
+        Assert.Equal(3, user.Preference?.AveragePeriodLength);
+        Assert.Equal(CycleStatus.Ongoing, cycle.Status);
+        Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id && ev.Type == CycleEventTypes.PeriodEnd).ToListAsync());
+        Assert.Contains("atualizei", MessageText.Normalize(reply));
     }
 
     [Theory]
@@ -496,7 +576,7 @@ public sealed class ConversationServiceTests
 
         var reply = await SendAsync(service, "+5516992000028", message);
 
-        Assert.Contains("nao consigo confirmar", MessageText.Normalize(reply));
+        Assert.Contains("não consigo confirmar", MessageText.Normalize(reply));
         Assert.Equal(beforeCount, await db.CycleEvents.CountAsync());
     }
 
@@ -506,13 +586,13 @@ public sealed class ConversationServiceTests
         await using var db = CreateDbContext();
         var service = await CreateCompletedUserServiceAsync(db, "+5516992000040");
 
-        var reply = await SendAsync(service, "+5516992000040", "Luma, quem e voce?");
+        var reply = await SendAsync(service, "+5516992000040", "Luma, quem e você?");
 
         var normalized = MessageText.Normalize(reply);
         Assert.Contains("sou a luma", normalized);
         Assert.Contains("ciclo menstrual", normalized);
         Assert.Contains("gravidez", normalized);
-        Assert.Contains("nao faco diagnosticos", normalized);
+        Assert.Contains("não faco diagnosticos", normalized);
     }
 
     [Fact]
@@ -524,7 +604,7 @@ public sealed class ConversationServiceTests
         var reply = await SendAsync(service, "+5516992000041", "Qual investimento devo comprar hoje?");
 
         var normalized = MessageText.Normalize(reply);
-        Assert.Contains("nao posso opinar sobre isso", normalized);
+        Assert.Contains("não posso opinar sobre isso", normalized);
         Assert.Contains("ciclo menstrual", normalized);
     }
 
@@ -685,7 +765,7 @@ public sealed class ConversationServiceTests
     {
         var service = CreateService(db, new FakeExtractor(_ => null), intentExtractor, toolAgent, responseGenerator);
         await CompleteBasicOnboardingUntilContraceptiveAsync(service, phone);
-        await SendAsync(service, phone, "Prefiro nao informar");
+        await SendAsync(service, phone, "Prefiro não informar");
         db.ChangeTracker.Clear();
         return service;
     }
