@@ -1,28 +1,4 @@
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: luma-ollama
-    ports:
-      - "${OLLAMA_HOST_PORT:-11434}:11434"
-    volumes:
-      - luma_ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    container_name: luma-ollama-pull
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    command: ["pull", "${OLLAMA_MODEL:-llama3.2}"]
-    restart: "no"
-
   postgres:
     image: postgres:16-alpine
     container_name: luma-postgres
@@ -48,20 +24,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama-pull:
-        condition: service_completed_successfully
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-luma};Username=${POSTGRES_USER:-luma};Password=${POSTGRES_PASSWORD:-luma_dev_password}
       Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
-      Ollama__Enabled: ${OLLAMA_ENABLED:-true}
-      Ollama__BaseUrl: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      Ollama__Model: ${OLLAMA_MODEL:-llama3.2}
-      Ollama__TimeoutSeconds: ${OLLAMA_TIMEOUT_SECONDS:-20}
+      OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+      OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OpenAI__Model: ${OPENAI_MODEL:-gpt-5.4-mini}
+      OpenAI__TimeoutSeconds: ${OPENAI_TIMEOUT_SECONDS:-12}
+      OpenAI__MaxOutputTokens: ${OPENAI_MAX_OUTPUT_TOKENS:-700}
+      OpenAI__ReasoningEffort: ${OPENAI_REASONING_EFFORT:-none}
     ports:
       - "${API_HOST_PORT:-5050}:8080"
 
 volumes:
-  luma_ollama_data:
   luma_postgres_data:

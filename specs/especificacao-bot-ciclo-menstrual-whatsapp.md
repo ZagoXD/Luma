@@ -1,5 +1,76 @@
 # Especificação inicial — Bot de Ciclo Menstrual pelo WhatsApp
 
+> Atualização de escopo para V1.0.0 - 2026-04-28
+>
+> O núcleo transacional da Luma já contempla cadastro, ciclo menstrual, relação sexual, gravidez, histórico básico e guardrails principais. Para a primeira versão de produção, a Luma não deve ser apenas um fluxo fixo de perguntas e respostas. Ela deve evoluir para uma assistente conversacional com orquestração de IA, RAG e tools/MCP controladas pelo backend.
+>
+> Regra central atualizada:
+>
+> **O backend decide. A IA entende, conversa e escreve.**
+>
+> A IA pode interpretar mensagens fora de ordem, consultar conhecimento seguro, sugerir chamadas de ferramentas e humanizar respostas. O backend continua sendo a fonte de verdade para consentimento, LGPD, regras médicas, cálculos, persistência e validação de segurança.
+
+---
+
+## Atualização V1.0.0 - Luma como assistente inteligente
+
+Para fechar a V1.0.0, a Luma deve lidar com situações em que a usuária não segue o fluxo esperado.
+
+Exemplo:
+
+```txt
+Estado atual: aguardando nome da usuária
+Usuária: menstruei hoje
+```
+
+Comportamento esperado:
+
+```txt
+Entendi. Já vi que você quer registrar que sua menstruação começou hoje.
+Antes disso, preciso terminar seu cadastro rapidinho para salvar tudo certinho e com segurança.
+Como devo te chamar?
+```
+
+Depois do cadastro:
+
+```txt
+Você tinha me contado que menstruou hoje. Quer que eu registre isso agora?
+```
+
+Se a usuária confirmar, o backend registra o evento.
+
+Isso exige:
+
+- memória de intenção pendente;
+- interpretação contextual;
+- confirmação antes de gravar dados sensíveis fora do fluxo esperado;
+- RAG para respostas educativas e institucionais;
+- tools/MCP para leitura e escrita controladas;
+- backend autoritativo;
+- guardrails fixos para LGPD e saúde.
+
+Fluxo alvo:
+
+```txt
+Mensagem da usuária
+  ->
+IA interpreta intenção, contexto e estado atual
+  ->
+Backend valida segurança, consentimento e regras de negócio
+  ->
+Backend executa tools autorizadas
+  ->
+RAG fornece conteúdo seguro quando necessário
+  ->
+IA escreve resposta acolhedora
+  ->
+WhatsApp
+```
+
+Essa camada inteligente é considerada parte obrigatória da V1.0.0.
+
+---
+
 ## Visão geral
 
 A ideia é criar um SaaS simples e acessível, baseado em WhatsApp, para ajudar mulheres a registrarem informações do ciclo menstrual sem precisar abrir um aplicativo específico todos os dias.
@@ -911,7 +982,7 @@ Usuária:
 Resposta possível:
 
 ```txt
-Um atraso pequeno pode acontecer por variações naturais do ciclo, estresse, sono, rotina, uso de medicamentos e outros fatores. Se houver chance de gravidez, vale considerar um teste. Se o atraso persistir, vier com dor forte, sangramento intenso ou outros sintomas preocupantes, procure orientação médica.
+Um atraso pequeno pode acontecer por variações naturais do ciclo, estresse, sono, rotina, uso de médicamentos e outros fatores. Se houver chance de gravidez, vale considerar um teste. Se o atraso persistir, vier com dor forte, sangramento intenso ou outros sintomas preocupantes, procure orientação médica.
 ```
 
 ---

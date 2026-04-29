@@ -1,5 +1,84 @@
 # Luma — Especificação de Stacks e Arquitetura Técnica
 
+> Atualização de escopo para V1.0.0 - 2026-04-28
+>
+> O projeto está na fase final da V1: o backend transacional já cobre cadastro, ciclo menstrual, relação sexual, gravidez e guardrails principais. O que falta para a primeira versão de produção e a camada de inteligência conversacional com RAG e tools/MCP, mantendo o backend como autoridade.
+>
+> A arquitetura recomendada para a V1.0.0 passa a incluir um orquestrador de conversa: OpenAI API interpreta contexto e intenções, RAG fornece conhecimento seguro, tools/MCP executam leituras/escritas controladas e o backend valida tudo antes de persistir ou responder.
+
+---
+
+## Atualização arquitetural - Orquestrador inteligente
+
+A V1.0.0 deve adicionar uma camada acima do backend atual:
+
+```txt
+WhatsApp
+  ->
+LumaConversationOrchestrator
+  ->
+OpenAI API para interpretação/contexto/humanização
+  ->
+RAG para conhecimento seguro
+  ->
+Tools internas ou MCP
+  ->
+Backend autoritativo
+  ->
+PostgreSQL
+```
+
+Componentes recomendados:
+
+```txt
+ILumaConversationOrchestrator
+IConversationContextBuilder
+IConversationIntentParser
+IResponseHumanizer
+IKnowledgeRetrievalService
+IToolRegistry ou MCP Server
+IPendingIntentService
+ISafetyGuardrailService
+```
+
+Ferramentas controladas:
+
+```txt
+get_user_profile
+get_onboarding_state
+save_pending_intent
+clear_pending_intent
+complete_onboarding_step
+record_period_start
+record_period_end
+record_flow_update
+record_symptom
+record_mood
+record_sexual_activity
+start_pregnancy_mode
+record_pregnancy_bleeding
+record_pregnancy_symptom
+record_prenatal_appointment
+record_ultrasound
+calculate_next_period
+calculate_delay
+get_last_period
+get_last_symptom
+get_last_sexual_activity
+search_luma_knowledge_base
+```
+
+Regras:
+
+- A IA não escreve direto no banco.
+- A IA solicita uma tool.
+- O backend valida consentimento, estado, segurança, LGPD e regras médicas.
+- O backend executa ou recusa.
+- A IA humaniza a resposta final.
+- Guardrails de LGPD e saúde continuam fixos no backend.
+
+---
+
 Este documento complementa a especificação funcional do projeto **Luma**, uma futura assistente de ciclo menstrual pelo WhatsApp.  
 O objetivo aqui é separar as tecnologias recomendadas por etapa de desenvolvimento, mantendo uma arquitetura simples para validação inicial, mas preparada para evoluir para uma plataforma real.
 
@@ -71,7 +150,7 @@ Supabase ou formulário externo para lista de espera
   app/
     page.tsx
     obrigado/page.tsx
-    politica-de-privacidade/page.tsx
+    política-de-privacidade/page.tsx
     termos/page.tsx
   components/
     Hero.tsx
@@ -98,7 +177,7 @@ Supabase ou formulário externo para lista de espera
 ```txt
 /
 /obrigado
-/politica-de-privacidade
+/política-de-privacidade
 /termos
 ```
 

@@ -2,7 +2,7 @@ namespace Luma.Api.Services;
 
 public static class SafetyGuardrail
 {
-    public const string SafeReply = "Nao consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnostico, gravidez, sangramentos ou decisoes medicas o ideal e procurar um profissional de saude.";
+    public const string SafeReply = "Não consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnóstico, gravidez, sangramentos ou decisões médicas o ideal é procurar um profissional de saúde.";
 
     public static bool ShouldBlock(string normalizedBody)
     {
