@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Minus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type PlanCardProps = {
   badge: string;
@@ -31,21 +32,7 @@ export function PlanCard({
   delay,
   planValue,
 }: PlanCardProps) {
-  function handleSelectPlan() {
-    // Seleciona o radio do plano no formulário
-    const radio = document.querySelector<HTMLInputElement>(
-      `input[name="plano"][value="${planValue}"]`
-    );
-    if (radio) {
-      radio.checked = true;
-      radio.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-    // Scroll suave até o formulário
-    const target = document.getElementById("lista");
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth" });
-    }
-  }
+  const router = useRouter();
 
   return (
     <div className={`plan-card ${featured ? "featured " : ""}fade-up`} style={{ transitionDelay: delay }}>
@@ -64,7 +51,7 @@ export function PlanCard({
           </li>
         ))}
       </ul>
-      <button className={`plan-cta ${ctaClass}`} onClick={handleSelectPlan}>
+      <button className={`plan-cta ${ctaClass}`} onClick={() => router.push(`/checkout/${planValue}`)}>
         {cta}
       </button>
       <p className="plan-note">{note}</p>

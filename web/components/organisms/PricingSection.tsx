@@ -41,7 +41,7 @@ export function PricingSection() {
             ]}
             cta="Quero esse plano"
             ctaClass="basic-btn"
-            note="Disponível no lançamento."
+            note="Libera o bot no WhatsApp."
             delay="0.15s"
           />
           <PlanCard
@@ -58,15 +58,15 @@ export function PricingSection() {
                 <span className="plan-period">/mês</span>
               </>
             }
-            description="Tudo do plano Básico, mais lembretes inteligentes para nunca ser pega de surpresa."
+            description="Tudo do plano Básico, mais acompanhamento completo para ciclo menstrual e gravidez."
             features={[
               ...baseFeatures,
-              { enabled: true, label: "Aviso antes da próxima menstruação" },
-              { enabled: true, label: "Lembrete de anticoncepcional" },
+              { enabled: true, label: "Acompanhamento de gravidez" },
+              { enabled: true, label: "Respostas com mais contexto" },
             ]}
             cta="Quero esse plano"
             ctaClass="full-btn"
-            note="Disponível no lançamento."
+            note="Libera o bot no WhatsApp."
             featured
             delay="0.25s"
           />
