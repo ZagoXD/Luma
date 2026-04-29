@@ -11,6 +11,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<Cycle> Cycles => Set<Cycle>();
     public DbSet<CycleEvent> CycleEvents => Set<CycleEvent>();
     public DbSet<Pregnancy> Pregnancies => Set<Pregnancy>();
+    public DbSet<PendingIntent> PendingIntents => Set<PendingIntent>();
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -73,6 +74,17 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.HasIndex(pregnancy => new { pregnancy.UserId, pregnancy.Status });
             entity.Property(pregnancy => pregnancy.Status).HasMaxLength(32).IsRequired();
             entity.Property(pregnancy => pregnancy.StartReference).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<PendingIntent>(entity =>
+        {
+            entity.ToTable("pending_intents");
+            entity.HasKey(intent => intent.Id);
+            entity.HasIndex(intent => new { intent.UserId, intent.Status, intent.CreatedAt });
+            entity.Property(intent => intent.Intent).HasMaxLength(64).IsRequired();
+            entity.Property(intent => intent.RequiredBeforeAction).HasMaxLength(64).IsRequired();
+            entity.Property(intent => intent.Status).HasMaxLength(32).IsRequired();
+            entity.Property(intent => intent.PayloadJson).HasColumnType("jsonb").IsRequired();
         });
 
         modelBuilder.Entity<ConversationMessage>(entity =>

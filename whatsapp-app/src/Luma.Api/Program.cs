@@ -19,6 +19,8 @@ builder.Services.AddDbContext<LumaDbContext>(options =>
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
 builder.Services.AddHttpClient<IOnboardingDataExtractor, OnboardingAiExtractor>();
 builder.Services.AddHttpClient<IConversationIntentExtractor, OllamaConversationIntentExtractor>();
+builder.Services.AddHttpClient<ILumaToolAgent, OllamaLumaToolAgent>();
+builder.Services.AddHttpClient<ILumaResponseGenerator, OllamaLumaResponseGenerator>();
 builder.Services.AddSingleton<IDateProvider, SystemDateProvider>();
 builder.Services.AddScoped<ConversationService>();
 
@@ -169,6 +171,19 @@ CREATE TABLE IF NOT EXISTS pregnancies (
     "UpdatedAt" timestamp with time zone NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_pregnancies_UserId_Status" ON pregnancies ("UserId", "Status");
+CREATE TABLE IF NOT EXISTS pending_intents (
+    "Id" uuid PRIMARY KEY,
+    "UserId" uuid NOT NULL,
+    "Intent" character varying(64) NOT NULL,
+    "Date" date,
+    "RequiredBeforeAction" character varying(64) NOT NULL,
+    "Status" character varying(32) NOT NULL,
+    "PayloadJson" jsonb NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NOT NULL,
+    "CompletedAt" timestamp with time zone
+);
+CREATE INDEX IF NOT EXISTS "IX_pending_intents_UserId_Status_CreatedAt" ON pending_intents ("UserId", "Status", "CreatedAt");
 """);
 }
 

@@ -10,6 +10,8 @@ public sealed class ConversationService(
     IConfiguration configuration,
     IOnboardingDataExtractor onboardingAi,
     IConversationIntentExtractor conversationAi,
+    ILumaToolAgent toolAgent,
+    ILumaResponseGenerator responseGenerator,
     IDateProvider dateProvider,
     ILogger<ConversationService> logger)
 {
@@ -43,7 +45,8 @@ public sealed class ConversationService(
             Body = _storeMessageBodies ? incoming.Body : null
         });
 
-        var reply = await BuildReplyAsync(user, incoming.Body);
+        var backendReply = await BuildReplyAsync(user, incoming.Body);
+        var reply = await BuildFinalReplyAsync(user, incoming.Body, backendReply);
 
         db.Messages.Add(new ConversationMessage
         {
@@ -61,9 +64,37 @@ public sealed class ConversationService(
         return reply;
     }
 
+    private async Task<string> BuildFinalReplyAsync(LumaUser user, string rawBody, string backendReply)
+    {
+        var body = MessageText.Normalize(rawBody);
+        var isGuardrail = IsFixedGuardrailReply(backendReply);
+        if (isGuardrail || IsRequiredBackendPrompt(user, backendReply))
+        {
+            return backendReply;
+        }
+
+        var knowledge = LumaKnowledgeBase.Search(body);
+
+        return await responseGenerator.GenerateAsync(new LumaResponseRequest(
+            UserMessage: rawBody,
+            BackendResult: backendReply,
+            OnboardingStep: user.OnboardingStep,
+            DisplayName: user.DisplayName,
+            PendingAction: user.PendingAction,
+            IsGuardrail: isGuardrail,
+            AvailableTools: LumaTools.Available,
+            Knowledge: knowledge));
+    }
+
     private async Task<string> BuildReplyAsync(LumaUser user, string rawBody)
     {
         var body = MessageText.Normalize(rawBody);
+
+        var agentReply = await TryHandleAgentToolAsync(user, rawBody, body, Today());
+        if (agentReply is not null)
+        {
+            return agentReply;
+        }
 
         if (user.OnboardingStep is OnboardingSteps.ConsentDeclined)
         {
@@ -80,7 +111,7 @@ public sealed class ConversationService(
             return await ContinueOnboardingAsync(user, body, rawBody);
         }
 
-        var intent = await ExtractConversationIntentAsync(body, rawBody, Today());
+        var intent = await ExtractConversationIntentAsync(body, rawBody, Today(), user);
 
         if (SafetyGuardrail.ShouldBlock(body)
             && (intent.Intent != ConversationIntents.PregnancyPositive || !IsPregnancyPositiveStatement(body)))
@@ -110,6 +141,280 @@ public sealed class ConversationService(
         }
 
         return await HandleCompletedUserMessageAsync(user, body, rawBody, intent);
+    }
+
+    private async Task<string?> TryHandleAgentToolAsync(LumaUser user, string rawBody, string body, DateOnly today)
+    {
+        if (SafetyGuardrail.ShouldBlock(body) && !IsPregnancyPositiveStatement(body))
+        {
+            return SafetyGuardrail.SafeReply;
+        }
+
+        if (user.OnboardingStep == OnboardingSteps.AwaitingConsent && IsGreeting(body))
+        {
+            return null;
+        }
+
+        var decision = await toolAgent.DecideAsync(new LumaToolAgentRequest(
+            UserMessage: rawBody,
+            Today: today,
+            Context: BuildConversationContext(user),
+            Knowledge: LumaKnowledgeBase.Search(body),
+            AvailableTools: LumaTools.Available));
+
+        if (decision?.ToolName is null)
+        {
+            return null;
+        }
+
+        return await ExecuteAgentToolAsync(user, rawBody, body, decision, today);
+    }
+
+    private async Task<string?> ExecuteAgentToolAsync(LumaUser user, string rawBody, string body, LumaToolCall tool, DateOnly today)
+    {
+        switch (tool.ToolName)
+        {
+            case "medical_guardrail":
+                return SafetyGuardrail.SafeReply;
+
+            case "out_of_scope":
+                return OutOfScopeMessage();
+
+            case "search_luma_knowledge_base":
+                return LumaKnowledgeBase.Search(body) ?? LumaIdentityMessage();
+
+            case "complete_onboarding_step":
+                if (user.OnboardingStep == OnboardingSteps.AwaitingConsent && IsGreeting(body))
+                {
+                    return null;
+                }
+
+                return await ExecuteOnboardingToolAsync(user, tool);
+
+            case "record_period_start":
+                return await ExecuteRecordPeriodStartToolAsync(user, tool, today);
+
+            case "record_period_end":
+                return await ExecuteRecordPeriodEndToolAsync(user, tool, today);
+
+            case "record_flow_update":
+                if (tool.FlowIntensity is null)
+                {
+                    return null;
+                }
+
+                await AddOrReplaceFlowEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), tool.Date ?? today, tool.FlowIntensity);
+                return tool.FlowIntensity == "unknown"
+                    ? "Tudo bem, deixei o fluxo sem informar."
+                    : $"Registrei o fluxo {FlowLabel(tool.FlowIntensity)} para {FormatDate(tool.Date ?? today)}.";
+
+            case "record_symptom":
+                if (tool.Symptom is null)
+                {
+                    return null;
+                }
+
+                await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.Symptom, tool.Date ?? today, new
+                {
+                    symptom = tool.Symptom,
+                    intensity = tool.Intensity ?? "moderate"
+                });
+                return $"Registrei {SymptomLabel(tool.Symptom)} para {FormatDate(tool.Date ?? today)}. Se vier com dor forte, febre, tontura ou mal-estar importante, procure orientacao medica.";
+
+            case "record_mood":
+                if (tool.Mood is null)
+                {
+                    return null;
+                }
+
+                await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.Mood, tool.Date ?? today, new { mood = tool.Mood });
+                return $"Registrei esse humor para {FormatDate(tool.Date ?? today)} como historico do seu ciclo.";
+
+            case "record_sexual_activity":
+                return await ExecuteRecordSexualActivityToolAsync(user, tool, today);
+
+            case "start_pregnancy_mode":
+                return await HandlePregnancyPositiveAsync(user, new ConversationIntent
+                {
+                    Intent = ConversationIntents.PregnancyPositive,
+                    Date = tool.Date ?? today,
+                    GestationalWeeks = tool.GestationalWeeks,
+                    LastPeriodDate = tool.LastPeriodDate,
+                    EstimatedDueDate = tool.EstimatedDueDate
+                }, today);
+
+            case "record_pregnancy_bleeding":
+                return await HandlePregnancyBleedingAsync(user.Id, tool.Date ?? today);
+
+            case "record_pregnancy_symptom":
+                var activePregnancy = await GetActivePregnancyAsync(user.Id);
+                if (activePregnancy is null || tool.Symptom is null)
+                {
+                    return null;
+                }
+
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.PregnancySymptom, tool.Date ?? today, new
+                {
+                    pregnancy_id = activePregnancy.Id,
+                    symptom = tool.Symptom,
+                    intensity = tool.Intensity ?? "moderate"
+                });
+                return "Registrei esse sintoma na sua gravidez. Se vier com dor forte, febre, tontura, sangramento, perda de liquido ou mal-estar importante, fale com seu medico ou obstetra.";
+
+            case "record_prenatal_appointment":
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.PrenatalAppointment, tool.Date ?? today, new { });
+                return $"Registrei sua consulta de pre-natal em {FormatDate(tool.Date ?? today)}.";
+
+            case "record_ultrasound":
+                await AddCycleEventAsync(user.Id, null, CycleEventTypes.Ultrasound, tool.Date ?? today, new { });
+                return $"Registrei o ultrassom em {FormatDate(tool.Date ?? today)}.";
+
+            case "calculate_next_period":
+                return BuildNextPeriodReply(user);
+
+            case "calculate_delay":
+                return BuildDelayReply(user, today);
+
+            case "get_last_period":
+                return BuildLastPeriodReply(user);
+
+            case "get_last_symptom":
+                return await BuildLastSymptomReplyAsync(user.Id);
+
+            case "get_last_sexual_activity":
+                return await BuildLastSexualActivityReplyAsync(user.Id);
+
+            default:
+                return null;
+        }
+    }
+
+    private async Task<string?> ExecuteOnboardingToolAsync(LumaUser user, LumaToolCall tool)
+    {
+        var extraction = new OnboardingExtraction
+        {
+            DisplayName = tool.DisplayName,
+            IsAdultConfirmed = tool.IsAdultConfirmed,
+            LastPeriodStartDate = tool.LastPeriodDate ?? tool.Date,
+            AverageCycleLength = tool.AverageCycleLength,
+            AveragePeriodLength = tool.AveragePeriodLength,
+            ContraceptiveType = tool.ContraceptiveType
+        };
+
+        if (user.OnboardingStep is OnboardingSteps.AwaitingConsent or OnboardingSteps.ConsentDeclined
+            && tool.ConsentAccepted == true)
+        {
+            return await AcceptConsentAsync(user);
+        }
+
+        if (user.OnboardingStep == OnboardingSteps.AwaitingDisplayName && extraction.DisplayName is not null)
+        {
+            await ApplyExtractedOnboardingDataAsync(user, extraction);
+            return NextOnboardingPrompt(user, extraction);
+        }
+
+        if (user.OnboardingStep is not OnboardingSteps.Completed && extraction.HasAnyValue())
+        {
+            await ApplyExtractedOnboardingDataAsync(user, extraction);
+            return user.OnboardingStep == OnboardingSteps.Completed
+                ? await CompleteOnboardingWithPendingPromptAsync(user, extraction)
+                : NextOnboardingPrompt(user, extraction);
+        }
+
+        return null;
+    }
+
+    private async Task<string> ExecuteRecordPeriodStartToolAsync(LumaUser user, LumaToolCall tool, DateOnly today)
+    {
+        var date = tool.Date ?? today;
+        if (user.OnboardingStep != OnboardingSteps.Completed && user.OnboardingStep != OnboardingSteps.AwaitingLastPeriodStart)
+        {
+            var pending = await SavePendingIntentAsync(user.Id, new ConversationIntent
+            {
+                Intent = ConversationIntents.PeriodStart,
+                Date = date
+            }, string.Empty, today);
+
+            return PendingIntentCapturedMessage(user, pending, today);
+        }
+
+        var cycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, date);
+        EnsurePreference(user).LastPeriodStartDate = date;
+        await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodStart, date, new { agent_tool = true });
+
+        if (user.OnboardingStep == OnboardingSteps.AwaitingLastPeriodStart)
+        {
+            user.OnboardingStep = OnboardingSteps.AwaitingAverageCycleLength;
+            return NextOnboardingPrompt(user, new OnboardingExtraction { LastPeriodStartDate = date });
+        }
+
+        if (tool.FlowIntensity is not null)
+        {
+            await AddOrReplaceFlowEventAsync(user.Id, cycle.Id, date, tool.FlowIntensity);
+            return $"Registrei o inicio da sua menstruacao em {FormatDate(date)} com fluxo {FlowLabel(tool.FlowIntensity)}.";
+        }
+
+        user.PendingAction = PendingActions.AwaitingFlowIntensity;
+        return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
+    }
+
+    private async Task<string?> ExecuteRecordPeriodEndToolAsync(LumaUser user, LumaToolCall tool, DateOnly today)
+    {
+        if (user.OnboardingStep != OnboardingSteps.Completed)
+        {
+            return null;
+        }
+
+        var date = tool.Date ?? today;
+        var cycle = await db.Cycles
+            .Where(existing => existing.UserId == user.Id && existing.Status == CycleStatus.Ongoing)
+            .OrderByDescending(existing => existing.StartDate)
+            .FirstOrDefaultAsync();
+
+        if (cycle is null)
+        {
+            await AddCycleEventAsync(user.Id, null, CycleEventTypes.PeriodEnd, date, new { needs_period_start = true, agent_tool = true });
+            return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ainda nao encontrei um ciclo aberto para calcular a duracao; se puder, me diga quando ela comecou.";
+        }
+
+        if (date < cycle.StartDate)
+        {
+            return $"A data de termino ficou antes do inicio do ciclo ({FormatDate(cycle.StartDate)}). Pode me mandar a data de termino de novo?";
+        }
+
+        cycle.EndDate = date;
+        cycle.Status = CycleStatus.Finished;
+        cycle.UpdatedAt = DateTimeOffset.UtcNow;
+        await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodEnd, date, new { agent_tool = true });
+        var days = Math.Max(1, date.DayNumber - cycle.StartDate.DayNumber + 1);
+        var nextPeriod = cycle.StartDate.AddDays(EnsurePreference(user).AverageCycleLength);
+        return $"Registrei que sua menstruacao terminou em {FormatDate(date)}. Ela durou cerca de {days} dias neste ciclo. Pela sua media atual, a proxima menstruacao esta prevista para perto de {FormatDate(nextPeriod)}.";
+    }
+
+    private async Task<string> ExecuteRecordSexualActivityToolAsync(LumaUser user, LumaToolCall tool, DateOnly today)
+    {
+        var date = tool.Date ?? today;
+        if (user.OnboardingStep != OnboardingSteps.Completed)
+        {
+            var pending = await SavePendingIntentAsync(user.Id, new ConversationIntent
+            {
+                Intent = ConversationIntents.SexualActivity,
+                Date = date,
+                Protected = tool.Protected
+            }, string.Empty, today);
+
+            return PendingIntentCapturedMessage(user, pending, today);
+        }
+
+        await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.SexualActivity, date, new
+        {
+            protected_value = tool.Protected ?? "unknown",
+            @protected = tool.Protected ?? "unknown",
+            contraceptive_method = "unknown",
+            agent_tool = true
+        });
+
+        return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu nao uso isso para afirmar gravidez ou diagnostico.";
     }
 
     private async Task<string> ContinueOnboardingAsync(LumaUser user, string body, string rawBody)
@@ -146,6 +451,12 @@ public sealed class ConversationService(
                 var name = rawBody.Trim();
                 if (!IsLikelyPlainDisplayName(name))
                 {
+                    var outOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
+                    if (outOfOrderReply is not null)
+                    {
+                        return outOfOrderReply;
+                    }
+
                     return MisunderstoodMessage("Pode responder so com seu primeiro nome ou apelido. Por exemplo: \"Nay\" ou \"Pode me chamar de Nay\".");
                 }
 
@@ -175,6 +486,12 @@ public sealed class ConversationService(
                     return "Obrigada por responder. Por seguranca, a Luma ainda nao pode continuar esse cadastro pelo WhatsApp para menores de 18 anos.";
                 }
 
+                var ageStepOutOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
+                if (ageStepOutOfOrderReply is not null)
+                {
+                    return ageStepOutOfOrderReply;
+                }
+
                 return MisunderstoodMessage("Voce pode responder \"sim\", \"nao\" ou algo como \"tenho 23 anos\".");
 
             case OnboardingSteps.AwaitingLastPeriodStart:
@@ -195,6 +512,12 @@ public sealed class ConversationService(
                 var date = DateParser.ParseFlexibleDate(rawBody, today);
                 if (date is null)
                 {
+                    var periodStepOutOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
+                    if (periodStepOutOfOrderReply is not null)
+                    {
+                        return periodStepOutOfOrderReply;
+                    }
+
                     return MisunderstoodMessage("Pode responder como \"10/04\", \"dia 10\", \"comecou ha 3 dias\", \"ontem\" ou \"nao lembro\".");
                 }
 
@@ -220,6 +543,12 @@ public sealed class ConversationService(
 
                 if (cycleLength is < 21 or > 45 or null)
                 {
+                    var cycleStepOutOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
+                    if (cycleStepOutOfOrderReply is not null)
+                    {
+                        return cycleStepOutOfOrderReply;
+                    }
+
                     return MisunderstoodMessage("Me diga um numero entre 21 e 45 dias. Se nao souber, responda \"nao sei\" e uso 28 dias por enquanto.");
                 }
 
@@ -238,6 +567,12 @@ public sealed class ConversationService(
                 var periodLength = MessageText.ExtractFirstInteger(body);
                 if (periodLength is < 2 or > 10 or null)
                 {
+                    var periodLengthStepOutOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
+                    if (periodLengthStepOutOfOrderReply is not null)
+                    {
+                        return periodLengthStepOutOfOrderReply;
+                    }
+
                     return MisunderstoodMessage("Me diga um numero entre 2 e 10 dias para a duracao media da menstruacao.");
                 }
 
@@ -250,12 +585,18 @@ public sealed class ConversationService(
                 var contraceptive = extractedFromContraceptiveStep.ContraceptiveType ?? ParseContraceptiveType(body);
                 if (contraceptive is null)
                 {
+                    var contraceptiveStepOutOfOrderReply = await TryCaptureOutOfOrderIntentAsync(user, body, rawBody, today);
+                    if (contraceptiveStepOutOfOrderReply is not null)
+                    {
+                        return contraceptiveStepOutOfOrderReply;
+                    }
+
                     return MisunderstoodMessage("Pode responder algo como \"tomo pilula\", \"uso DIU\", \"uso camisinha\", \"nao uso\" ou \"prefiro nao informar\".");
                 }
 
                 ApplyContraceptivePreference(user, contraceptive);
                 user.OnboardingStep = OnboardingSteps.Completed;
-                return NextOnboardingPrompt(user, new OnboardingExtraction { ContraceptiveType = contraceptive });
+                return await CompleteOnboardingWithPendingPromptAsync(user, new OnboardingExtraction { ContraceptiveType = contraceptive });
 
             default:
                 user.OnboardingStep = OnboardingSteps.AwaitingConsent;
@@ -426,16 +767,42 @@ public sealed class ConversationService(
         }
     }
 
-    private async Task<ConversationIntent> ExtractConversationIntentAsync(string body, string rawBody, DateOnly today)
+    private async Task<ConversationIntent> ExtractConversationIntentAsync(string body, string rawBody, DateOnly today, LumaUser? user = null)
     {
         var deterministic = ExtractDeterministicConversationIntent(body, rawBody, today);
         if (ShouldUseAiForOnboarding(rawBody))
         {
-            var ai = await conversationAi.ExtractAsync(rawBody, today);
+            var ai = await conversationAi.ExtractAsync(rawBody, today, user is null ? null : BuildConversationContext(user));
             MergeConversationIntent(deterministic, ai);
         }
 
         return deterministic;
+    }
+
+    private async Task<string?> TryCaptureOutOfOrderIntentAsync(LumaUser user, string body, string rawBody, DateOnly today)
+    {
+        if (user.OnboardingStep is OnboardingSteps.AwaitingConsent
+            or OnboardingSteps.ConsentDeclined
+            or OnboardingSteps.UnderageBlocked
+            or OnboardingSteps.Completed)
+        {
+            return null;
+        }
+
+        var intent = ExtractDeterministicConversationIntent(body, rawBody, today);
+        if (!IsActionablePendingIntent(intent.Intent) && ShouldAskAiForOutOfOrderIntent(body, rawBody))
+        {
+            var ai = await conversationAi.ExtractAsync(rawBody, today, BuildConversationContext(user));
+            MergeConversationIntent(intent, ai);
+        }
+
+        if (!IsActionablePendingIntent(intent.Intent) || !IsOutOfOrderForCurrentStep(user.OnboardingStep, intent.Intent))
+        {
+            return null;
+        }
+
+        var pending = await SavePendingIntentAsync(user.Id, intent, rawBody, today);
+        return PendingIntentCapturedMessage(user, pending, today);
     }
 
     private static ConversationIntent ExtractDeterministicConversationIntent(string body, string rawBody, DateOnly today)
@@ -445,6 +812,12 @@ public sealed class ConversationService(
         if (IsLumaIdentityQuestion(body))
         {
             intent.Intent = ConversationIntents.LumaIdentityQuestion;
+            return intent;
+        }
+
+        if (LumaKnowledgeBase.IsKnowledgeQuestion(body))
+        {
+            intent.Intent = ConversationIntents.KnowledgeQuestion;
             return intent;
         }
 
@@ -463,6 +836,20 @@ public sealed class ConversationService(
         if (IsPregnancyDueDateQuestion(body))
         {
             intent.Intent = ConversationIntents.PregnancyDueDateQuestion;
+            return intent;
+        }
+
+        if (IsPeriodStart(body))
+        {
+            intent.Intent = ConversationIntents.PeriodStart;
+            intent.Date = InferPeriodStartDate(body, rawBody, today);
+            return intent;
+        }
+
+        if (IsPeriodEnd(body))
+        {
+            intent.Intent = ConversationIntents.PeriodEnd;
+            intent.Date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
             return intent;
         }
 
@@ -512,6 +899,34 @@ public sealed class ConversationService(
             return intent;
         }
 
+        var symptoms = ParseSymptoms(body);
+        if (symptoms.Count > 0)
+        {
+            intent.Intent = ConversationIntents.Symptom;
+            intent.Date = today;
+            intent.Symptom = symptoms.First().Key;
+            intent.Intensity = symptoms.First().Intensity;
+            return intent;
+        }
+
+        var flow = ParseFlowIntensity(body);
+        if (flow is not null && IsFlowOnlyResponse(body))
+        {
+            intent.Intent = ConversationIntents.FlowUpdate;
+            intent.Date = today;
+            intent.Intensity = flow;
+            return intent;
+        }
+
+        var mood = ParseMood(body);
+        if (mood is not null)
+        {
+            intent.Intent = ConversationIntents.Mood;
+            intent.Date = today;
+            intent.Symptom = mood.Value.Key;
+            return intent;
+        }
+
         if (IsSexualActivity(body))
         {
             intent.Intent = ConversationIntents.SexualActivity;
@@ -555,9 +970,20 @@ public sealed class ConversationService(
             return await HandlePregnancyReferenceAsync(user, body, rawBody, intent, today);
         }
 
+        var pendingIntentReply = await HandlePendingIntentConfirmationAsync(user, body, today);
+        if (pendingIntentReply is not null)
+        {
+            return pendingIntentReply;
+        }
+
         if (intent.Intent == ConversationIntents.LumaIdentityQuestion)
         {
             return LumaIdentityMessage();
+        }
+
+        if (intent.Intent == ConversationIntents.KnowledgeQuestion && LumaKnowledgeBase.Search(body) is { } knowledgeReply)
+        {
+            return knowledgeReply;
         }
 
         if (intent.Intent == ConversationIntents.OutOfScope)
@@ -657,9 +1083,9 @@ public sealed class ConversationService(
             return BuildNextPeriodReply(user);
         }
 
-        if (IsPeriodStart(body))
+        if (intent.Intent == ConversationIntents.PeriodStart || IsPeriodStart(body))
         {
-            var date = InferPeriodStartDate(body, rawBody, today);
+            var date = intent.Date ?? InferPeriodStartDate(body, rawBody, today);
             var periodFlow = ParseFlowIntensity(body);
             var cycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, date);
             EnsurePreference(user).LastPeriodStartDate = date;
@@ -676,9 +1102,9 @@ public sealed class ConversationService(
             return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}.\n\nComo esta o fluxo?\n1. Leve\n2. Medio\n3. Intenso\n4. Prefiro nao informar";
         }
 
-        if (IsPeriodEnd(body))
+        if (intent.Intent == ConversationIntents.PeriodEnd || IsPeriodEnd(body))
         {
-            var date = DateParser.ParseFlexibleDate(rawBody, today) ?? today;
+            var date = intent.Date ?? DateParser.ParseFlexibleDate(rawBody, today) ?? today;
             var cycle = await db.Cycles
                 .Where(existing => existing.UserId == user.Id && existing.Status == CycleStatus.Ongoing)
                 .OrderByDescending(existing => existing.StartDate)
@@ -830,6 +1256,126 @@ public sealed class ConversationService(
         return Task.CompletedTask;
     }
 
+    private async Task<PendingIntent> SavePendingIntentAsync(Guid userId, ConversationIntent intent, string rawBody, DateOnly today)
+    {
+        var existing = await db.PendingIntents
+            .Where(pending => pending.UserId == userId && pending.Status == PendingIntentStatus.PendingConfirmation)
+            .ToListAsync();
+
+        foreach (var pending in existing)
+        {
+            pending.Status = PendingIntentStatus.Dismissed;
+            pending.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        var pendingIntent = new PendingIntent
+        {
+            UserId = userId,
+            Intent = intent.Intent!,
+            Date = intent.Date ?? today,
+            RequiredBeforeAction = PendingIntentRequirements.FinishOnboarding,
+            Status = PendingIntentStatus.PendingConfirmation,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                original_message = _storeMessageBodies ? rawBody : null,
+                @protected = intent.Protected,
+                symptom = intent.Symptom,
+                intensity = intent.Intensity,
+                gestational_weeks = intent.GestationalWeeks,
+                last_period_date = intent.LastPeriodDate,
+                estimated_due_date = intent.EstimatedDueDate
+            })
+        };
+
+        db.PendingIntents.Add(pendingIntent);
+        return pendingIntent;
+    }
+
+    private async Task<PendingIntent?> GetLatestPendingIntentAsync(Guid userId)
+    {
+        return await db.PendingIntents
+            .Where(intent => intent.UserId == userId && intent.Status == PendingIntentStatus.PendingConfirmation)
+            .OrderByDescending(intent => intent.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<string> CompleteOnboardingWithPendingPromptAsync(LumaUser user, OnboardingExtraction? captured)
+    {
+        var reply = NextOnboardingPrompt(user, captured);
+        var pending = await GetLatestPendingIntentAsync(user.Id);
+        if (pending is null)
+        {
+            return reply;
+        }
+
+        return $"{reply}\n\n{PendingIntentConfirmationPrompt(pending, Today())}";
+    }
+
+    private async Task<string?> HandlePendingIntentConfirmationAsync(LumaUser user, string body, DateOnly today)
+    {
+        var pending = await GetLatestPendingIntentAsync(user.Id);
+        if (pending is null)
+        {
+            return null;
+        }
+
+        if (IsNegative(body))
+        {
+            pending.Status = PendingIntentStatus.Dismissed;
+            pending.CompletedAt = DateTimeOffset.UtcNow;
+            pending.UpdatedAt = DateTimeOffset.UtcNow;
+            return "Tudo bem, nao registrei aquela informacao. Quando quiser, pode me mandar de novo de um jeito natural.";
+        }
+
+        if (!IsAffirmative(body))
+        {
+            return null;
+        }
+
+        var reply = await ExecutePendingIntentAsync(user, pending, today);
+        pending.Status = PendingIntentStatus.Completed;
+        pending.CompletedAt = DateTimeOffset.UtcNow;
+        pending.UpdatedAt = DateTimeOffset.UtcNow;
+        return reply;
+    }
+
+    private async Task<string> ExecutePendingIntentAsync(LumaUser user, PendingIntent pending, DateOnly today)
+    {
+        var date = pending.Date ?? today;
+
+        if (pending.Intent == ConversationIntents.PeriodStart)
+        {
+            var cycle = await CreateOrUpdateCycleFromLastPeriodAsync(user.Id, date);
+            EnsurePreference(user).LastPeriodStartDate = date;
+            await AddCycleEventAsync(user.Id, cycle.Id, CycleEventTypes.PeriodStart, date, new { pending_intent = true });
+            return $"Registrei o inicio da sua menstruacao em {FormatDate(date)}. Obrigada por confirmar; deixei isso organizado no seu historico.";
+        }
+
+        if (pending.Intent == ConversationIntents.SexualActivity)
+        {
+            var protectedValue = ExtractPendingString(pending.PayloadJson, "protected") ?? "unknown";
+            await AddCycleEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), CycleEventTypes.SexualActivity, date, new
+            {
+                pending_intent = true,
+                protected_value = protectedValue,
+                @protected = protectedValue,
+                contraceptive_method = "unknown"
+            });
+
+            return $"Registrei a relacao em {FormatDate(date)}. Esse dado fica salvo apenas para seu historico; eu nao uso isso para afirmar gravidez ou diagnostico.";
+        }
+
+        if (pending.Intent == ConversationIntents.PregnancyPositive)
+        {
+            return await HandlePregnancyPositiveAsync(user, new ConversationIntent { Intent = ConversationIntents.PregnancyPositive, Date = date }, today);
+        }
+
+        pending.Status = PendingIntentStatus.Dismissed;
+        pending.CompletedAt = DateTimeOffset.UtcNow;
+        pending.UpdatedAt = DateTimeOffset.UtcNow;
+        return "Eu tinha guardado uma intencao anterior, mas ainda nao consigo executar esse tipo de registro com seguranca. Pode me mandar de novo depois do cadastro, de forma direta?";
+    }
+
     private static ConsentRecord NewConsent(Guid userId, string type)
     {
         return new ConsentRecord
@@ -844,6 +1390,18 @@ public sealed class ConversationService(
     {
         user.Preference ??= new UserPreference { UserId = user.Id };
         return user.Preference;
+    }
+
+    private static ConversationContext BuildConversationContext(LumaUser user)
+    {
+        return new ConversationContext
+        {
+            DisplayName = user.DisplayName,
+            OnboardingStep = user.OnboardingStep,
+            PendingAction = user.PendingAction,
+            HasAcceptedConsent = user.ConsentAcceptedAt is not null,
+            HasCompletedOnboarding = user.OnboardingStep == OnboardingSteps.Completed
+        };
     }
 
     private static void ApplyContraceptivePreference(LumaUser user, string contraceptiveType)
@@ -914,6 +1472,34 @@ public sealed class ConversationService(
             : $"{name}pronto. Seu cadastro inicial ficou completo.";
 
         return $"{intro}\n\nA partir de agora, pode falar comigo de um jeito bem natural. Por exemplo:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo intenso\"\n\"to com colica forte\"\n\"hoje estou irritada\"\n\"tive relacao dia 20\"\n\"quando e minha proxima menstruacao?\"\n\nEu vou te ajudar a organizar seus registros, sempre como estimativa e sem substituir orientacao medica.";
+    }
+
+    private static string PendingIntentCapturedMessage(LumaUser user, PendingIntent pending, DateOnly today)
+    {
+        var dateLabel = FormatRelativeDateForReply(pending.Date ?? today, today);
+        var nextPrompt = NextOnboardingPrompt(user);
+
+        var understood = pending.Intent switch
+        {
+            ConversationIntents.PeriodStart => $"Entendi, ja vi que voce quer registrar o inicio da menstruacao {dateLabel}.",
+            ConversationIntents.SexualActivity => $"Entendi, ja vi que voce quer registrar uma relacao {dateLabel}.",
+            ConversationIntents.PregnancyPositive => "Entendi, ja vi que voce quer me contar sobre uma gravidez.",
+            _ => "Entendi o que voce quer registrar."
+        };
+
+        return $"{understood} Antes disso, preciso terminar seu cadastro rapidinho para salvar tudo do jeito certo e com seguranca.\n\n{nextPrompt}";
+    }
+
+    private static string PendingIntentConfirmationPrompt(PendingIntent pending, DateOnly today)
+    {
+        var dateLabel = FormatRelativeDateForReply(pending.Date ?? today, today);
+        return pending.Intent switch
+        {
+            ConversationIntents.PeriodStart => $"Voce tinha me contado que sua menstruacao comecou {dateLabel}. Quer que eu registre isso agora?\n1. Sim\n2. Nao",
+            ConversationIntents.SexualActivity => $"Voce tinha me contado que teve uma relacao {dateLabel}. Quer que eu registre isso agora?\n1. Sim\n2. Nao",
+            ConversationIntents.PregnancyPositive => "Voce tinha me contado sobre uma gravidez. Quer que eu registre isso agora?\n1. Sim\n2. Nao",
+            _ => "Voce tinha me contado algo antes de terminar o cadastro. Quer que eu registre isso agora?\n1. Sim\n2. Nao"
+        };
     }
 
     private static string HelpMessage()
@@ -1284,9 +1870,12 @@ public sealed class ConversationService(
 
     private static bool IsAffirmative(string body)
     {
-        return body is "1" or "sim" or "s" or "aceito" or "aceitar"
+        return body is "1" or "sim" or "s" or "aceito" or "aceitar" or "claro" or "ok" or "okay"
             || body.Contains("aceito", StringComparison.Ordinal)
-            || body.Contains("concordo", StringComparison.Ordinal);
+            || body.Contains("concordo", StringComparison.Ordinal)
+            || body.Contains("claro", StringComparison.Ordinal)
+            || body.Contains("com certeza", StringComparison.Ordinal)
+            || body.Contains("pode", StringComparison.Ordinal) && body.Contains("sim", StringComparison.Ordinal);
     }
 
     private static bool IsNegative(string body)
@@ -1302,7 +1891,12 @@ public sealed class ConversationService(
 
     private static bool IsGreeting(string body)
     {
-        return body is "oi" or "ola" or "bom dia" or "boa tarde" or "boa noite"
+        var firstToken = body.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?
+            .Trim(',', '.', '!', '?', ';', ':');
+
+        return firstToken is "oi" or "ola"
+            || body is "bom dia" or "boa tarde" or "boa noite"
             || body.StartsWith("oi ", StringComparison.Ordinal)
             || body.StartsWith("ola ", StringComparison.Ordinal);
     }
@@ -1526,6 +2120,100 @@ public sealed class ConversationService(
             && !IsUltrasound(body)
             && !IsPregnancyWeeksQuestion(body)
             && !IsPregnancyDueDateQuestion(body);
+    }
+
+    private static bool IsActionablePendingIntent(string? intent)
+    {
+        return intent is ConversationIntents.PeriodStart
+            or ConversationIntents.SexualActivity
+            or ConversationIntents.PregnancyPositive;
+    }
+
+    private static bool IsOutOfOrderForCurrentStep(string onboardingStep, string? intent)
+    {
+        if (!IsActionablePendingIntent(intent))
+        {
+            return false;
+        }
+
+        if (onboardingStep == OnboardingSteps.AwaitingLastPeriodStart && intent == ConversationIntents.PeriodStart)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool ShouldAskAiForOutOfOrderIntent(string body, string rawBody)
+    {
+        if (!ShouldUseAiForOnboarding(rawBody) || IsGreeting(body) || IsLikelyPlainDisplayName(rawBody.Trim()))
+        {
+            return false;
+        }
+
+        return !body.Contains("ciclo", StringComparison.Ordinal)
+            && !body.Contains("dura", StringComparison.Ordinal)
+            && !body.Contains("anos", StringComparison.Ordinal)
+            && !body.Contains("idade", StringComparison.Ordinal);
+    }
+
+    private static bool IsFixedGuardrailReply(string reply)
+    {
+        var normalized = MessageText.Normalize(reply);
+        return normalized.Contains("nao consigo confirmar", StringComparison.Ordinal)
+            || normalized.Contains("nao posso afirmar", StringComparison.Ordinal)
+            || normalized.Contains("procure atendimento", StringComparison.Ordinal)
+            || normalized.Contains("menores de 18 anos", StringComparison.Ordinal)
+            || normalized.Contains("sem o seu consentimento", StringComparison.Ordinal);
+    }
+
+    private static bool IsRequiredBackendPrompt(LumaUser user, string reply)
+    {
+        if (user.OnboardingStep != OnboardingSteps.Completed)
+        {
+            return true;
+        }
+
+        var normalized = MessageText.Normalize(reply);
+        return normalized.Contains("voce aceita?", StringComparison.Ordinal)
+            || normalized.Contains("como devo te chamar", StringComparison.Ordinal)
+            || normalized.Contains("18 anos ou mais", StringComparison.Ordinal)
+            || normalized.Contains("primeiro dia da sua ultima menstruacao", StringComparison.Ordinal)
+            || normalized.Contains("ciclo costuma ter quantos dias", StringComparison.Ordinal)
+            || normalized.Contains("menstruacao costuma durar", StringComparison.Ordinal)
+            || normalized.Contains("metodo contraceptivo", StringComparison.Ordinal)
+            || normalized.Contains("como esta o fluxo?", StringComparison.Ordinal)
+            || normalized.Contains("1. leve", StringComparison.Ordinal);
+    }
+
+    private static string? ExtractPendingString(string payloadJson, string property)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(payloadJson);
+            return json.RootElement.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string FormatRelativeDateForReply(DateOnly date, DateOnly today)
+    {
+        if (date == today)
+        {
+            return "hoje";
+        }
+
+        if (date == today.AddDays(-1))
+        {
+            return "ontem";
+        }
+
+        return $"em {FormatDate(date)}";
     }
 
     private static DateOnly InferPeriodStartDate(string body, string rawBody, DateOnly today)

@@ -17,7 +17,11 @@ public sealed class OllamaConversationIntentExtractor(
 
     private readonly OllamaOptions _options = options.Value;
 
-    public async Task<ConversationIntent?> ExtractAsync(string message, DateOnly today, CancellationToken cancellationToken = default)
+    public async Task<ConversationIntent?> ExtractAsync(
+        string message,
+        DateOnly today,
+        ConversationContext? context = null,
+        CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled || string.IsNullOrWhiteSpace(message))
         {
@@ -32,9 +36,19 @@ Voce e o extrator de intencoes da Luma, uma assistente de ciclo menstrual e grav
 Extraia apenas a intencao e entidades explicitamente informadas. Nao diagnostique, nao invente.
 Hoje e {{today:yyyy-MM-dd}}.
 
+Contexto atual da conversa:
+- nome conhecido: {{context?.DisplayName ?? "desconhecido"}}
+- etapa de cadastro/conversa: {{context?.OnboardingStep ?? "desconhecida"}}
+- cadastro completo: {{(context?.HasCompletedOnboarding == true ? "sim" : "nao")}}
+- consentimento aceito: {{(context?.HasAcceptedConsent == true ? "sim" : "nao")}}
+- acao pendente no backend: {{context?.PendingAction ?? "nenhuma"}}
+
+Ferramentas autorizadas pelo backend, apenas como intencao sugerida: get_user_profile, get_onboarding_state, save_pending_intent, complete_onboarding_step, record_period_start, record_period_end, record_flow_update, record_symptom, record_mood, record_sexual_activity, start_pregnancy_mode, record_pregnancy_bleeding, record_pregnancy_symptom, record_prenatal_appointment, record_ultrasound, calculate_next_period, calculate_delay, get_last_period, get_last_symptom, get_last_sexual_activity, search_luma_knowledge_base.
+Voce nao executa ferramentas nem grava dados; apenas sugere a intencao para o backend validar.
+
 Responda somente JSON valido, sem markdown:
 {
-  "intent": "sexual_activity"|"last_sexual_activity_question"|"pregnancy_positive"|"pregnancy_bleeding"|"pregnancy_symptom"|"prenatal_appointment"|"ultrasound"|"pregnancy_weeks_question"|"pregnancy_due_date_question"|"luma_identity_question"|"out_of_scope"|null,
+  "intent": "period_start"|"period_end"|"flow_update"|"symptom"|"mood"|"sexual_activity"|"last_sexual_activity_question"|"pregnancy_positive"|"pregnancy_bleeding"|"pregnancy_symptom"|"prenatal_appointment"|"ultrasound"|"pregnancy_weeks_question"|"pregnancy_due_date_question"|"luma_identity_question"|"knowledge_question"|"out_of_scope"|null,
   "date": "yyyy-MM-dd"|null,
   "gestational_weeks": number|null,
   "last_period_date": "yyyy-MM-dd"|null,
@@ -46,6 +60,9 @@ Responda somente JSON valido, sem markdown:
 }
 
 Regras:
+- Use period_start para mensagens que informem inicio da menstruacao, mesmo com linguagem natural.
+- Use period_end para mensagens que informem fim da menstruacao.
+- Use flow_update, symptom ou mood para registros de fluxo, sintomas ou humor.
 - Use sexual_activity para qualquer mensagem que informe relacao sexual, sexo, intimidade sexual ou equivalente, mesmo com linguagem informal.
 - Use last_sexual_activity_question para perguntas sobre quando foi a ultima relacao sexual.
 - Use pregnancy_positive para mensagens informando gravidez ou teste positivo. Se houver "8 semanas", preencha gestational_weeks.
@@ -54,6 +71,7 @@ Regras:
 - Use prenatal_appointment para consulta de pre-natal/obstetra.
 - Use ultrasound para ultrassom.
 - Use luma_identity_question para "quem e voce", "o que voce faz", "o que e a Luma".
+- Use knowledge_question para perguntas sobre privacidade, consentimento, LGPD, limites da Luma, ciclo menstrual ou gravidez que nao sejam pedido de diagnostico.
 - Use out_of_scope para perguntas fora de ciclo menstrual, gravidez, sintomas, registros, privacidade ou funcionamento da Luma.
 - Datas relativas: hoje={{today:yyyy-MM-dd}}, ontem={{today.AddDays(-1):yyyy-MM-dd}}.
 - Se houver duvida, use null e confidence baixo.
@@ -138,7 +156,12 @@ Mensagem:
     {
         return intent switch
         {
-            ConversationIntents.SexualActivity
+            ConversationIntents.PeriodStart
+                or ConversationIntents.PeriodEnd
+                or ConversationIntents.FlowUpdate
+                or ConversationIntents.Symptom
+                or ConversationIntents.Mood
+                or ConversationIntents.SexualActivity
                 or ConversationIntents.LastSexualActivityQuestion
                 or ConversationIntents.PregnancyPositive
                 or ConversationIntents.PregnancyBleeding
@@ -148,6 +171,7 @@ Mensagem:
                 or ConversationIntents.PregnancyWeeksQuestion
                 or ConversationIntents.PregnancyDueDateQuestion
                 or ConversationIntents.LumaIdentityQuestion
+                or ConversationIntents.KnowledgeQuestion
                 or ConversationIntents.OutOfScope => intent,
             _ => null
         };

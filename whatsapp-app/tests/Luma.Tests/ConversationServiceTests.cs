@@ -49,6 +49,153 @@ public sealed class ConversationServiceTests
     }
 
     [Fact]
+    public async Task Consent_accepts_natural_affirmative_answer()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db, new FakeExtractor(_ => null));
+
+        var phone = "+5516992000053";
+        await SendAsync(service, phone, "Ola");
+        var reply = await SendAsync(service, phone, "Claro!");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        Assert.Equal(OnboardingSteps.AwaitingDisplayName, user.OnboardingStep);
+        Assert.Contains("como devo te chamar", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Agent_can_accept_consent_without_deterministic_affirmative_word()
+    {
+        await using var db = CreateDbContext();
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("perfeitamente", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "complete_onboarding_step",
+                    ConsentAccepted = true,
+                    Confidence = 0.95
+                }
+                : null);
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        var phone = "+5516992000062";
+        await SendAsync(service, phone, "Ola");
+        var reply = await SendAsync(service, phone, "perfeitamente, pode seguir");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        Assert.Equal(OnboardingSteps.AwaitingDisplayName, user.OnboardingStep);
+        Assert.Contains("como devo te chamar", MessageText.Normalize(reply));
+        Assert.Contains(agent.Requests, request => request.Context.OnboardingStep == OnboardingSteps.AwaitingConsent);
+    }
+
+    [Fact]
+    public async Task Agent_cannot_turn_plain_greeting_into_consent()
+    {
+        await using var db = CreateDbContext();
+        var agent = new FakeToolAgent(_ => new LumaToolCall
+        {
+            ToolName = "complete_onboarding_step",
+            ConsentAccepted = true,
+            Confidence = 0.95
+        });
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        await SendAsync(service, "+5516992000064", "Ola, tudo bem?");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == "+5516992000064");
+        Assert.Equal(OnboardingSteps.AwaitingConsent, user.OnboardingStep);
+        Assert.Empty(agent.Requests);
+    }
+
+    [Fact]
+    public async Task Agent_tool_call_records_completed_user_period_start_with_unmapped_wording()
+    {
+        await using var db = CreateDbContext();
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("visita mensal", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "record_period_start",
+                    Date = new DateOnly(2026, 4, 25),
+                    Confidence = 0.96
+                }
+                : null);
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000063", toolAgent: agent);
+
+        var reply = await SendAsync(service, "+5516992000063", "a visita mensal apareceu");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == "+5516992000063");
+        var ev = await db.CycleEvents
+            .Where(ev => ev.UserId == user.Id && ev.Type == CycleEventTypes.PeriodStart)
+            .OrderByDescending(ev => ev.CreatedAt)
+            .FirstAsync();
+        Assert.Equal(new DateOnly(2026, 4, 25), ev.Date);
+        Assert.Contains("agent_tool", ev.MetadataJson);
+        Assert.Contains("inicio da sua menstruacao", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Non_guardrail_reply_is_written_by_luma_ai_response_generator()
+    {
+        await using var db = CreateDbContext();
+        var responseGenerator = new FakeResponseGenerator(_ => "Oi, eu sou a Luma em modo producao. Pode me chamar do seu jeito.");
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000060", responseGenerator: responseGenerator);
+
+        responseGenerator.Requests.Clear();
+        var reply = await SendAsync(service, "+5516992000060", "Ola");
+
+        Assert.Equal("Oi, eu sou a Luma em modo producao. Pode me chamar do seu jeito.", reply);
+        Assert.Single(responseGenerator.Requests);
+        Assert.Contains(responseGenerator.Requests[0].AvailableTools, tool => tool.StartsWith("get_onboarding_state", StringComparison.Ordinal));
+        Assert.Equal(OnboardingSteps.Completed, responseGenerator.Requests[0].OnboardingStep);
+    }
+
+    [Fact]
+    public async Task Required_onboarding_prompt_does_not_go_through_luma_ai_response_generator()
+    {
+        await using var db = CreateDbContext();
+        var responseGenerator = new FakeResponseGenerator(_ => "isso deixaria o webhook lento");
+        var service = CreateService(db, new FakeExtractor(_ => null), responseGenerator: responseGenerator);
+
+        var reply = await SendAsync(service, "+5516992000065", "Ola");
+
+        Assert.Contains("voce aceita", MessageText.Normalize(reply));
+        Assert.Empty(responseGenerator.Requests);
+    }
+
+    [Fact]
+    public async Task Fixed_medical_guardrail_does_not_go_through_luma_ai_response_generator()
+    {
+        await using var db = CreateDbContext();
+        var responseGenerator = new FakeResponseGenerator(_ => "isso nao deveria aparecer");
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000061", responseGenerator: responseGenerator);
+
+        responseGenerator.Requests.Clear();
+        var reply = await SendAsync(service, "+5516992000061", "Estou gravida?");
+
+        Assert.Contains("nao consigo confirmar", MessageText.Normalize(reply));
+        Assert.Empty(responseGenerator.Requests);
+    }
+
+    [Fact]
+    public async Task Display_name_step_can_capture_name_and_age_in_same_message()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db, new FakeExtractor(_ => null));
+
+        var phone = "+5516992000054";
+        await SendAsync(service, phone, "Ola");
+        await SendAsync(service, phone, "Aceito");
+        var reply = await SendAsync(service, phone, "Voce pode me chamar de Nay, e eu tenho 21 anos");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        Assert.Equal("Nay", user.DisplayName);
+        Assert.True(user.IsAdultConfirmed);
+        Assert.Equal(OnboardingSteps.AwaitingLastPeriodStart, user.OnboardingStep);
+        Assert.Contains("qual foi o primeiro dia da sua ultima menstruacao", MessageText.Normalize(reply));
+    }
+
+    [Fact]
     public async Task Last_period_step_saves_relative_date_and_event()
     {
         await using var db = CreateDbContext();
@@ -65,6 +212,89 @@ public sealed class ConversationServiceTests
         var periodStart = await db.CycleEvents.SingleAsync(ev => ev.UserId == user.Id && ev.Type == CycleEventTypes.PeriodStart);
         Assert.Equal(new DateOnly(2026, 4, 20), user.Preference!.LastPeriodStartDate);
         Assert.Equal(new DateOnly(2026, 4, 20), periodStart.Date);
+    }
+
+    [Fact]
+    public async Task Onboarding_saves_out_of_order_period_start_as_pending_intent_and_confirms_after_completion()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db, new FakeExtractor(_ => null));
+
+        var phone = "+5516992000050";
+        await SendAsync(service, phone, "Ola");
+        await SendAsync(service, phone, "Aceito");
+        var pendingReply = await SendAsync(service, phone, "menstruei hoje");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        var pending = Assert.Single(await db.PendingIntents.Where(intent => intent.UserId == user.Id).ToListAsync());
+        Assert.Equal(OnboardingSteps.AwaitingDisplayName, user.OnboardingStep);
+        Assert.Equal(ConversationIntents.PeriodStart, pending.Intent);
+        Assert.Equal(new DateOnly(2026, 4, 25), pending.Date);
+        Assert.Contains("ja vi que voce quer registrar o inicio da menstruacao hoje", MessageText.Normalize(pendingReply));
+        Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id).ToListAsync());
+
+        await SendAsync(service, phone, "Julia");
+        await SendAsync(service, phone, "Sim, tenho 25 anos");
+        await SendAsync(service, phone, "nao lembro");
+        await SendAsync(service, phone, "28 dias");
+        await SendAsync(service, phone, "5 dias");
+        var completedReply = await SendAsync(service, phone, "Prefiro nao informar");
+
+        Assert.Contains("voce tinha me contado que sua menstruacao comecou hoje", MessageText.Normalize(completedReply));
+        Assert.Contains("quer que eu registre isso agora", MessageText.Normalize(completedReply));
+        Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id).ToListAsync());
+
+        var confirmationReply = await SendAsync(service, phone, "sim");
+
+        var periodStart = Assert.Single(await db.CycleEvents.Where(ev => ev.UserId == user.Id && ev.Type == CycleEventTypes.PeriodStart).ToListAsync());
+        Assert.Equal(new DateOnly(2026, 4, 25), periodStart.Date);
+        Assert.Contains("registrei o inicio da sua menstruacao em 25/04", MessageText.Normalize(confirmationReply));
+        Assert.All(await db.PendingIntents.Where(intent => intent.UserId == user.Id).ToListAsync(), intent => Assert.Equal(PendingIntentStatus.Completed, intent.Status));
+    }
+
+    [Fact]
+    public async Task Onboarding_saves_ai_detected_unmapped_intent_as_pending_intent()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(
+            db,
+            new FakeExtractor(_ => null),
+            new FakeIntentExtractor(message =>
+                message.Contains("intimo", StringComparison.OrdinalIgnoreCase)
+                    ? new ConversationIntent
+                    {
+                        Intent = ConversationIntents.SexualActivity,
+                        Date = new DateOnly(2026, 4, 24),
+                        Protected = "unknown",
+                        Confidence = 0.92
+                    }
+                    : null));
+
+        var phone = "+5516992000051";
+        await SendAsync(service, phone, "Ola");
+        await SendAsync(service, phone, "Aceito");
+        var reply = await SendAsync(service, phone, "Ontem ficamos de um jeito mais intimo");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        var pending = Assert.Single(await db.PendingIntents.Where(intent => intent.UserId == user.Id).ToListAsync());
+        Assert.Equal(ConversationIntents.SexualActivity, pending.Intent);
+        Assert.Equal(new DateOnly(2026, 4, 24), pending.Date);
+        Assert.Contains("quer registrar uma relacao", MessageText.Normalize(reply));
+        Assert.Contains("preciso terminar seu cadastro", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Completed_user_can_ask_privacy_question_from_luma_knowledge_base()
+    {
+        await using var db = CreateDbContext();
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000052");
+
+        var reply = await SendAsync(service, "+5516992000052", "Luma, como voce protege meus dados?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("privacidade", normalized);
+        Assert.Contains("consentimento", normalized);
+        Assert.Contains("apagar", normalized);
     }
 
     [Theory]
@@ -408,7 +638,9 @@ public sealed class ConversationServiceTests
     private static ConversationService CreateService(
         LumaDbContext db,
         IOnboardingDataExtractor extractor,
-        IConversationIntentExtractor? intentExtractor = null)
+        IConversationIntentExtractor? intentExtractor = null,
+        ILumaToolAgent? toolAgent = null,
+        ILumaResponseGenerator? responseGenerator = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -422,6 +654,8 @@ public sealed class ConversationServiceTests
             configuration,
             extractor,
             intentExtractor ?? new FakeIntentExtractor(_ => null),
+            toolAgent ?? new NullLumaToolAgent(),
+            responseGenerator ?? new PassthroughLumaResponseGenerator(),
             new FixedDateProvider(new DateTimeOffset(2026, 4, 25, 12, 0, 0, TimeSpan.Zero)),
             NullLogger<ConversationService>.Instance);
     }
@@ -445,9 +679,11 @@ public sealed class ConversationServiceTests
     private static async Task<ConversationService> CreateCompletedUserServiceAsync(
         LumaDbContext db,
         string phone,
-        IConversationIntentExtractor? intentExtractor = null)
+        IConversationIntentExtractor? intentExtractor = null,
+        ILumaToolAgent? toolAgent = null,
+        ILumaResponseGenerator? responseGenerator = null)
     {
-        var service = CreateService(db, new FakeExtractor(_ => null), intentExtractor);
+        var service = CreateService(db, new FakeExtractor(_ => null), intentExtractor, toolAgent, responseGenerator);
         await CompleteBasicOnboardingUntilContraceptiveAsync(service, phone);
         await SendAsync(service, phone, "Prefiro nao informar");
         db.ChangeTracker.Clear();
@@ -464,9 +700,39 @@ public sealed class ConversationServiceTests
 
     private sealed class FakeIntentExtractor(Func<string, ConversationIntent?> extract) : IConversationIntentExtractor
     {
-        public Task<ConversationIntent?> ExtractAsync(string message, DateOnly today, CancellationToken cancellationToken = default)
+        public Task<ConversationIntent?> ExtractAsync(
+            string message,
+            DateOnly today,
+            ConversationContext? context = null,
+            CancellationToken cancellationToken = default)
         {
             return Task.FromResult(extract(message));
+        }
+    }
+
+    private sealed class FakeToolAgent(Func<LumaToolAgentRequest, LumaToolCall?> decide) : ILumaToolAgent
+    {
+        public List<LumaToolAgentRequest> Requests { get; } = [];
+
+        public Task<LumaToolCall?> DecideAsync(LumaToolAgentRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(decide(request));
+        }
+    }
+
+    private sealed class FakeResponseGenerator(Func<LumaResponseRequest, string> generate) : ILumaResponseGenerator
+    {
+        public List<LumaResponseRequest> Requests { get; } = [];
+
+        public Task<string> GenerateAsync(LumaResponseRequest request, CancellationToken cancellationToken = default)
+        {
+            if (!request.IsGuardrail)
+            {
+                Requests.Add(request);
+            }
+
+            return Task.FromResult(request.IsGuardrail ? request.BackendResult : generate(request));
         }
     }
 
