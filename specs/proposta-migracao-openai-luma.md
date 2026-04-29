@@ -2,13 +2,13 @@
 
 ## Contexto
 
-Durante os testes pelo WhatsApp/Twilio, o fluxo com Ollama local funcionou corretamente no backend, mas apresentou latência alta demais para o webhook.
+Durante os testes pelo WhatsApp/Twilio, o fluxo com OpenAI API funcionou corretamente no backend, mas apresentou latência alta demais para o webhook.
 
 Exemplo observado em 28/04/2026:
 
 - Usuário enviou: `Aceito sim`
-- Backend chamou `ILumaToolAgent` usando Ollama local
-- Ollama respondeu em apróximadamente 16,5 segundos
+- Backend chamou `ILumaToolAgent` usando OpenAI API
+- O provedor local respondeu em apróximadamente 16,5 segundos
 - Backend gravou o consentimento e avancou para `awaiting_display_name`
 - Twilio não exibiu a resposta para a usuária, provavelmente por timeout do webhook
 
@@ -18,17 +18,17 @@ Ou seja: o sistema processou, mas respondeu tarde demais para uma experiência c
 
 O problema principal não é apenas "inteligência" do modelo. É a combinação de:
 
-- Modelo local pequeno (`llama3.2`) com latência variável.
+- Modelo local pequeno (`gpt-5.4-mini`) com latência variável.
 - Execucao local via Docker/CPU, sem garantia de tempo de resposta.
 - Webhook do Twilio esperando resposta sincrona.
 - Fluxos onde a IA e chamada para interpretar mensagens simples como consentimento.
 - Necessidade de tool calling/JSON confiavel para a Luma agir como agente.
 
-O Ollama continua útil para desenvolvimento local, privacidade e testes sem custo por token. Mas, para uma V1 de produção com WhatsApp, ele não oferece previsibilidade suficiente neste momento.
+O O provedor local anterior foi removido do projeto para manter paridade entre desenvolvimento e produção com OpenAI API.
 
 ## Recomendação
 
-Migrar a camada de IA principal da Luma para a OpenAI API, mantendo Ollama como fallback/local-dev.
+Migrar a camada de IA principal da Luma para a OpenAI API, mantendo sem fallback local de IA.
 
 Modelo recomendado para V1:
 
@@ -63,14 +63,14 @@ Criar uma abstracao de provedor de IA:
 
 ```text
 ILumaAiProvider
-  - OllamaLumaAiProvider
+  - OpenAiLumaAiProvider
   - OpenAiLumaAiProvider
 ```
 
 Configurar via ambiente:
 
 ```text
-LUMA_AI_PROVIDER=openai
+OPENAI_API_KEY=...
 OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_REASONING_EFFORT=none
@@ -79,9 +79,9 @@ OPENAI_REASONING_EFFORT=none
 Manter:
 
 ```text
-LUMA_AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=llama3.2
+
+
+
 ```
 
 ## Tools previstas
@@ -157,7 +157,7 @@ Isso não é retrocesso para "mensagens chumbadas"; é segurança de produto. A 
 
 Migrar para OpenAI deve melhorar bastante:
 
-- Menor latência média em comparação com Ollama local em CPU/Docker.
+- Menor latência média em comparação com OpenAI API em CPU/Docker.
 - Melhor interpretação de frases naturais como `Aceito sim`, `claro`, `pode seguir`, `com certeza`.
 - Melhor tool calling e aderência ao schema.
 - Menos necessidade de criar casos manuais para cada frase.
@@ -177,9 +177,9 @@ Assim a Luma fica inteligente sem sacrificar a experiência do WhatsApp.
 ### Etapa A - Abstracao de provedor
 
 - Criar `ILumaAiProvider`.
-- Migrar chamadas atuais de Ollama para uma interface única.
+- Migrar chamadas atuais de OpenAI API para uma interface única.
 - Adicionar configuracao por `.env`.
-- Manter Ollama funcionando em desenvolvimento.
+- Manter OpenAI API funcionando em desenvolvimento.
 
 ### Etapa B - OpenAI Responses API
 
@@ -214,7 +214,7 @@ Assim a Luma fica inteligente sem sacrificar a experiência do WhatsApp.
 
 ### Etapa F - Fallback e observabilidade
 
-- Se a OpenAI falhar: fallback para resposta segura ou Ollama, dependendo do tipo de mensagem.
+- Se a OpenAI falhar: fallback para resposta segura ou OpenAI API, dependendo do tipo de mensagem.
 - Logar latência por chamada.
 - Logar tool escolhida, sem armazenar conteúdo sensível além do necessário.
 - Criar metricas:
@@ -236,7 +236,7 @@ Assim a Luma fica inteligente sem sacrificar a experiência do WhatsApp.
 Para a V1 de produção/testes reais no WhatsApp, a recomendação é:
 
 - OpenAI API como provedor principal.
-- Ollama como fallback/local-dev.
+- sem fallback local de IA.
 - Backend autoritativo.
 - Guardrails fixos mínimos.
 - IA responsável por interpretar linguagem natural, chamar tools e humanizar respostas.

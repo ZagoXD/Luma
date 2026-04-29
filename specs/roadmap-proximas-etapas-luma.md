@@ -26,7 +26,7 @@ A Luma já possui um núcleo funcional capaz de:
 - receber mensagens pelo WhatsApp via Twilio Sandbox;
 - rodar localmente via Docker Compose;
 - persistir dados em PostgreSQL;
-- usar Ollama via Docker;
+- usar OpenAI API;
 - cadastrar usuárias;
 - registrar ciclo menstrual;
 - registrar sintomas, fluxo, humor e relação sexual;
@@ -49,7 +49,7 @@ Status: **concluída**.
 Entregas:
 
 - Backend em ASP.NET Core Web API.
-- Docker Compose com API, PostgreSQL e Ollama.
+- Docker Compose com API e PostgreSQL.
 - Integração inicial com Twilio Sandbox.
 - Webhook de WhatsApp.
 - Endpoint local de desenvolvimento.
@@ -438,7 +438,7 @@ Testes mínimos:
 - pergunta fora de escopo e recusada;
 - pergunta sobre LGPD usa resposta controlada;
 - sangramento na gravidez usa guardrail fixo;
-- falha do Ollama retorna fallback seguro;
+- falha da OpenAI API retorna fallback seguro;
 - logs não salvam conteúdo sensível por padrão.
 
 ---
@@ -457,10 +457,10 @@ A Luma estará pronta para `v1.0.0` quando:
 - O backend continuar autoritativo.
 - Guardrails médicos e LGPD não dependerem apenas da IA.
 - Respostas fixas forem reduzidas aos casos de segurança, LGPD e falha.
-- Ollama estiver integrado ao fluxo inteligente.
-- Houver fallback seguro se Ollama estiver indisponível.
+- OpenAI API estiver integrada ao fluxo inteligente.
+- Houver fallback seguro se a OpenAI API estiver indisponível.
 - Testes automatizados cobrirem os fluxos principais.
-- Docker Compose subir API, PostgreSQL e Ollama.
+- Docker Compose subir API e PostgreSQL.
 - Twilio Sandbox ou provedor equivalente estiver validado.
 - README de desenvolvimento estiver atualizado.
 
@@ -533,7 +533,7 @@ Escopo:
 3. Definir contrato das tools internas/MCP
 4. Criar memória de intenção pendente
 5. Criar LumaConversationOrchestrator
-6. Integrar Ollama ao orquestrador
+6. Integrar OpenAI API ao orquestrador
 7. Substituir respostas fixas por humanização dinâmica
 8. Manter guardrails fixos no backend
 9. Testar fluxos fora de ordem
@@ -552,7 +552,7 @@ O que falta para a versão `1.0.0` é a camada de inteligência conversacional:
 - RAG para conhecimento seguro.
 - Tools/MCP para a IA operar o backend.
 - Memória de intenções pendentes.
-- Orquestração de IA com Ollama.
+- Orquestração de IA com OpenAI API.
 - Humanização dinâmica.
 - Guardrails fixos para segurança e LGPD.
 

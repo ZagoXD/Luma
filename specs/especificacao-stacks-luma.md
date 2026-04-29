@@ -4,7 +4,7 @@
 >
 > O projeto está na fase final da V1: o backend transacional já cobre cadastro, ciclo menstrual, relação sexual, gravidez e guardrails principais. O que falta para a primeira versão de produção e a camada de inteligência conversacional com RAG e tools/MCP, mantendo o backend como autoridade.
 >
-> A arquitetura recomendada para a V1.0.0 passa a incluir um orquestrador de conversa: Ollama interpreta contexto e intenções, RAG fornece conhecimento seguro, tools/MCP executam leituras/escritas controladas e o backend valida tudo antes de persistir ou responder.
+> A arquitetura recomendada para a V1.0.0 passa a incluir um orquestrador de conversa: OpenAI API interpreta contexto e intenções, RAG fornece conhecimento seguro, tools/MCP executam leituras/escritas controladas e o backend valida tudo antes de persistir ou responder.
 
 ---
 
@@ -17,7 +17,7 @@ WhatsApp
   ->
 LumaConversationOrchestrator
   ->
-Ollama para interpretação/contexto/humanização
+OpenAI API para interpretação/contexto/humanização
   ->
 RAG para conhecimento seguro
   ->
