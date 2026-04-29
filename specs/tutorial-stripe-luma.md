@@ -11,6 +11,7 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_BASIC_PRICE_ID=price_...
 STRIPE_ESSENTIAL_PRICE_ID=price_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 Use sempre chaves `test` enquanto estiver desenvolvendo. As chaves `live` só devem entrar em produção.
@@ -56,9 +57,65 @@ O cancelamento é feito com `cancel_at_period_end=true`, então:
 - O acesso continua até o fim do período já pago.
 - Depois da data final, a Luma deixa de responder aquele número.
 
-Em produção, também devemos adicionar webhooks da Stripe para refletir alterações feitas fora da Luma, como falha de cobrança, reembolso, atualização manual no Dashboard ou cancelamento externo.
+## 5. Webhooks
 
-## 5. Como testar pagamento sem cobrança real
+A Luma possui o endpoint:
+
+```text
+POST /webhooks/stripe
+```
+
+Em desenvolvimento local, use o Stripe CLI para encaminhar eventos:
+
+```powershell
+stripe listen --forward-to localhost:5050/webhooks/stripe
+```
+
+O comando vai mostrar um `Signing secret`, algo como `whsec_...`. Copie esse valor para:
+
+```env
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Depois recrie a API:
+
+```powershell
+docker compose up -d --build --force-recreate api
+```
+
+No Dashboard da Stripe, para produção:
+
+1. Acesse `Developers`.
+2. Abra `Webhooks`.
+3. Clique em `Add endpoint`.
+4. Informe a URL pública da API:
+
+```text
+https://seu-dominio.com/webhooks/stripe
+```
+
+5. Selecione estes eventos:
+
+```text
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+invoice.payment_succeeded
+invoice.payment_failed
+```
+
+6. Depois de criar o endpoint, copie o `Signing secret` de produção para `STRIPE_WEBHOOK_SECRET`.
+
+Esses webhooks sincronizam:
+
+- pagamento inicial confirmado;
+- renovação paga com sucesso;
+- falha de pagamento;
+- cancelamento agendado no fim do período;
+- cancelamento feito diretamente no Dashboard da Stripe;
+- assinatura criada ou alterada fora do fluxo principal da Luma.
+
+## 6. Como testar pagamento sem cobrança real
 
 Use sempre chaves de teste (`pk_test` e `sk_test`) e cartões de teste da Stripe.
 
@@ -89,7 +146,7 @@ CVC: qualquer 3 dígitos
 
 Referência oficial: https://docs.stripe.com/testing
 
-## 6. Rodar localmente
+## 7. Rodar localmente
 
 Depois de preencher o `.env`, suba tudo com:
 
@@ -104,4 +161,3 @@ Fluxo esperado:
 3. Pagar com cartão de teste.
 4. Abrir o perfil e confirmar plano ativo.
 5. Enviar mensagem pelo WhatsApp usando o celular cadastrado.
-

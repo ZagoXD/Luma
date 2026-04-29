@@ -403,6 +403,39 @@ nav .nav-cta:focus {
 
 .profile-note { font-size: 0.86rem; }
 
+.billing-actions {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.billing-button {
+  min-height: 46px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.billing-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.payment-method-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
 .luma-whatsapp-link {
   min-height: 58px;
   border: 1.5px solid oklch(82% 0.12 150);

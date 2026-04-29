@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Luma.Api.Data;
 using Luma.Api.Models;
@@ -6,6 +7,7 @@ using Luma.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Stripe;
 using LumaSubscriptionStatuses = Luma.Api.Models.SubscriptionStatuses;
+using StripeSubscription = Stripe.Subscription;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -80,7 +82,7 @@ app.MapPost("/account/register", async (AccountRegisterRequest request, LumaDbCo
 
     if (exists)
     {
-        return Results.Conflict(new { message = "JÃ¡ existe uma conta com esse e-mail, CPF ou celular." });
+        return Results.Conflict(new { message = "Já existe uma conta com esse e-mail, CPF ou celular." });
     }
 
     var account = new AccountUser
@@ -245,6 +247,8 @@ app.MapPost("/checkout/confirm-subscription", async (HttpRequest http, CheckoutC
         return Results.Unauthorized();
     }
 
+    await UpdateStripeCustomerBillingDetailsAsync(account, request.CardholderName, request.BillingCpf);
+
     var localSubscription = await db.AccountSubscriptions
         .FirstOrDefaultAsync(subscription =>
             subscription.AccountUserId == account.Id
@@ -255,7 +259,7 @@ app.MapPost("/checkout/confirm-subscription", async (HttpRequest http, CheckoutC
         return Results.NotFound(new { message = "Assinatura local não encontrada." });
     }
 
-    localSubscription.Status = StripeStatusToLocalStatus(stripeSubscription.Status);
+    localSubscription.Status = StripeStatusToLocalStatus(stripeSubscription);
     localSubscription.CurrentPeriodEndsAt = GetStripePeriodEnd(stripeSubscription) ?? DateTimeOffset.UtcNow.AddDays(30);
     localSubscription.UpdatedAt = DateTimeOffset.UtcNow;
 
@@ -320,6 +324,241 @@ app.MapPost("/account/subscription/cancel", async (HttpRequest http, LumaDbConte
     return Results.Ok(new { subscription = BuildSubscriptionResponse(subscription) });
 })
 .WithName("CancelSubscription")
+.WithOpenApi();
+
+app.MapPost("/account/subscription/resume", async (HttpRequest http, LumaDbContext db) =>
+{
+    var account = await GetAuthenticatedAccountAsync(http, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
+    if (subscription is null)
+    {
+        return Results.NotFound(new { message = "Nenhum plano encontrado para retomar." });
+    }
+
+    var stripeOptions = GetStripeOptions(http.HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+    if (string.IsNullOrWhiteSpace(subscription.StripeSubscriptionId) || string.IsNullOrWhiteSpace(stripeOptions.SecretKey))
+    {
+        subscription.Status = LumaSubscriptionStatuses.Active;
+        subscription.CanceledAt = null;
+        subscription.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        return Results.Ok(new { subscription = BuildSubscriptionResponse(subscription) });
+    }
+
+    StripeConfiguration.ApiKey = stripeOptions.SecretKey;
+    var updated = await new SubscriptionService().UpdateAsync(subscription.StripeSubscriptionId, new SubscriptionUpdateOptions
+    {
+        CancelAtPeriodEnd = false
+    });
+
+    subscription.Status = StripeStatusToLocalStatus(updated);
+    subscription.CurrentPeriodEndsAt = GetStripePeriodEnd(updated) ?? subscription.CurrentPeriodEndsAt;
+    subscription.CanceledAt = null;
+    subscription.UpdatedAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { subscription = BuildSubscriptionResponse(subscription) });
+})
+.WithName("ResumeSubscription")
+.WithOpenApi();
+
+app.MapPost("/account/subscription/change-plan", async (HttpRequest http, ChangeSubscriptionPlanRequest request, LumaDbContext db) =>
+{
+    var account = await GetAuthenticatedAccountAsync(http, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var nextPlan = NormalizePlan(request.PlanCode);
+    if (nextPlan is null)
+    {
+        return Results.BadRequest(new { message = "Plano inválido." });
+    }
+
+    var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
+    if (subscription is null)
+    {
+        return Results.NotFound(new { message = "Nenhum plano ativo encontrado." });
+    }
+
+    if (subscription.PlanCode == nextPlan && subscription.Status == LumaSubscriptionStatuses.Active)
+    {
+        return Results.Ok(new { subscription = BuildSubscriptionResponse(subscription) });
+    }
+
+    var stripeOptions = GetStripeOptions(http.HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+    if (string.IsNullOrWhiteSpace(subscription.StripeSubscriptionId) || string.IsNullOrWhiteSpace(stripeOptions.SecretKey))
+    {
+        subscription.PlanCode = nextPlan;
+        subscription.Status = LumaSubscriptionStatuses.Active;
+        subscription.CanceledAt = null;
+        subscription.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        return Results.Ok(new { subscription = BuildSubscriptionResponse(subscription) });
+    }
+
+    StripeConfiguration.ApiKey = stripeOptions.SecretKey;
+    var stripeSubscription = await new SubscriptionService().GetAsync(subscription.StripeSubscriptionId, new SubscriptionGetOptions
+    {
+        Expand = ["items"]
+    });
+    var item = stripeSubscription.Items?.Data?.FirstOrDefault();
+    if (item is null)
+    {
+        return Results.BadRequest(new { message = "Não consegui localizar o item da assinatura na Stripe." });
+    }
+
+    var nextPriceId = await ResolveStripePriceIdAsync(nextPlan, stripeOptions);
+    var updated = await new SubscriptionService().UpdateAsync(stripeSubscription.Id, new SubscriptionUpdateOptions
+    {
+        CancelAtPeriodEnd = false,
+        ProrationBehavior = "create_prorations",
+        Items = [new SubscriptionItemOptions { Id = item.Id, Price = nextPriceId }],
+        Metadata = new Dictionary<string, string>
+        {
+            ["plan_code"] = nextPlan
+        }
+    });
+
+    subscription.PlanCode = nextPlan;
+    subscription.Status = StripeStatusToLocalStatus(updated);
+    subscription.CurrentPeriodEndsAt = GetStripePeriodEnd(updated) ?? subscription.CurrentPeriodEndsAt;
+    subscription.CanceledAt = null;
+    subscription.UpdatedAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { subscription = BuildSubscriptionResponse(subscription) });
+})
+.WithName("ChangeSubscriptionPlan")
+.WithOpenApi();
+
+app.MapPost("/account/payment-method/setup-intent", async (HttpRequest http, LumaDbContext db, IConfiguration configuration) =>
+{
+    var account = await GetAuthenticatedAccountAsync(http, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var stripeOptions = GetStripeOptions(configuration);
+    if (string.IsNullOrWhiteSpace(stripeOptions.SecretKey) || string.IsNullOrWhiteSpace(stripeOptions.PublishableKey))
+    {
+        return Results.BadRequest(new { message = "Configure STRIPE_SECRET_KEY e NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY para atualizar cartão." });
+    }
+
+    StripeConfiguration.ApiKey = stripeOptions.SecretKey;
+    account.StripeCustomerId = await EnsureStripeCustomerAsync(account);
+    await db.SaveChangesAsync();
+
+    var setupIntent = await new SetupIntentService().CreateAsync(new SetupIntentCreateOptions
+    {
+        Customer = account.StripeCustomerId,
+        PaymentMethodTypes = ["card"],
+        Usage = "off_session",
+        Metadata = new Dictionary<string, string>
+        {
+            ["account_user_id"] = account.Id.ToString()
+        }
+    });
+
+    return Results.Ok(new
+    {
+        publishableKey = stripeOptions.PublishableKey,
+        clientSecret = setupIntent.ClientSecret,
+        setupIntentId = setupIntent.Id
+    });
+})
+.WithName("CreatePaymentMethodSetupIntent")
+.WithOpenApi();
+
+app.MapPost("/account/payment-method/confirm", async (HttpRequest http, ConfirmPaymentMethodRequest request, LumaDbContext db, IConfiguration configuration) =>
+{
+    var account = await GetAuthenticatedAccountAsync(http, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrWhiteSpace(request.SetupIntentId))
+    {
+        return Results.BadRequest(new { message = "SetupIntent inválido." });
+    }
+
+    var stripeOptions = GetStripeOptions(configuration);
+    if (string.IsNullOrWhiteSpace(stripeOptions.SecretKey))
+    {
+        return Results.BadRequest(new { message = "Configure STRIPE_SECRET_KEY para atualizar cartão." });
+    }
+
+    StripeConfiguration.ApiKey = stripeOptions.SecretKey;
+    var setupIntent = await new SetupIntentService().GetAsync(request.SetupIntentId);
+    if (setupIntent.CustomerId != account.StripeCustomerId)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (setupIntent.Status != "succeeded" || string.IsNullOrWhiteSpace(setupIntent.PaymentMethodId))
+    {
+        return Results.BadRequest(new { message = "A Stripe ainda não confirmou esse cartão." });
+    }
+
+    await UpdateStripeCustomerBillingDetailsAsync(account, request.CardholderName, request.BillingCpf, setupIntent.PaymentMethodId);
+
+    var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
+    if (!string.IsNullOrWhiteSpace(subscription?.StripeSubscriptionId))
+    {
+        await new SubscriptionService().UpdateAsync(subscription.StripeSubscriptionId, new SubscriptionUpdateOptions
+        {
+            DefaultPaymentMethod = setupIntent.PaymentMethodId
+        });
+    }
+
+    return Results.Ok(new { ok = true });
+})
+.WithName("ConfirmPaymentMethod")
+.WithOpenApi();
+
+app.MapPost("/webhooks/stripe", async (HttpRequest request, LumaDbContext db, IConfiguration configuration, ILogger<Program> logger) =>
+{
+    var stripeOptions = GetStripeOptions(configuration);
+    if (string.IsNullOrWhiteSpace(stripeOptions.SecretKey))
+    {
+        return Results.BadRequest(new { message = "Configure STRIPE_SECRET_KEY para processar webhooks da Stripe." });
+    }
+
+    var payload = await new StreamReader(request.Body).ReadToEndAsync();
+    var signature = request.Headers["Stripe-Signature"].ToString();
+
+    Event stripeEvent;
+    try
+    {
+        stripeEvent = string.IsNullOrWhiteSpace(stripeOptions.WebhookSecret)
+            ? EventUtility.ParseEvent(payload)
+            : EventUtility.ConstructEvent(payload, signature, stripeOptions.WebhookSecret);
+    }
+    catch (StripeException ex)
+    {
+        logger.LogWarning(ex, "Stripe webhook rejected because the signature or payload is invalid.");
+        return Results.BadRequest(new { message = "Webhook da Stripe inválido." });
+    }
+    catch (JsonException ex)
+    {
+        logger.LogWarning(ex, "Stripe webhook rejected because the JSON payload is invalid.");
+        return Results.BadRequest(new { message = "Webhook da Stripe inválido." });
+    }
+
+    StripeConfiguration.ApiKey = stripeOptions.SecretKey;
+    await HandleStripeWebhookEventAsync(stripeEvent, payload, db, stripeOptions, logger);
+
+    return Results.Ok(new { received = true });
+})
+.WithName("StripeWebhook")
 .WithOpenApi();
 
 app.MapPost("/webhooks/twilio/whatsapp", async (HttpRequest request, ConversationService conversations) =>
@@ -555,8 +794,160 @@ static StripeBillingOptions GetStripeOptions(IConfiguration configuration)
         SecretKey = configuration.GetValue<string>("Stripe:SecretKey") ?? string.Empty,
         PublishableKey = configuration.GetValue<string>("Stripe:PublishableKey") ?? string.Empty,
         BasicPriceId = configuration.GetValue<string>("Stripe:BasicPriceId") ?? string.Empty,
-        EssentialPriceId = configuration.GetValue<string>("Stripe:EssentialPriceId") ?? string.Empty
+        EssentialPriceId = configuration.GetValue<string>("Stripe:EssentialPriceId") ?? string.Empty,
+        WebhookSecret = configuration.GetValue<string>("Stripe:WebhookSecret") ?? string.Empty
     };
+}
+
+static async Task HandleStripeWebhookEventAsync(
+    Event stripeEvent,
+    string payload,
+    LumaDbContext db,
+    StripeBillingOptions stripeOptions,
+    ILogger logger)
+{
+    switch (stripeEvent.Type)
+    {
+        case EventTypes.CustomerSubscriptionCreated:
+        case EventTypes.CustomerSubscriptionUpdated:
+        case EventTypes.CustomerSubscriptionDeleted:
+            if (stripeEvent.Data.Object is StripeSubscription subscription)
+            {
+                await SyncStripeSubscriptionAsync(db, subscription, stripeOptions, logger);
+            }
+            break;
+
+        case EventTypes.InvoicePaymentSucceeded:
+        case EventTypes.InvoicePaymentFailed:
+            var subscriptionId = ExtractStripeSubscriptionIdFromInvoicePayload(payload);
+            if (!string.IsNullOrWhiteSpace(subscriptionId))
+            {
+                var invoiceSubscription = await new SubscriptionService().GetAsync(subscriptionId, new SubscriptionGetOptions
+                {
+                    Expand = ["items"]
+                });
+                await SyncStripeSubscriptionAsync(db, invoiceSubscription, stripeOptions, logger);
+            }
+            break;
+
+        default:
+            logger.LogInformation("Ignoring Stripe webhook event {EventType}.", stripeEvent.Type);
+            break;
+    }
+}
+
+static async Task SyncStripeSubscriptionAsync(
+    LumaDbContext db,
+    StripeSubscription stripeSubscription,
+    StripeBillingOptions stripeOptions,
+    ILogger logger)
+{
+    var localSubscription = await db.AccountSubscriptions
+        .FirstOrDefaultAsync(subscription => subscription.StripeSubscriptionId == stripeSubscription.Id);
+
+    if (localSubscription is null)
+    {
+        var account = await db.AccountUsers
+            .FirstOrDefaultAsync(account => account.StripeCustomerId == stripeSubscription.CustomerId);
+
+        if (account is null)
+        {
+            logger.LogInformation("Stripe subscription {SubscriptionId} has no matching Luma account.", stripeSubscription.Id);
+            return;
+        }
+
+        var planCode = ResolvePlanFromStripeSubscription(stripeSubscription, stripeOptions);
+        if (planCode is null)
+        {
+            logger.LogWarning("Stripe subscription {SubscriptionId} has no recognizable Luma plan.", stripeSubscription.Id);
+            return;
+        }
+
+        localSubscription = new AccountSubscription
+        {
+            AccountUserId = account.Id,
+            PhoneNumber = account.PhoneNumber,
+            PlanCode = planCode,
+            StripeSubscriptionId = stripeSubscription.Id,
+            StartsAt = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.AccountSubscriptions.Add(localSubscription);
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    localSubscription.Status = StripeStatusToLocalStatus(stripeSubscription);
+    localSubscription.CurrentPeriodEndsAt = GetStripePeriodEnd(stripeSubscription) ?? localSubscription.CurrentPeriodEndsAt;
+    localSubscription.CanceledAt = localSubscription.Status == LumaSubscriptionStatuses.Canceled
+        ? localSubscription.CanceledAt ?? now
+        : null;
+    localSubscription.UpdatedAt = now;
+
+    if (localSubscription.Status == LumaSubscriptionStatuses.Active)
+    {
+        var otherSubscriptions = await db.AccountSubscriptions
+            .Where(subscription => subscription.AccountUserId == localSubscription.AccountUserId
+                && subscription.Id != localSubscription.Id
+                && subscription.CurrentPeriodEndsAt >= now
+                && (subscription.Status == LumaSubscriptionStatuses.Active || subscription.Status == LumaSubscriptionStatuses.Canceled))
+            .ToListAsync();
+
+        foreach (var subscription in otherSubscriptions)
+        {
+            subscription.Status = LumaSubscriptionStatuses.Canceled;
+            subscription.CanceledAt ??= now;
+            subscription.UpdatedAt = now;
+        }
+    }
+
+    await db.SaveChangesAsync();
+}
+
+static string? ExtractStripeSubscriptionIdFromInvoicePayload(string payload)
+{
+    using var document = JsonDocument.Parse(payload);
+    if (!document.RootElement.TryGetProperty("data", out var data)
+        || !data.TryGetProperty("object", out var invoice))
+    {
+        return null;
+    }
+
+    if (invoice.TryGetProperty("subscription", out var legacySubscription)
+        && legacySubscription.ValueKind == JsonValueKind.String)
+    {
+        return legacySubscription.GetString();
+    }
+
+    if (invoice.TryGetProperty("parent", out var parent)
+        && parent.TryGetProperty("subscription_details", out var subscriptionDetails)
+        && subscriptionDetails.TryGetProperty("subscription", out var subscription)
+        && subscription.ValueKind == JsonValueKind.String)
+    {
+        return subscription.GetString();
+    }
+
+    return null;
+}
+
+static string? ResolvePlanFromStripeSubscription(StripeSubscription subscription, StripeBillingOptions stripeOptions)
+{
+    if (subscription.Metadata is not null && subscription.Metadata.TryGetValue("plan_code", out var metadataPlan))
+    {
+        return NormalizePlan(metadataPlan);
+    }
+
+    var priceId = subscription.Items?.Data?.FirstOrDefault()?.Price?.Id;
+    if (string.IsNullOrWhiteSpace(priceId))
+    {
+        return null;
+    }
+
+    if (priceId == stripeOptions.BasicPriceId)
+    {
+        return "basico";
+    }
+
+    return priceId == stripeOptions.EssentialPriceId ? "essencial" : null;
 }
 
 static async Task<string> EnsureStripeCustomerAsync(AccountUser account)
@@ -578,6 +969,47 @@ static async Task<string> EnsureStripeCustomerAsync(AccountUser account)
     });
 
     return customer.Id;
+}
+
+static async Task UpdateStripeCustomerBillingDetailsAsync(
+    AccountUser account,
+    string? cardholderName = null,
+    string? billingCpf = null,
+    string? defaultPaymentMethodId = null)
+{
+    if (string.IsNullOrWhiteSpace(account.StripeCustomerId))
+    {
+        return;
+    }
+
+    var cpf = string.IsNullOrWhiteSpace(billingCpf)
+        ? account.Cpf
+        : AccountInputNormalizer.OnlyDigits(billingCpf);
+    var name = string.IsNullOrWhiteSpace(cardholderName)
+        ? account.FullName
+        : cardholderName.Trim();
+
+    var options = new CustomerUpdateOptions
+    {
+        Name = name,
+        Email = account.Email,
+        Phone = account.PhoneNumber,
+        Metadata = new Dictionary<string, string>
+        {
+            ["account_user_id"] = account.Id.ToString(),
+            ["cpf"] = cpf
+        }
+    };
+
+    if (!string.IsNullOrWhiteSpace(defaultPaymentMethodId))
+    {
+        options.InvoiceSettings = new CustomerInvoiceSettingsOptions
+        {
+            DefaultPaymentMethod = defaultPaymentMethodId
+        };
+    }
+
+    await new CustomerService().UpdateAsync(account.StripeCustomerId, options);
 }
 
 static async Task<Subscription> CreateStripeSubscriptionAsync(string customerId, string planCode, StripeBillingOptions options)
@@ -634,10 +1066,17 @@ static DateTimeOffset? GetStripePeriodEnd(Subscription subscription)
     return subscription.Items?.Data?.FirstOrDefault()?.CurrentPeriodEnd;
 }
 
-static string StripeStatusToLocalStatus(string stripeStatus)
+static string StripeStatusToLocalStatus(StripeSubscription subscription)
 {
-    return stripeStatus is "active" or "trialing"
-        ? LumaSubscriptionStatuses.Active
+    if (subscription.Status is "active" or "trialing")
+    {
+        return subscription.CancelAtPeriodEnd
+            ? LumaSubscriptionStatuses.Canceled
+            : LumaSubscriptionStatuses.Active;
+    }
+
+    return subscription.Status == "canceled"
+        ? LumaSubscriptionStatuses.Canceled
         : LumaSubscriptionStatuses.Pending;
 }
 
@@ -697,6 +1136,9 @@ public sealed record DevIncomingMessage(string From, string Body);
 public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber);
 public sealed record AccountLoginRequest(string Email, string Password);
 public sealed record CheckoutCreateSubscriptionRequest(string PlanCode);
-public sealed record CheckoutConfirmSubscriptionRequest(string PlanCode, string StripeSubscriptionId);
+public sealed record CheckoutConfirmSubscriptionRequest(string PlanCode, string StripeSubscriptionId, string? CardholderName, string? BillingCpf);
+public sealed record ChangeSubscriptionPlanRequest(string PlanCode);
+public sealed record ConfirmPaymentMethodRequest(string SetupIntentId, string? CardholderName, string? BillingCpf);
+
 
 

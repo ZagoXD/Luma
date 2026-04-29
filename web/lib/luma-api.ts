@@ -26,6 +26,12 @@ export type StripeSubscriptionIntent = {
   stripeSubscriptionId: string;
 };
 
+export type StripeSetupIntent = {
+  publishableKey: string;
+  clientSecret: string;
+  setupIntentId: string;
+};
+
 export type MenstrualSummary = {
   displayName?: string | null;
   onboardingStep: string;
@@ -102,7 +108,12 @@ export async function createStripeSubscription(input: { planCode: PlanCode }) {
   });
 }
 
-export async function confirmStripeSubscription(input: { planCode: PlanCode; stripeSubscriptionId: string }) {
+export async function confirmStripeSubscription(input: {
+  planCode: PlanCode;
+  stripeSubscriptionId: string;
+  cardholderName?: string;
+  billingCpf?: string;
+}) {
   return appRequest<{ subscription: AccountSubscription }>("/api/checkout/confirm-subscription", {
     method: "POST",
     body: JSON.stringify(input),
@@ -112,6 +123,36 @@ export async function confirmStripeSubscription(input: { planCode: PlanCode; str
 export async function cancelSubscription() {
   return appRequest<{ subscription: AccountSubscription }>("/api/account/subscription/cancel", {
     method: "POST",
+  });
+}
+
+export async function resumeSubscription() {
+  return appRequest<{ subscription: AccountSubscription }>("/api/account/subscription/resume", {
+    method: "POST",
+  });
+}
+
+export async function changeSubscriptionPlan(input: { planCode: PlanCode }) {
+  return appRequest<{ subscription: AccountSubscription }>("/api/account/subscription/change-plan", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createPaymentMethodSetupIntent() {
+  return appRequest<StripeSetupIntent>("/api/account/payment-method/setup-intent", {
+    method: "POST",
+  });
+}
+
+export async function confirmPaymentMethod(input: {
+  setupIntentId: string;
+  cardholderName?: string;
+  billingCpf?: string;
+}) {
+  return appRequest<{ ok: true }>("/api/account/payment-method/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }
 

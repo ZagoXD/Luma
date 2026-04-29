@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, CreditCard, LogOut, MessageCircle, User } from "lucide-react";
+import { ArrowLeft, CalendarDays, CreditCard, LogOut, MessageCircle, RefreshCcw, Repeat2, User } from "lucide-react";
+import { Elements } from "@stripe/react-stripe-js";
+import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
+import { StripePaymentMethodForm } from "@/components/organisms/StripePaymentMethodForm";
 import {
   cancelSubscription,
+  changeSubscriptionPlan,
+  createPaymentMethodSetupIntent,
   getAccountProfile,
   logoutAccount,
   plans,
+  resumeSubscription,
   type AccountProfile,
+  type PlanCode,
 } from "@/lib/luma-api";
 import { formatBrazilPhoneDisplay } from "@/lib/account-format";
 
@@ -25,6 +32,14 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [billingAction, setBillingAction] = useState("");
+  const [setupClientSecret, setSetupClientSecret] = useState("");
+  const [setupIntentId, setSetupIntentId] = useState("");
+  const [setupPublishableKey, setSetupPublishableKey] = useState("");
+  const stripePromise = useMemo(
+    () => setupPublishableKey ? loadStripe(setupPublishableKey) : null,
+    [setupPublishableKey],
+  );
 
   useEffect(() => {
     getAccountProfile()
@@ -56,6 +71,49 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
     }
   }
 
+  async function handleResume() {
+    setStatus("");
+    setBillingAction("resume");
+    try {
+      const result = await resumeSubscription();
+      setProfile((current) => current && { ...current, subscription: result.subscription });
+      setStatus("Assinatura retomada. A próxima renovação seguirá normalmente.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui retomar a assinatura agora.");
+    } finally {
+      setBillingAction("");
+    }
+  }
+
+  async function handleChangePlan(planCode: PlanCode) {
+    setStatus("");
+    setBillingAction(`plan-${planCode}`);
+    try {
+      const result = await changeSubscriptionPlan({ planCode });
+      setProfile((current) => current && { ...current, subscription: result.subscription });
+      setStatus(`Plano alterado para ${plans[planCode].name}. A Stripe calculará ajustes proporcionais quando aplicável.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui trocar o plano agora.");
+    } finally {
+      setBillingAction("");
+    }
+  }
+
+  async function handleStartPaymentMethodUpdate() {
+    setStatus("");
+    setBillingAction("card");
+    try {
+      const result = await createPaymentMethodSetupIntent();
+      setSetupPublishableKey(result.publishableKey);
+      setSetupClientSecret(result.clientSecret);
+      setSetupIntentId(result.setupIntentId);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui abrir a atualização de cartão.");
+    } finally {
+      setBillingAction("");
+    }
+  }
+
   async function handleLogout() {
     await logoutAccount();
     router.push("/");
@@ -73,6 +131,24 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
 
   const subscription = profile?.subscription;
   const plan = subscription ? plans[subscription.planCode] : null;
+  const nextPlanCode: PlanCode | null = subscription?.planCode === "basico"
+    ? "essencial"
+    : subscription?.planCode === "essencial"
+      ? "basico"
+      : null;
+  const setupOptions: StripeElementsOptions | undefined = setupClientSecret
+    ? {
+        clientSecret: setupClientSecret,
+        appearance: {
+          theme: "stripe",
+          variables: {
+            colorPrimary: "#6d3fb3",
+            borderRadius: "8px",
+            fontFamily: "DM Sans, system-ui, sans-serif",
+          },
+        },
+      }
+    : undefined;
 
   return (
     <main className="account-page">
@@ -113,9 +189,49 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
                   <div><dt>Status</dt><dd>{formatSubscriptionStatus(subscription.status)}</dd></div>
                   <div><dt>Acesso até</dt><dd>{formatDate(subscription.currentPeriodEndsAt)}</dd></div>
                 </dl>
-                <button className="account-secondary danger" type="button" onClick={handleCancel} disabled={canceling || subscription.status === "canceled"}>
-                  {canceling ? "Cancelando..." : subscription.status === "canceled" ? "Cancelamento solicitado" : "Cancelar assinatura"}
-                </button>
+                <div className="billing-actions">
+                  {subscription.status === "canceled" ? (
+                    <button className="account-primary" type="button" onClick={handleResume} disabled={billingAction === "resume"}>
+                      <RefreshCcw size={16} />
+                      {billingAction === "resume" ? "Retomando..." : "Retomar assinatura"}
+                    </button>
+                  ) : (
+                    <button className="account-secondary danger" type="button" onClick={handleCancel} disabled={canceling}>
+                      {canceling ? "Cancelando..." : "Cancelar assinatura"}
+                    </button>
+                  )}
+                  {nextPlanCode && (
+                    <button
+                      className="account-secondary billing-button"
+                      type="button"
+                      onClick={() => handleChangePlan(nextPlanCode)}
+                      disabled={billingAction === `plan-${nextPlanCode}`}
+                    >
+                      <Repeat2 size={16} />
+                      {billingAction === `plan-${nextPlanCode}` ? "Trocando..." : `Trocar para ${plans[nextPlanCode].name}`}
+                    </button>
+                  )}
+                  <button className="account-secondary billing-button" type="button" onClick={handleStartPaymentMethodUpdate} disabled={billingAction === "card"}>
+                    <CreditCard size={16} />
+                    {billingAction === "card" ? "Abrindo..." : "Trocar cartão"}
+                  </button>
+                </div>
+                {stripePromise && setupOptions && setupIntentId && (
+                  <div className="payment-method-panel">
+                    <p>Informe o novo cartão. A Stripe salvará esse método como padrão para as próximas faturas.</p>
+                    <Elements stripe={stripePromise} options={setupOptions}>
+                      <StripePaymentMethodForm
+                        setupIntentId={setupIntentId}
+                        onSuccess={() => {
+                          setSetupClientSecret("");
+                          setSetupIntentId("");
+                          setSetupPublishableKey("");
+                          setStatus("Cartão atualizado para as próximas cobranças.");
+                        }}
+                      />
+                    </Elements>
+                  </div>
+                )}
               </>
             ) : (
               <>

@@ -3,29 +3,27 @@
 import { FormEvent, useState } from "react";
 import { PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { CreditCard } from "lucide-react";
-import { confirmStripeSubscription, type PlanCode } from "@/lib/luma-api";
+import { confirmPaymentMethod } from "@/lib/luma-api";
 import { formatCpf, isValidCpf } from "@/lib/account-format";
 
-type StripeCheckoutFormProps = {
-  planCode: PlanCode;
-  stripeSubscriptionId: string;
+type StripePaymentMethodFormProps = {
+  setupIntentId: string;
   onSuccess: () => void;
 };
 
-export function StripeCheckoutForm({ planCode, stripeSubscriptionId, onSuccess }: StripeCheckoutFormProps) {
+export function StripePaymentMethodForm({ setupIntentId, onSuccess }: StripePaymentMethodFormProps) {
   const stripe = useStripe();
   const elements = useElements();
-  const [status, setStatus] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [cardholderName, setCardholderName] = useState("");
   const [billingCpf, setBillingCpf] = useState("");
+  const [status, setStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!stripe || !elements) return;
 
     setStatus("");
-
     if (!cardholderName.trim()) {
       setStatus("Informe o nome conforme está no cartão.");
       return;
@@ -37,8 +35,7 @@ export function StripeCheckoutForm({ planCode, stripeSubscriptionId, onSuccess }
     }
 
     setSubmitting(true);
-
-    const result = await stripe.confirmPayment({
+    const result = await stripe.confirmSetup({
       elements,
       confirmParams: {
         payment_method_data: {
@@ -51,16 +48,16 @@ export function StripeCheckoutForm({ planCode, stripeSubscriptionId, onSuccess }
     });
 
     if (result.error) {
-      setStatus(result.error.message || "Não consegui confirmar o pagamento.");
+      setStatus(result.error.message || "Não consegui salvar esse cartão.");
       setSubmitting(false);
       return;
     }
 
     try {
-      await confirmStripeSubscription({ planCode, stripeSubscriptionId, cardholderName, billingCpf });
+      await confirmPaymentMethod({ setupIntentId, cardholderName, billingCpf });
       onSuccess();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Pagamento confirmado, mas não consegui ativar o plano localmente.");
+      setStatus(error instanceof Error ? error.message : "Cartão confirmado, mas não consegui atualizar a assinatura.");
     } finally {
       setSubmitting(false);
     }
@@ -92,13 +89,14 @@ export function StripeCheckoutForm({ planCode, stripeSubscriptionId, onSuccess }
           />
         </label>
       </div>
+
       <div className="stripe-element-shell">
         <PaymentElement />
       </div>
 
       <button className="account-primary" type="submit" disabled={!stripe || submitting}>
         <CreditCard size={18} />
-        {submitting ? "Confirmando..." : "Confirmar pagamento"}
+        {submitting ? "Salvando..." : "Salvar cartão"}
       </button>
       {status && <p className="account-status error">{status}</p>}
     </form>
