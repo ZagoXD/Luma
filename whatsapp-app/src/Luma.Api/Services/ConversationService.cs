@@ -1880,7 +1880,7 @@ public sealed class ConversationService(
             "hoje",
             "ontem",
             "aceito",
-            "não",
+            "nao",
             "sim"
         };
 
@@ -1916,8 +1916,8 @@ public sealed class ConversationService(
 
     private static bool IsNegative(string body)
     {
-        return body is "2" or "não" or "n"
-            || body.Contains("não aceito", StringComparison.Ordinal);
+        return body is "2" or "nao" or "n"
+            || body.Contains("nao aceito", StringComparison.Ordinal);
     }
 
     private static bool IsHelp(string body)
@@ -2115,9 +2115,9 @@ public sealed class ConversationService(
 
     private static bool IsLumaIdentityQuestion(string body)
     {
-        return body.Contains("quem e você", StringComparison.Ordinal)
-            || body.Contains("quem você e", StringComparison.Ordinal)
-            || body.Contains("o que você faz", StringComparison.Ordinal)
+        return body.Contains("quem e voce", StringComparison.Ordinal)
+            || body.Contains("quem voce e", StringComparison.Ordinal)
+            || body.Contains("o que voce faz", StringComparison.Ordinal)
             || body.Contains("o que e a luma", StringComparison.Ordinal)
             || body.Contains("quem e a luma", StringComparison.Ordinal);
     }
@@ -2248,8 +2248,8 @@ public sealed class ConversationService(
     private static bool IsFixedGuardrailReply(string reply)
     {
         var normalized = MessageText.Normalize(reply);
-        return normalized.Contains("não consigo confirmar", StringComparison.Ordinal)
-            || normalized.Contains("não posso afirmar", StringComparison.Ordinal)
+        return normalized.Contains("nao consigo confirmar", StringComparison.Ordinal)
+            || normalized.Contains("nao posso afirmar", StringComparison.Ordinal)
             || normalized.Contains("procure atendimento", StringComparison.Ordinal)
             || normalized.Contains("menores de 18 anos", StringComparison.Ordinal)
             || normalized.Contains("sem o seu consentimento", StringComparison.Ordinal);
@@ -2263,7 +2263,7 @@ public sealed class ConversationService(
         }
 
         var normalized = MessageText.Normalize(reply);
-        return normalized.Contains("você aceita?", StringComparison.Ordinal)
+        return normalized.Contains("voce aceita?", StringComparison.Ordinal)
             || normalized.Contains("como devo te chamar", StringComparison.Ordinal)
             || normalized.Contains("18 anos ou mais", StringComparison.Ordinal)
             || normalized.Contains("primeiro dia da sua ultima menstruacao", StringComparison.Ordinal)
@@ -2336,12 +2336,12 @@ public sealed class ConversationService(
 
     private static string? ParseContraceptiveType(string body)
     {
-        if (body.Contains("prefiro não", StringComparison.Ordinal) || body.Contains("não informar", StringComparison.Ordinal))
+        if (body.Contains("prefiro nao", StringComparison.Ordinal) || body.Contains("nao informar", StringComparison.Ordinal))
         {
             return "prefer_not_say";
         }
 
-        if (body is "1" || body.Contains("não uso", StringComparison.Ordinal) || body.Contains("nenhum", StringComparison.Ordinal))
+        if (body is "1" || body.Contains("nao uso", StringComparison.Ordinal) || body.Contains("nenhum", StringComparison.Ordinal))
         {
             return "none";
         }
@@ -2396,7 +2396,7 @@ public sealed class ConversationService(
 
     private static string? ParseFlowIntensity(string body)
     {
-        if (body is "4" || body.Contains("prefiro não", StringComparison.Ordinal))
+        if (body is "4" || body.Contains("prefiro nao", StringComparison.Ordinal))
         {
             return "unknown";
         }
@@ -2528,7 +2528,7 @@ public sealed class ConversationService(
             return "yes";
         }
 
-        if (body.Contains("prefiro não", StringComparison.Ordinal))
+        if (body.Contains("prefiro nao", StringComparison.Ordinal))
         {
             return "prefer_not_say";
         }

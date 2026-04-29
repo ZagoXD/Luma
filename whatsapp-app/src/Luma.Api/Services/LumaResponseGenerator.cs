@@ -144,7 +144,7 @@ Responda somente JSON valido:
         var backend = MessageText.Normalize(backendResult);
         var reply = MessageText.Normalize(generatedReply);
 
-        if (backend.Contains("você aceita", StringComparison.Ordinal))
+        if (backend.Contains("voce aceita", StringComparison.Ordinal))
         {
             return reply.Contains("aceita", StringComparison.Ordinal)
                 && reply.Contains("1.", StringComparison.Ordinal)

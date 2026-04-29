@@ -11,7 +11,6 @@ public static partial class DateParser
         ["fevereiro"] = 2,
         ["fev"] = 2,
         ["marco"] = 3,
-        ["março"] = 3,
         ["mar"] = 3,
         ["abril"] = 4,
         ["abr"] = 4,
@@ -35,10 +34,8 @@ public static partial class DateParser
 
     public static bool IsUnknown(string normalized)
     {
-        return normalized.Contains("não lembro", StringComparison.Ordinal)
-            || normalized.Contains("não lembro", StringComparison.Ordinal)
-            || normalized.Contains("não sei", StringComparison.Ordinal)
-            || normalized.Contains("não sei", StringComparison.Ordinal)
+        return normalized.Contains("nao lembro", StringComparison.Ordinal)
+            || normalized.Contains("nao sei", StringComparison.Ordinal)
             || normalized.Contains("esqueci", StringComparison.Ordinal);
     }
 
@@ -220,10 +217,10 @@ public static partial class DateParser
     [GeneratedRegex(@"(?<day>\d{1,2})[\/\-.](?<month>\d{1,2})(?:[\/\-.](?<year>\d{2,4}))?")]
     private static partial Regex DatePattern();
 
-    [GeneratedRegex(@"\bdia\s+(?<day>\d{1,2})\s+(?:de\s+)?(?<month>janeiro|jan|fevereiro|fev|marco|março|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez)(?:\s+(?:de\s+)?(?<year>\d{2,4}))?\b|\b(?<day>\d{1,2})\s+(?:de\s+)?(?<month>janeiro|jan|fevereiro|fev|marco|março|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez)(?:\s+(?:de\s+)?(?<year>\d{2,4}))?\b")]
+    [GeneratedRegex(@"\bdia\s+(?<day>\d{1,2})\s+(?:de\s+)?(?<month>janeiro|jan|fevereiro|fev|marco|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez)(?:\s+(?:de\s+)?(?<year>\d{2,4}))?\b|\b(?<day>\d{1,2})\s+(?:de\s+)?(?<month>janeiro|jan|fevereiro|fev|marco|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez)(?:\s+(?:de\s+)?(?<year>\d{2,4}))?\b")]
     private static partial Regex WrittenMonthPattern();
 
-    [GeneratedRegex(@"\bdia\s+(?<day>\d{1,2})\s+(?:do\s+|de\s+)?m[eê]s\s+passado\b|\b(?<day>\d{1,2})\s+(?:do\s+|de\s+)?m[eê]s\s+passado\b")]
+    [GeneratedRegex(@"\bdia\s+(?<day>\d{1,2})\s+(?:do\s+|de\s+)?mes\s+passado\b|\b(?<day>\d{1,2})\s+(?:do\s+|de\s+)?mes\s+passado\b")]
     private static partial Regex PreviousMonthPattern();
 
     [GeneratedRegex(@"\bdia\s+(?<day>\d{1,2})\b")]
@@ -232,6 +229,6 @@ public static partial class DateParser
     [GeneratedRegex(@"antes\s+de")]
     private static partial Regex BeforePrefix();
 
-    [GeneratedRegex(@"(?:ha|há|faz|fazem|tem|come[cç]ou\s+ha|come[cç]ou\s+há)\s+(?:uns?\s+|umas?\s+|cerca\s+de\s+|mais\s+ou\s+menos\s+)?(?<days>\d{1,3})\s+dias?|(?<days>\d{1,3})\s+dias?\s+(?:atras|atrás)")]
+    [GeneratedRegex(@"(?:ha|faz|fazem|tem|come[c]ou\s+ha)\s+(?:uns?\s+|umas?\s+|cerca\s+de\s+|mais\s+ou\s+menos\s+)?(?<days>\d{1,3})\s+dias?|(?<days>\d{1,3})\s+dias?\s+atras")]
     private static partial Regex ExplicitDaysAgo();
 }

@@ -105,11 +105,11 @@ Mensagem da usuaria:
     private static bool IsExplicitConsentDenial(string message)
     {
         var normalized = MessageText.Normalize(message);
-        return normalized.Contains("não", StringComparison.Ordinal)
+        return normalized.Contains("nao", StringComparison.Ordinal)
             || normalized.Contains("nunca", StringComparison.Ordinal)
             || normalized.Contains("recuso", StringComparison.Ordinal)
-            || normalized.Contains("não aceito", StringComparison.Ordinal)
-            || normalized.Contains("prefiro não", StringComparison.Ordinal);
+            || normalized.Contains("nao aceito", StringComparison.Ordinal)
+            || normalized.Contains("prefiro nao", StringComparison.Ordinal);
     }
 
     private static bool IsPlainGreeting(string message)

@@ -1,10 +1,10 @@
-﻿# Luma â€” EspecificaÃ§Ã£o de Stacks e Arquitetura TÃ©cnica
+# Luma — Especificação de Stacks e Arquitetura Técnica
 
 > Atualização de escopo para V1.0.0 - 2026-04-28
 >
-> O projeto esta na fase final da V1: o backend transacional já cobre cadastro, ciclo menstrual, relação sexual, gravidez e guardrails principais. O que falta para a primeira versão de producao e a camada de inteligência conversacional com RAG e tools/MCP, mantendo o backend como autoridade.
+> O projeto está na fase final da V1: o backend transacional já cobre cadastro, ciclo menstrual, relação sexual, gravidez e guardrails principais. O que falta para a primeira versão de produção e a camada de inteligência conversacional com RAG e tools/MCP, mantendo o backend como autoridade.
 >
-> A arquitetura recomendada para a V1.0.0 passa a incluir um orquestrador de conversa: Ollama interpreta contexto e intencoes, RAG fornece conhecimento seguro, tools/MCP executam leituras/escritas controladas e o backend valida tudo antes de persistir ou responder.
+> A arquitetura recomendada para a V1.0.0 passa a incluir um orquestrador de conversa: Ollama interpreta contexto e intenções, RAG fornece conhecimento seguro, tools/MCP executam leituras/escritas controladas e o backend valida tudo antes de persistir ou responder.
 
 ---
 
@@ -17,7 +17,7 @@ WhatsApp
   ->
 LumaConversationOrchestrator
   ->
-Ollama para interpretacao/contexto/humanizacao
+Ollama para interpretação/contexto/humanização
   ->
 RAG para conhecimento seguro
   ->
@@ -79,32 +79,32 @@ Regras:
 
 ---
 
-Este documento complementa a especificaÃ§Ã£o funcional do projeto **Luma**, uma futura assistente de ciclo menstrual pelo WhatsApp.  
-O objetivo aqui Ã© separar as tecnologias recomendadas por etapa de desenvolvimento, mantendo uma arquitetura simples para validaÃ§Ã£o inicial, mas preparada para evoluir para uma plataforma real.
+Este documento complementa a especificação funcional do projeto **Luma**, uma futura assistente de ciclo menstrual pelo WhatsApp.  
+O objetivo aqui é separar as tecnologias recomendadas por etapa de desenvolvimento, mantendo uma arquitetura simples para validação inicial, mas preparada para evoluir para uma plataforma real.
 
 ---
 
-## 1. VisÃ£o geral da separaÃ§Ã£o do projeto
+## 1. Visão geral da separação do projeto
 
 O projeto deve ser pensado em duas grandes frentes:
 
 ```txt
 1. Site / Landing Page / Cadastro
-   ResponsÃ¡vel por divulgar a ideia, captar interessadas, explicar a proposta e futuramente permitir cadastro/pagamento.
+   Responsável por divulgar a ideia, captar interessadas, explicar a proposta e futuramente permitir cadastro/pagamento.
 
 2. Plataforma Backend do Bot
-   ResponsÃ¡vel pelo funcionamento real da assistente: WhatsApp, regras de ciclo, banco de dados, IA, lembretes, pagamentos e privacidade.
+   Responsável pelo funcionamento real da assistente: WhatsApp, regras de ciclo, banco de dados, IA, lembretes, pagamentos e privacidade.
 ```
 
-A ideia principal Ã© evitar misturar tudo em uma Ãºnica aplicaÃ§Ã£o logo no inÃ­cio. O site precisa ser rÃ¡pido de criar e publicar. A plataforma do bot precisa ser robusta, segura e organizada.
+A ideia principal é evitar misturar tudo em uma única aplicação logo no início. O site precisa ser rápido de criar e publicar. A plataforma do bot precisa ser robusta, segura e organizada.
 
 ---
 
-# Parte 1 â€” Site de divulgaÃ§Ã£o e cadastro
+# Parte 1 — Site de divulgação e cadastro
 
 ## 2. Objetivo do site
 
-O site da Luma nÃ£o deve ser o aplicativo em si no primeiro momento. Ele deve servir para:
+O site da Luma não deve ser o aplicativo em si no primeiro momento. Ele deve servir para:
 
 - divulgar a proposta do produto;
 - explicar a dor que a Luma resolve;
@@ -113,7 +113,7 @@ O site da Luma nÃ£o deve ser o aplicativo em si no primeiro momento. Ele deve 
 - validar interesse real antes de construir o sistema completo;
 - futuramente permitir cadastro, login e assinatura.
 
-No MVP inicial, o site pode ser apenas uma landing page com formulÃ¡rio de interesse.
+No MVP inicial, o site pode ser apenas uma landing page com formulário de interesse.
 
 ---
 
@@ -126,24 +126,24 @@ Next.js
 TypeScript
 Tailwind CSS
 Vercel
-Supabase ou formulÃ¡rio externo para lista de espera
+Supabase ou formulário externo para lista de espera
 ```
 
 ### Por que essa stack?
 
-**Next.js** Ã© uma excelente escolha para landing pages e produtos SaaS porque oferece boa performance, SEO, rotas, renderizaÃ§Ã£o hÃ­brida e facilidade de deploy.
+**Next.js** é uma excelente escolha para landing pages e produtos SaaS porque oferece boa performance, SEO, rotas, renderização híbrida e facilidade de deploy.
 
-**TypeScript** ajuda a manter o cÃ³digo seguro, escalÃ¡vel e menos propenso a erros.
+**TypeScript** ajuda a manter o código seguro, escalável e menos propenso a erros.
 
 **Tailwind CSS** permite criar uma interface moderna e responsiva rapidamente, com excelente controle visual.
 
-**Vercel** Ã© uma opÃ§Ã£o natural para hospedar o site, especialmente se o frontend for feito em Next.js.
+**Vercel** é uma opção natural para hospedar o site, especialmente se o frontend for feito em Next.js.
 
-**Supabase**, **Tally**, **Formspree**, **Airtable** ou **Google Forms** podem ser usados para captar leads no inÃ­cio.
+**Supabase**, **Tally**, **Formspree**, **Airtable** ou **Google Forms** podem ser usados para captar leads no início.
 
 ---
 
-## 4. Estrutura sugerida do repositÃ³rio do site
+## 4. Estrutura sugerida do repositório do site
 
 ```txt
 /luma-site
@@ -170,9 +170,9 @@ Supabase ou formulÃ¡rio externo para lista de espera
 
 ---
 
-## 5. PÃ¡ginas recomendadas para o site
+## 5. Páginas recomendadas para o site
 
-### PÃ¡ginas iniciais
+### Páginas iniciais
 
 ```txt
 /
@@ -181,7 +181,7 @@ Supabase ou formulÃ¡rio externo para lista de espera
 /termos
 ```
 
-### PÃ¡ginas futuras
+### Páginas futuras
 
 ```txt
 /login
@@ -191,11 +191,11 @@ Supabase ou formulÃ¡rio externo para lista de espera
 /checkout
 ```
 
-No inÃ­cio, `/login`, `/cadastro`, `/painel` e `/checkout` nÃ£o sÃ£o necessÃ¡rios. Eles podem ser adicionados quando o produto sair da fase de validaÃ§Ã£o.
+No início, `/login`, `/cadastro`, `/painel` e `/checkout` não são necessários. Eles podem ser adicionados quando o produto sair da fase de validação.
 
 ---
 
-## 6. FormulÃ¡rio de lista de espera
+## 6. Formulário de lista de espera
 
 Campos recomendados:
 
@@ -205,7 +205,7 @@ E-mail
 WhatsApp
 Maior dificuldade com apps de ciclo
 Checkbox de consentimento para contato futuro
-Data de criaÃ§Ã£o
+Data de criação
 Origem da campanha
 ```
 
@@ -226,9 +226,9 @@ CREATE TABLE waitlist_leads (
 
 ---
 
-## 7. OpÃ§Ãµes para captura de leads
+## 7. Opções para captura de leads
 
-### OpÃ§Ã£o mais rÃ¡pida
+### Opção mais rápida
 
 ```txt
 Tally
@@ -239,17 +239,17 @@ Formspree
 
 Boa para validar sem criar backend.
 
-### OpÃ§Ã£o mais profissional
+### Opção mais profissional
 
 ```txt
 Supabase
 ```
 
-Boa para jÃ¡ guardar leads em PostgreSQL e evoluir depois para cadastro real.
+Boa para já guardar leads em PostgreSQL e evoluir depois para cadastro real.
 
-### RecomendaÃ§Ã£o inicial
+### Recomendação inicial
 
-Para MVP rÃ¡pido:
+Para MVP rápido:
 
 ```txt
 Next.js + Tally/Formspree
@@ -265,7 +265,7 @@ Next.js + Supabase
 
 ## 8. Pagamento futuro no site
 
-Quando a Luma comeÃ§ar a cobrar assinatura, algumas opÃ§Ãµes sÃ£o:
+Quando a Luma começar a cobrar assinatura, algumas opções são:
 
 ```txt
 Stripe Billing
@@ -274,7 +274,7 @@ Asaas
 Pagar.me
 ```
 
-### RecomendaÃ§Ã£o
+### Recomendação
 
 Para mercado brasileiro, considerar:
 
@@ -288,32 +288,32 @@ Para arquitetura SaaS mais padronizada e internacional:
 Stripe Billing
 ```
 
-No MVP, o pagamento nÃ£o precisa existir. A prioridade deve ser captar interessadas e validar se elas pagariam pelo serviÃ§o.
+No MVP, o pagamento não precisa existir. A prioridade deve ser captar interessadas e validar se elas pagariam pelo serviço.
 
 ---
 
-# Parte 2 â€” Plataforma Backend do Bot
+# Parte 2 — Plataforma Backend do Bot
 
 ## 9. Objetivo da plataforma backend
 
-A plataforma backend serÃ¡ responsÃ¡vel por:
+A plataforma backend será responsável por:
 
 - receber mensagens do WhatsApp;
-- identificar a usuÃ¡ria pelo nÃºmero de telefone;
+- identificar a usuária pelo número de telefone;
 - validar assinatura ativa;
 - interpretar mensagens;
 - registrar eventos do ciclo;
-- calcular previsÃµes;
+- calcular previsões;
 - responder de forma segura;
 - integrar com IA;
 - enviar lembretes;
 - controlar limites de uso;
 - armazenar consentimentos;
-- permitir exclusÃ£o/exportaÃ§Ã£o de dados;
+- permitir exclusão/exportação de dados;
 - processar webhooks de pagamento;
 - manter logs e auditoria.
 
-Essa Ã© a parte mais sensÃ­vel e importante do projeto.
+Essa é a parte mais sensível e importante do projeto.
 
 ---
 
@@ -335,20 +335,20 @@ WhatsApp API ou provedor terceiro
 
 ### Por que C# aqui?
 
-C# Ã© uma Ã³tima escolha para a plataforma backend da Luma porque o sistema terÃ¡ muitas regras de negÃ³cio, integraÃ§Ãµes, jobs, webhooks e necessidade de seguranÃ§a.
+C# é uma ótima escolha para a plataforma backend da Luma porque o sistema terá muitas regras de negócio, integrações, jobs, webhooks e necessidade de segurança.
 
 O backend do bot exige:
 
 ```txt
-validaÃ§Ã£o de webhook
+validação de webhook
 controle de assinatura
 rate limit
 logs estruturados
 regras de ciclo menstrual
-cÃ¡lculos de previsÃ£o
+cálculos de previsão
 jobs de lembrete
-integraÃ§Ã£o com WhatsApp
-integraÃ§Ã£o com Gemini
+integração com WhatsApp
+integração com Gemini
 consentimento LGPD
 auditoria
 criptografia
@@ -360,23 +360,23 @@ Essas responsabilidades combinam muito bem com **ASP.NET Core**.
 
 ## 11. Arquitetura recomendada
 
-Para comeÃ§ar, a melhor opÃ§Ã£o Ã© um **monÃ³lito modular** em C#.
+Para começar, a melhor opção é um **monólito modular** em C#.
 
-Evitar microserviÃ§os no inÃ­cio. O produto ainda estarÃ¡ validando mercado, entÃ£o microserviÃ§os adicionariam complexidade desnecessÃ¡ria.
+Evitar microserviços no início. O produto ainda estará validando mercado, então microserviços adicionariam complexidade desnecessária.
 
 ### Arquitetura MVP
 
 ```txt
 [Landing Page - Next.js]
-        â†“
+        ↓
 [Lista de espera / Cadastro]
-        â†“
+        ↓
 [Backend ASP.NET Core]
-        â†“
+        ↓
 [PostgreSQL]
-        â†“
+        ↓
 [WhatsApp API]
-        â†“
+        ↓
 [Gemini API]
 ```
 
@@ -384,21 +384,21 @@ Evitar microserviÃ§os no inÃ­cio. O produto ainda estarÃ¡ validando mercad
 
 ```txt
 WhatsApp
-  â†“
+  ↓
 Webhook ASP.NET Core
-  â†“
-ValidaÃ§Ã£o da mensagem
-  â†“
+  ↓
+Validação da mensagem
+  ↓
 Fila / Job
-  â†“
+  ↓
 Processador de mensagem
-  â†“
+  ↓
 Motor de ciclo
-  â†“
+  ↓
 Banco de dados
-  â†“
-Gemini para humanizaÃ§Ã£o
-  â†“
+  ↓
+Gemini para humanização
+  ↓
 Resposta via WhatsApp
 ```
 
@@ -424,12 +424,12 @@ Resposta via WhatsApp
 
 ## `Luma.Api`
 
-ResponsÃ¡vel por expor endpoints HTTP.
+Responsável por expor endpoints HTTP.
 
 ```txt
 controllers
 webhooks
-autenticaÃ§Ã£o
+autenticação
 endpoints administrativos
 health checks
 Swagger/OpenAPI
@@ -449,7 +449,7 @@ GET /admin/conversations
 
 ## `Luma.Domain`
 
-ResponsÃ¡vel pelas entidades e regras puras do negÃ³cio.
+Responsável pelas entidades e regras puras do negócio.
 
 Entidades principais:
 
@@ -466,24 +466,24 @@ Consent
 AuditLog
 ```
 
-Regras de domÃ­nio:
+Regras de domínio:
 
 ```txt
 abrir ciclo
 encerrar ciclo
 registrar intensidade
 registrar sintoma
-calcular prÃ³xima menstruaÃ§Ã£o
+calcular próxima menstruação
 calcular atraso
-validar se resposta Ã© segura
-bloquear diagnÃ³sticos
+validar se resposta é segura
+bloquear diagnósticos
 ```
 
 ---
 
 ## `Luma.Application`
 
-ResponsÃ¡vel pelos casos de uso.
+Responsável pelos casos de uso.
 
 Exemplos:
 
@@ -504,7 +504,7 @@ DeleteUserDataUseCase
 
 ## `Luma.Infrastructure`
 
-ResponsÃ¡vel por integraÃ§Ãµes externas e persistÃªncia.
+Responsável por integrações externas e persistência.
 
 ```txt
 PostgreSQL
@@ -521,20 +521,20 @@ Storage
 
 ## `Luma.Worker`
 
-ResponsÃ¡vel por tarefas em segundo plano.
+Responsável por tarefas em segundo plano.
 
 ```txt
 enviar lembretes
 processar mensagens pendentes
-recalcular previsÃµes
+recalcular previsões
 verificar assinaturas vencidas
-limpar sessÃµes temporÃ¡rias
+limpar sessões temporárias
 executar jobs agendados
 ```
 
 ---
 
-# Parte 3 â€” Banco de dados
+# Parte 3 — Banco de dados
 
 ## 14. Banco recomendado
 
@@ -542,7 +542,7 @@ executar jobs agendados
 PostgreSQL
 ```
 
-PostgreSQL Ã© uma boa escolha porque Ã© robusto, barato, amplamente suportado e permite usar tanto dados relacionais quanto campos flexÃ­veis com `JSONB`.
+PostgreSQL é uma boa escolha porque é robusto, barato, amplamente suportado e permite usar tanto dados relacionais quanto campos flexíveis com `JSONB`.
 
 ---
 
@@ -565,7 +565,7 @@ audit_logs
 
 ## 16. Modelo de eventos do ciclo
 
-A tabela mais importante do produto serÃ¡ `cycle_events`.
+A tabela mais importante do produto será `cycle_events`.
 
 Ela permite registrar diferentes tipos de eventos sem precisar alterar o banco a cada nova funcionalidade.
 
@@ -620,15 +620,15 @@ note
 
 ---
 
-# Parte 4 â€” WhatsApp
+# Parte 4 — WhatsApp
 
-## 18. OpÃ§Ãµes de integraÃ§Ã£o com WhatsApp
+## 18. Opções de integração com WhatsApp
 
 Existem duas abordagens principais.
 
 ---
 
-## OpÃ§Ã£o A â€” WhatsApp Cloud API oficial
+## Opção A — WhatsApp Cloud API oficial
 
 Vantagens:
 
@@ -636,19 +636,19 @@ Vantagens:
 mais oficial
 mais controle
 melhor para escalar
-menos dependÃªncia de intermediÃ¡rio
+menos dependência de intermediário
 ```
 
 Desvantagens:
 
 ```txt
-configuraÃ§Ã£o inicial mais burocrÃ¡tica
-exige configurar app, nÃºmero, webhooks e templates
+configuração inicial mais burocrática
+exige configurar app, número, webhooks e templates
 ```
 
 ---
 
-## OpÃ§Ã£o B â€” Provedor terceiro
+## Opção B — Provedor terceiro
 
 Exemplos:
 
@@ -663,9 +663,9 @@ outros provedores de WhatsApp
 Vantagens:
 
 ```txt
-mais rÃ¡pido para MVP
+mais rápido para MVP
 painel pronto
-integraÃ§Ã£o simplificada
+integração simplificada
 ```
 
 Desvantagens:
@@ -673,21 +673,21 @@ Desvantagens:
 ```txt
 mensalidade fixa
 markup nas mensagens
-dependÃªncia do provedor
-risco de limitaÃ§Ãµes futuras
+dependência do provedor
+risco de limitações futuras
 ```
 
 ---
 
-## 19. RecomendaÃ§Ã£o para WhatsApp
+## 19. Recomendação para WhatsApp
 
 Para MVP:
 
 ```txt
-comeÃ§ar com um provedor terceiro mais simples
+começar com um provedor terceiro mais simples
 ```
 
-Para produto sÃ©rio em escala:
+Para produto sério em escala:
 
 ```txt
 migrar para WhatsApp Cloud API oficial
@@ -702,15 +702,15 @@ public interface IWhatsAppClient
 }
 ```
 
-Assim, Ã© possÃ­vel comeÃ§ar com Z-API ou outro provedor e trocar depois sem reescrever o sistema inteiro.
+Assim, é possível começar com Z-API ou outro provedor e trocar depois sem reescrever o sistema inteiro.
 
 ---
 
-# Parte 5 â€” Gemini e IA
+# Parte 5 — Gemini e IA
 
 ## 20. Papel da IA no sistema
 
-A IA nÃ£o deve ser o cÃ©rebro mÃ©dico do produto.
+A IA não deve ser o cérebro médico do produto.
 
 Regra principal:
 
@@ -723,15 +723,15 @@ Ou seja:
 - a IA pode interpretar mensagens;
 - a IA pode transformar linguagem natural em JSON estruturado;
 - a IA pode humanizar respostas;
-- a IA pode responder dÃºvidas gerais com guardrails;
-- a IA nÃ£o deve diagnosticar;
-- a IA nÃ£o deve afirmar gravidez;
-- a IA nÃ£o deve sugerir condutas mÃ©dicas arriscadas;
-- a IA nÃ£o deve decidir se algo Ã© normal ou seguro.
+- a IA pode responder dúvidas gerais com guardrails;
+- a IA não deve diagnosticar;
+- a IA não deve afirmar gravidez;
+- a IA não deve sugerir condutas médicas arriscadas;
+- a IA não deve decidir se algo é normal ou seguro.
 
 ---
 
-## 21. ServiÃ§os de IA recomendados
+## 21. Serviços de IA recomendados
 
 ```txt
 IMessageIntentParser
@@ -741,14 +741,14 @@ ISafetyGuardrailService
 
 ### `IMessageIntentParser`
 
-Transforma mensagem natural em intenÃ§Ã£o estruturada.
+Transforma mensagem natural em intenção estruturada.
 
 Exemplo:
 
 Mensagem:
 
 ```txt
-desceu ontem e hoje tÃ¡ forte
+desceu ontem e hoje tá forte
 ```
 
 Resposta esperada:
@@ -766,7 +766,7 @@ Resposta esperada:
 
 ### `IResponseHumanizer`
 
-Transforma uma resposta determinÃ­stica em uma mensagem mais natural.
+Transforma uma resposta determinística em uma mensagem mais natural.
 
 Entrada:
 
@@ -778,36 +778,36 @@ Entrada:
 }
 ```
 
-SaÃ­da:
+Saída:
 
 ```txt
-Registrei que sua menstruaÃ§Ã£o comeÃ§ou ontem com fluxo intenso âœ…
+Registrei que sua menstruação começou ontem com fluxo intenso ✅
 ```
 
 ---
 
 ### `ISafetyGuardrailService`
 
-Bloqueia ou redireciona respostas sensÃ­veis.
+Bloqueia ou redireciona respostas sensíveis.
 
 Exemplos de mensagens que devem ser bloqueadas ou tratadas com cuidado:
 
 ```txt
-Estou grÃ¡vida?
-Esse sangramento Ã© normal?
-Posso ter relaÃ§Ã£o sem proteÃ§Ã£o hoje?
-Acho que estou com infecÃ§Ã£o.
+Estou grávida?
+Esse sangramento é normal?
+Posso ter relação sem proteção hoje?
+Acho que estou com infecção.
 ```
 
 Resposta segura:
 
 ```txt
-NÃ£o consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnÃ³stico ou decisÃ£o mÃ©dica o ideal Ã© procurar um profissional de saÃºde.
+Não consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnóstico ou decisão médica o ideal é procurar um profissional de saúde.
 ```
 
 ---
 
-# Parte 6 â€” Redis, filas e jobs
+# Parte 6 — Redis, filas e jobs
 
 ## 22. Redis
 
@@ -817,15 +817,15 @@ Redis pode ser usado para:
 rate limit
 controle de spam
 cache
-estado temporÃ¡rio da conversa
+estado temporário da conversa
 fila simples
-bloqueio temporÃ¡rio por abuso
+bloqueio temporário por abuso
 ```
 
 Exemplo de regra:
 
 ```txt
-5 mensagens em menos de 10 segundos â†’ timeout temporÃ¡rio
+5 mensagens em menos de 10 segundos → timeout temporário
 ```
 
 ---
@@ -844,7 +844,7 @@ Alternativa:
 Quartz.NET
 ```
 
-### RecomendaÃ§Ã£o
+### Recomendação
 
 Para MVP:
 
@@ -852,53 +852,53 @@ Para MVP:
 Hangfire
 ```
 
-Motivo: simples, prÃ¡tico, possui dashboard e funciona bem para tarefas recorrentes.
+Motivo: simples, prático, possui dashboard e funciona bem para tarefas recorrentes.
 
-Jobs possÃ­veis:
+Jobs possíveis:
 
 ```txt
-enviar lembrete da prÃ³xima menstruaÃ§Ã£o
+enviar lembrete da próxima menstruação
 lembrar de registrar sintomas
 verificar assinaturas vencidas
 processar mensagens pendentes
-limpar sessÃµes antigas
-recalcular previsÃµes
+limpar sessões antigas
+recalcular previsões
 ```
 
 ---
 
-# Parte 7 â€” AutenticaÃ§Ã£o e usuÃ¡rios
+# Parte 7 — Autenticação e usuários
 
 ## 24. Identidade inicial
 
-No inÃ­cio, a identidade principal da usuÃ¡ria pode ser o nÃºmero de WhatsApp.
+No início, a identidade principal da usuária pode ser o número de WhatsApp.
 
 ```txt
 phone_number = identificador principal
 ```
 
-Mas futuramente Ã© recomendÃ¡vel ter login para:
+Mas futuramente é recomendável ter login para:
 
 ```txt
 acessar painel
 exportar dados
 apagar conta
-ver histÃ³rico
+ver histórico
 alterar assinatura
 configurar lembretes
 ```
 
 ---
 
-## 25. OpÃ§Ãµes de autenticaÃ§Ã£o
+## 25. Opções de autenticação
 
-### OpÃ§Ã£o C# nativa
+### Opção C# nativa
 
 ```txt
 ASP.NET Identity + JWT
 ```
 
-### OpÃ§Ãµes externas
+### Opções externas
 
 ```txt
 Clerk
@@ -907,7 +907,7 @@ Supabase Auth
 Firebase Auth
 ```
 
-### RecomendaÃ§Ã£o
+### Recomendação
 
 Para manter a plataforma coesa em C#:
 
@@ -915,7 +915,7 @@ Para manter a plataforma coesa em C#:
 ASP.NET Identity + JWT
 ```
 
-Para acelerar MVP com menos backend de autenticaÃ§Ã£o:
+Para acelerar MVP com menos backend de autenticação:
 
 ```txt
 Clerk ou Supabase Auth
@@ -923,14 +923,14 @@ Clerk ou Supabase Auth
 
 ---
 
-# Parte 8 â€” LGPD, privacidade e seguranÃ§a
+# Parte 8 — LGPD, privacidade e segurança
 
-## 26. Dados sensÃ­veis
+## 26. Dados sensíveis
 
-A Luma lidarÃ¡ com dados extremamente sensÃ­veis, como:
+A Luma lidará com dados extremamente sensíveis, como:
 
 ```txt
-menstruaÃ§Ã£o
+menstruação
 sintomas
 humor
 vida sexual
@@ -939,26 +939,26 @@ sangramentos
 uso de anticoncepcional
 ```
 
-Por isso, a arquitetura deve considerar privacidade desde o inÃ­cio.
+Por isso, a arquitetura deve considerar privacidade desde o início.
 
 ---
 
-## 27. Funcionalidades mÃ­nimas de privacidade
+## 27. Funcionalidades mínimas de privacidade
 
 O sistema deve permitir:
 
 ```txt
-consentimento explÃ­cito
+consentimento explícito
 registro do consentimento
-revogaÃ§Ã£o de consentimento
-exportaÃ§Ã£o de dados
-exclusÃ£o de dados
-polÃ­tica de privacidade clara
+revogação de consentimento
+exportação de dados
+exclusão de dados
+política de privacidade clara
 termos de uso
-limitaÃ§Ã£o de finalidade
-logs sem conteÃºdo sensÃ­vel quando possÃ­vel
-criptografia em repouso quando possÃ­vel
-criptografia em trÃ¢nsito
+limitação de finalidade
+logs sem conteúdo sensível quando possível
+criptografia em repouso quando possível
+criptografia em trânsito
 controle de acesso administrativo
 ```
 
@@ -991,7 +991,7 @@ whatsapp_contact
 
 ---
 
-# Parte 9 â€” Deploy e infraestrutura
+# Parte 9 — Deploy e infraestrutura
 
 ## 29. Deploy inicial recomendado
 
@@ -1003,7 +1003,7 @@ Vercel
 
 ### Backend
 
-OpÃ§Ãµes:
+Opções:
 
 ```txt
 Render
@@ -1015,7 +1015,7 @@ Azure App Service
 
 ### Banco
 
-OpÃ§Ãµes:
+Opções:
 
 ```txt
 Supabase Postgres
@@ -1026,7 +1026,7 @@ DigitalOcean Managed PostgreSQL
 
 ### Redis
 
-OpÃ§Ãµes:
+Opções:
 
 ```txt
 Upstash
@@ -1059,7 +1059,7 @@ Redis: Docker no VPS
 
 ---
 
-## 32. Deploy produÃ§Ã£o mais sÃ©rio
+## 32. Deploy produção mais sério
 
 ```txt
 Site: Vercel
@@ -1071,7 +1071,7 @@ Observabilidade: Sentry + OpenTelemetry
 
 ---
 
-# Parte 10 â€” Observabilidade e qualidade
+# Parte 10 — Observabilidade e qualidade
 
 ## 33. Logs
 
@@ -1081,7 +1081,7 @@ Para logs em C#:
 Serilog
 ```
 
-Usar logs estruturados, evitando registrar conteÃºdo sensÃ­vel das mensagens.
+Usar logs estruturados, evitando registrar conteúdo sensível das mensagens.
 
 Exemplo de log bom:
 
@@ -1098,10 +1098,10 @@ Exemplo de log bom:
 Evitar logar:
 
 ```txt
-conteÃºdo completo da mensagem
-sintomas Ã­ntimos detalhados
-informaÃ§Ãµes sexuais
-nÃºmero completo de telefone sem mascaramento
+conteúdo completo da mensagem
+sintomas íntimos detalhados
+informações sexuais
+número completo de telefone sem mascaramento
 ```
 
 ---
@@ -1124,7 +1124,7 @@ Sentry + Serilog
 
 ---
 
-## 35. DocumentaÃ§Ã£o da API
+## 35. Documentação da API
 
 Usar:
 
@@ -1132,7 +1132,7 @@ Usar:
 Swagger / OpenAPI
 ```
 
-ASP.NET Core possui integraÃ§Ã£o fÃ¡cil com Swagger.
+ASP.NET Core possui integração fácil com Swagger.
 
 ---
 
@@ -1150,22 +1150,22 @@ Moq ou NSubstitute
 ### Testes importantes
 
 ```txt
-cÃ¡lculo de ciclo
-cÃ¡lculo de atraso
-registro de inÃ­cio/fim de menstruaÃ§Ã£o
-alteraÃ§Ã£o de intensidade
-bloqueio de diagnÃ³stico
+cálculo de ciclo
+cálculo de atraso
+registro de início/fim de menstruação
+alteração de intensidade
+bloqueio de diagnóstico
 rate limit
 webhook do WhatsApp
 webhook de pagamento
-exclusÃ£o de dados
+exclusão de dados
 ```
 
 ---
 
-# Parte 11 â€” Fases de desenvolvimento
+# Parte 11 — Fases de desenvolvimento
 
-## 37. Fase 1 â€” Landing page
+## 37. Fase 1 — Landing page
 
 ### Objetivo
 
@@ -1185,19 +1185,19 @@ Tally/Formspree ou Supabase
 
 ```txt
 landing page
-formulÃ¡rio de lista de espera
-pÃ¡gina de obrigado
-polÃ­tica de privacidade inicial
+formulário de lista de espera
+página de obrigado
+política de privacidade inicial
 termos iniciais
 ```
 
 ---
 
-## 38. Fase 2 â€” PrÃ©-cadastro e validaÃ§Ã£o comercial
+## 38. Fase 2 — Pré-cadastro e validação comercial
 
 ### Objetivo
 
-Medir intenÃ§Ã£o real de uso e pagamento.
+Medir intenção real de uso e pagamento.
 
 ### Stack
 
@@ -1212,19 +1212,19 @@ Stripe/Mercado Pago/Asaas opcional
 
 ```txt
 lista de espera persistente
-segmentaÃ§Ã£o de leads
+segmentação de leads
 campanhas de e-mail/WhatsApp autorizadas
 pesquisa de interesse
-possÃ­vel prÃ©-venda
+possível pré-venda
 ```
 
 ---
 
-## 39. Fase 3 â€” Bot MVP
+## 39. Fase 3 — Bot MVP
 
 ### Objetivo
 
-Criar a primeira versÃ£o funcional da Luma pelo WhatsApp.
+Criar a primeira versão funcional da Luma pelo WhatsApp.
 
 ### Stack
 
@@ -1243,13 +1243,13 @@ Docker
 
 ```txt
 receber mensagens
-identificar usuÃ¡ria
-registrar inÃ­cio da menstruaÃ§Ã£o
-registrar fim da menstruaÃ§Ã£o
+identificar usuária
+registrar início da menstruação
+registrar fim da menstruação
 registrar intensidade
 registrar sintomas
 responder perguntas simples
-calcular prÃ³xima menstruaÃ§Ã£o
+calcular próxima menstruação
 calcular atraso
 limitar spam
 registrar consentimento
@@ -1257,13 +1257,13 @@ registrar consentimento
 
 ---
 
-## 40. Fase 4 â€” Painel/admin
+## 40. Fase 4 — Painel/admin
 
 ### Objetivo
 
-Gerenciar operaÃ§Ã£o, suporte e visualizaÃ§Ã£o bÃ¡sica.
+Gerenciar operação, suporte e visualização básica.
 
-### OpÃ§Ãµes de stack
+### Opções de stack
 
 ```txt
 Next.js Admin
@@ -1271,9 +1271,9 @@ Blazor
 ASP.NET Core MVC
 ```
 
-### RecomendaÃ§Ã£o
+### Recomendação
 
-Para velocidade e consistÃªncia visual:
+Para velocidade e consistência visual:
 
 ```txt
 Next.js Admin
@@ -1288,17 +1288,17 @@ Blazor
 ### Entregas
 
 ```txt
-visualizar usuÃ¡rias
+visualizar usuárias
 visualizar status de assinatura
-consultar logs nÃ£o sensÃ­veis
+consultar logs não sensíveis
 acompanhar mensagens processadas
 reenviar mensagens com falha
-bloquear/desbloquear usuÃ¡rias
+bloquear/desbloquear usuárias
 ```
 
 ---
 
-## 41. Fase 5 â€” Plataforma completa
+## 41. Fase 5 — Plataforma completa
 
 ### Objetivo
 
@@ -1308,20 +1308,20 @@ Transformar o MVP em produto real.
 
 ```txt
 assinaturas recorrentes
-painel da usuÃ¡ria
-exportaÃ§Ã£o de dados
-exclusÃ£o de conta
-lembretes configurÃ¡veis
+painel da usuária
+exportação de dados
+exclusão de conta
+lembretes configuráveis
 modo gravidez opcional
-relatÃ³rios de ciclo
+relatórios de ciclo
 melhorias de IA
-mÃ©tricas de uso
-observabilidade avanÃ§ada
+métricas de uso
+observabilidade avançada
 ```
 
 ---
 
-# Parte 12 â€” Stack final recomendada
+# Parte 12 — Stack final recomendada
 
 ## 42. Site
 
@@ -1397,9 +1397,9 @@ Testcontainers
 
 ---
 
-# Parte 13 â€” DecisÃ£o final sugerida
+# Parte 13 — Decisão final sugerida
 
-A recomendaÃ§Ã£o final Ã©:
+A recomendação final é:
 
 ```txt
 Luma Site
@@ -1409,7 +1409,7 @@ Luma Platform
 ASP.NET Core Web API + PostgreSQL + Entity Framework Core + Redis + Hangfire + Docker
 
 IA
-Gemini como parser e humanizador, nÃ£o como tomador de decisÃ£o mÃ©dica
+Gemini como parser e humanizador, não como tomador de decisão médica
 
 WhatsApp
 Provedor terceiro no MVP, com arquitetura preparada para migrar para Cloud API oficial
@@ -1428,20 +1428,20 @@ O sistema decide. A IA escreve.
 
 Essa regra deve guiar todo o desenvolvimento da Luma.
 
-A IA pode ajudar a interpretar e humanizar, mas as decisÃµes importantes devem estar no backend, em regras determinÃ­sticas, testÃ¡veis e auditÃ¡veis.
+A IA pode ajudar a interpretar e humanizar, mas as decisões importantes devem estar no backend, em regras determinísticas, testáveis e auditáveis.
 
 ---
 
 ## 49. Resumo executivo
 
-A Luma deve ser construÃ­da em duas frentes:
+A Luma deve ser construída em duas frentes:
 
 ```txt
-1. Um site simples, bonito e rÃ¡pido para validar interesse.
+1. Um site simples, bonito e rápido para validar interesse.
 2. Um backend robusto em C# para operar o bot de forma segura.
 ```
 
-A escolha de **C# com ASP.NET Core** para o backend Ã© tecnicamente adequada e estratÃ©gica, porque permite criar uma plataforma bem estruturada, com regras de negÃ³cio, jobs, webhooks, integraÃ§Ãµes e privacidade desde o inÃ­cio.
+A escolha de **C# com ASP.NET Core** para o backend é tecnicamente adequada e estratégica, porque permite criar uma plataforma bem estruturada, com regras de negócio, jobs, webhooks, integrações e privacidade desde o início.
 
-O site deve continuar simples, usando tecnologias de frontend modernas e rÃ¡pidas, enquanto o backend concentra a complexidade real do produto.
+O site deve continuar simples, usando tecnologias de frontend modernas e rápidas, enquanto o backend concentra a complexidade real do produto.
 

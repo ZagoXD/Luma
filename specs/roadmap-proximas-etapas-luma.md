@@ -1,6 +1,6 @@
 # Luma - Roadmap para V1.0.0
 
-Este documento organiza o estado atual do projeto Luma e o que ainda falta para chegar na primeira versão de producao: `v1.0.0`.
+Este documento organiza o estado atual do projeto Luma e o que ainda falta para chegar na primeira versão de produção: `v1.0.0`.
 
 Ele deve ser lido junto com:
 
@@ -11,7 +11,7 @@ A regra arquitetural principal continua sendo:
 
 > O backend decide. A IA entende, conversa e escreve.
 
-Na prática, a Luma deve parecer uma assistente inteligente, mas a fonte de verdade continua sendo o backend: regras de negocio, segurança, LGPD, gravação no banco, calculos e guardrails médicos.
+Na prática, a Luma deve parecer uma assistente inteligente, mas a fonte de verdade continua sendo o backend: regras de negócio, segurança, LGPD, gravação no banco, cálculos e guardrails médicos.
 
 ---
 
@@ -21,13 +21,13 @@ Na prática, a Luma deve parecer uma assistente inteligente, mas a fonte de verd
 
 Status atual: **V1 transacional implementada; falta camada inteligente RAG/MCP para fechar a V1.0.0.**
 
-A Luma já possui um nucleo funcional capaz de:
+A Luma já possui um núcleo funcional capaz de:
 
 - receber mensagens pelo WhatsApp via Twilio Sandbox;
 - rodar localmente via Docker Compose;
 - persistir dados em PostgreSQL;
 - usar Ollama via Docker;
-- cadastrar usuarias;
+- cadastrar usuárias;
 - registrar ciclo menstrual;
 - registrar sintomas, fluxo, humor e relação sexual;
 - consultar histórico básico;
@@ -36,7 +36,7 @@ A Luma já possui um nucleo funcional capaz de:
 - responder com segurança quando não deve diagnosticar;
 - rodar testes automatizados para os fluxos principais.
 
-O que ainda falta para `v1.0.0` não e criar mais regras fixas. O próximo passo e transformar esse nucleo em uma assistente mais viva, capaz de entender contexto, lidar com mensagens fora da ordem esperada e usar ferramentas controladas pelo backend.
+O que ainda falta para `v1.0.0` não é criar mais regras fixas. O próximo passo é transformar esse núcleo em uma assistente mais viva, capaz de entender contexto, lidar com mensagens fora da ordem esperada e usar ferramentas controladas pelo backend.
 
 ---
 
@@ -58,11 +58,11 @@ Entregas:
   - nome;
   - confirmação de maioridade;
   - última menstruação;
-  - duração media do ciclo;
-  - duração media da menstruação.
+  - duração média do ciclo;
+  - duração média da menstruação.
 - Persistência em PostgreSQL.
 - Event log inicial.
-- Interpretacao de datas naturais.
+- Interpretação de datas naturais.
 - Testes automatizados.
 
 ---
@@ -83,7 +83,7 @@ Entregas:
   - camisinha;
   - não uso;
   - prefiro não informar.
-- Registro em preferências da usuaria.
+- Registro em preferências da usuária.
 - Guardrails para não recomendar método contraceptivo e não afirmar "período seguro".
 - Testes automatizados.
 
@@ -107,7 +107,7 @@ Entregas:
   - última menstruação;
   - último sintoma;
   - última relação sexual.
-- Calculos basicos de ciclo e atraso.
+- Cálculos básicos de ciclo e atraso.
 - Guardrails para evitar diagnóstico, gravidez afirmada, período seguro e orientações médicas indevidas.
 - Testes automatizados.
 
@@ -145,7 +145,7 @@ Esta etapa esta pronta para MVP, mas a experiência conversacional ainda será m
 
 ---
 
-## Etapa 4 - Luma inteligente com RAG, MCP/tools e orquestracao de IA
+## Etapa 4 - Luma inteligente com RAG, MCP/tools e orquestração de IA
 
 Status: **próxima etapa; pendente para fechar V1.0.0**.
 
@@ -155,7 +155,7 @@ Transformar a Luma de um fluxo transacional com respostas fixas em uma assistent
 
 - entender mensagens fora da ordem esperada;
 - manter contexto da conversa;
-- guardar intencoes pendentes;
+- guardar intenções pendentes;
 - consultar uma base de conhecimento segura;
 - chamar ferramentas de leitura/escrita controladas pelo backend;
 - humanizar respostas;
@@ -168,9 +168,9 @@ Essa etapa não substitui o backend. Ela cria uma camada inteligente acima dele.
 Fluxo alvo:
 
 ```txt
-Mensagem da usuaria
+Mensagem da usuária
   ->
-Orquestrador da Luma com prompt de identidade, estado da usuaria e ferramentas disponíveis
+Orquestrador da Luma com prompt de identidade, estado da usuária e ferramentas disponíveis
   ->
 IA interpreta intenção e contexto
   ->
@@ -204,20 +204,20 @@ Criar um prompt versionado definindo:
 - quando orientar procurar médico;
 - como lidar com incerteza;
 - como lidar com mensagens fora de ordem;
-- como pedir confirmação antes de salvar eventos sensiveis.
+- como pedir confirmação antes de salvar eventos sensíveis.
 
 Exemplo de identidade:
 
 ```txt
 Você e a Luma, uma assistente de ciclo menstrual e gravidez pelo WhatsApp.
-Seu papel e ajudar a usuaria a registrar e consultar informações pessoais sobre ciclo, sintomas, fluxo, humor, relação sexual e gravidez.
+Seu papel é ajudar a usuária a registrar e consultar informações pessoais sobre ciclo, sintomas, fluxo, humor, relação sexual e gravidez.
 Você não faz diagnósticos, não confirma gravidez, não diz que sangramentos são normais e não substitui orientação médica.
 Quando houver risco, oriente procurar profissional de saúde.
 ```
 
 ## 4.2 Estado conversacional
 
-O orquestrador deve receber o estado atual da usuaria:
+O orquestrador deve receber o estado atual da usuária:
 
 ```txt
 onboarding_step
@@ -234,13 +234,13 @@ Isso resolve casos como:
 
 ```txt
 Etapa atual: aguardando nome
-Usuaria: menstruei hoje
+Usuária: menstruei hoje
 ```
 
 Resposta esperada:
 
 ```txt
-Entendi. Já vi que você quer registrar que sua menstruação comecou hoje.
+Entendi. Já vi que você quer registrar que sua menstruação começou hoje.
 Antes disso, preciso terminar seu cadastro rapidinho para salvar tudo certinho e com segurança.
 Como devo te chamar?
 ```
@@ -257,9 +257,9 @@ Se confirmar:
 Backend registra period_start.
 ```
 
-## 4.3 Memoria de intenção pendente
+## 4.3 Memória de intenção pendente
 
-Adicionar suporte conceitual a intencoes pendentes.
+Adicionar suporte conceitual a intenções pendentes.
 
 Exemplos:
 
@@ -285,7 +285,7 @@ Eventos que podem virar intenção pendente:
 
 Regra:
 
-> Nenhuma intenção sensivel enviada fora da etapa atual deve ser descartada silenciosamente. A Luma deve reconhecer, explicar o que falta e retomar depois com confirmação.
+> Nenhuma intenção sensível enviada fora da etapa atual deve ser descartada silenciosamente. A Luma deve reconhecer, explicar o que falta e retomar depois com confirmação.
 
 ## 4.4 RAG
 
@@ -383,9 +383,9 @@ Responsabilidades:
 - chamar tools autorizadas;
 - aplicar guardrails;
 - montar resposta final;
-- registrar logs sem conteúdo sensivel.
+- registrar logs sem conteúdo sensível.
 
-## 4.7 Humanizacao dinâmica
+## 4.7 Humanização dinâmica
 
 Substituir gradualmente respostas fixas por respostas geradas pela IA.
 
@@ -395,7 +395,7 @@ O backend deve continuar retornando um resultado estruturado:
 {
   "action": "period_start_registered",
   "date": "2026-04-28",
-  "requires_medical_guardrail": false,
+  "requires_médical_guardrail": false,
   "next_question": "flow_intensity"
 }
 ```
@@ -403,7 +403,7 @@ O backend deve continuar retornando um resultado estruturado:
 A IA transforma isso em uma mensagem acolhedora:
 
 ```txt
-Pronto, registrei que sua menstruação comecou hoje. Obrigada por me contar.
+Pronto, registrei que sua menstruação começou hoje. Obrigada por me contar.
 Como esta o fluxo agora: leve, medio ou intenso?
 ```
 
@@ -419,7 +419,7 @@ Mesmo com IA, essas respostas devem continuar controladas pelo backend:
 - afirmar período seguro;
 - lidar com menor de idade;
 - consentimento LGPD;
-- exclusão/exportacao de dados;
+- exclusão/exportação de dados;
 - mensagens de crise ou risco grave.
 
 ## 4.9 Testes obrigatorios da Etapa 4
@@ -431,7 +431,7 @@ Testes mínimos:
 - usuário manda relação sexual durante onboarding;
 - usuário manda sintoma durante onboarding;
 - intenção pendente e salva e confirmada após cadastro;
-- intenção pendente e descartada se usuaria negar;
+- intenção pendente é descartada se usuária negar;
 - IA pede tool valida;
 - IA tenta pedir tool proibida;
 - RAG responde pergunta educativa sem diagnosticar;
@@ -439,7 +439,7 @@ Testes mínimos:
 - pergunta sobre LGPD usa resposta controlada;
 - sangramento na gravidez usa guardrail fixo;
 - falha do Ollama retorna fallback seguro;
-- logs não salvam conteúdo sensivel por padrão.
+- logs não salvam conteúdo sensível por padrão.
 
 ---
 
@@ -448,10 +448,10 @@ Testes mínimos:
 A Luma estará pronta para `v1.0.0` quando:
 
 - Etapas 1, 1.1, 2 e 3 estiverem implementadas e testadas.
-- Etapa 4 estiver implementada com orquestracao inteligente.
-- A Luma conseguir lidar com mensagens fora de ordem sem perder a intenção da usuaria.
-- Existir memoria de intenção pendente.
-- Existir confirmação antes de gravar evento sensivel fora do fluxo esperado.
+- Etapa 4 estiver implementada com orquestração inteligente.
+- A Luma conseguir lidar com mensagens fora de ordem sem perder a intenção da usuária.
+- Existir memória de intenção pendente.
+- Existir confirmação antes de gravar evento sensível fora do fluxo esperado.
 - Existir RAG inicial com conteúdo versionado.
 - Existirem tools internas ou MCP para leitura/escrita controlada.
 - O backend continuar autoritativo.
@@ -468,16 +468,16 @@ A Luma estará pronta para `v1.0.0` quando:
 
 # Depois da V1.0.0: V2 SaaS
 
-Depois da primeira versão de producao, o foco passa a ser SaaS.
+Depois da primeira versão de produção, o foco passa a ser SaaS.
 
 ## Etapa 5 - Website, cadastro e assinaturas
 
-Status: **pos-V1.0.0**.
+Status: **pós-V1.0.0**.
 
 Escopo:
 
 - Landing page em Next.js.
-- Cadastro da usuaria.
+- Cadastro da usuária.
 - Login.
 - Política de privacidade.
 - Termos de uso.
@@ -486,7 +486,7 @@ Escopo:
 - Webhook de pagamento.
 - Tabela de assinaturas.
 
-Provedores possiveis:
+Provedores possíveis:
 
 ```txt
 Asaas
@@ -497,7 +497,7 @@ Pagar.me
 
 ## Etapa 5.1 - Validação de assinatura no bot
 
-Status: **pos-V1.0.0**.
+Status: **pós-V1.0.0**.
 
 Escopo:
 
@@ -509,7 +509,7 @@ Escopo:
 
 ## Etapa 6 - Anti-spam, grupos e hardening
 
-Status: **pos-V1.0.0 ou preparacao final de producao, dependendo do risco do piloto**.
+Status: **pós-V1.0.0 ou preparação final de produção, dependendo do risco do piloto**.
 
 Escopo:
 
@@ -521,7 +521,7 @@ Escopo:
 - Observabilidade.
 - Logs estruturados.
 - Sentry/Application Insights.
-- Exportacao e exclusão de dados.
+- Exportação e exclusão de dados.
 
 ---
 
@@ -531,10 +531,10 @@ Escopo:
 1. Projetar prompt de identidade da Luma
 2. Criar base RAG inicial em Markdown
 3. Definir contrato das tools internas/MCP
-4. Criar memoria de intenção pendente
+4. Criar memória de intenção pendente
 5. Criar LumaConversationOrchestrator
 6. Integrar Ollama ao orquestrador
-7. Substituir respostas fixas por humanizacao dinâmica
+7. Substituir respostas fixas por humanização dinâmica
 8. Manter guardrails fixos no backend
 9. Testar fluxos fora de ordem
 10. Revalidar fluxo completo via WhatsApp
@@ -547,13 +547,13 @@ Escopo:
 
 A Luma já tem o motor funcional.
 
-O que falta para a versão `1.0.0` e a camada de inteligência conversacional:
+O que falta para a versão `1.0.0` é a camada de inteligência conversacional:
 
 - RAG para conhecimento seguro.
 - Tools/MCP para a IA operar o backend.
-- Memoria de intencoes pendentes.
-- Orquestracao de IA com Ollama.
-- Humanizacao dinâmica.
+- Memória de intenções pendentes.
+- Orquestração de IA com Ollama.
+- Humanização dinâmica.
 - Guardrails fixos para segurança e LGPD.
 
 Essa e a etapa que vai transformar a Luma de um bot com fluxos em uma assistente de verdade.

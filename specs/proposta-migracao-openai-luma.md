@@ -2,29 +2,29 @@
 
 ## Contexto
 
-Durante os testes pelo WhatsApp/Twilio, o fluxo com Ollama local funcionou corretamente no backend, mas apresentou latencia alta demais para o webhook.
+Durante os testes pelo WhatsApp/Twilio, o fluxo com Ollama local funcionou corretamente no backend, mas apresentou latência alta demais para o webhook.
 
 Exemplo observado em 28/04/2026:
 
 - Usuário enviou: `Aceito sim`
 - Backend chamou `ILumaToolAgent` usando Ollama local
-- Ollama respondeu em aproximadamente 16,5 segundos
+- Ollama respondeu em apróximadamente 16,5 segundos
 - Backend gravou o consentimento e avancou para `awaiting_display_name`
-- Twilio não exibiu a resposta para a usuaria, provavelmente por timeout do webhook
+- Twilio não exibiu a resposta para a usuária, provavelmente por timeout do webhook
 
 Ou seja: o sistema processou, mas respondeu tarde demais para uma experiência confiavel no WhatsApp.
 
 ## Diagnóstico
 
-O problema principal não e apenas "inteligência" do modelo. E a combinacao de:
+O problema principal não é apenas "inteligência" do modelo. É a combinação de:
 
-- Modelo local pequeno (`llama3.2`) com latencia variavel.
+- Modelo local pequeno (`llama3.2`) com latência variável.
 - Execucao local via Docker/CPU, sem garantia de tempo de resposta.
 - Webhook do Twilio esperando resposta sincrona.
 - Fluxos onde a IA e chamada para interpretar mensagens simples como consentimento.
 - Necessidade de tool calling/JSON confiavel para a Luma agir como agente.
 
-O Ollama continua útil para desenvolvimento local, privacidade e testes sem custo por token. Mas, para uma V1 de producao com WhatsApp, ele não oferece previsibilidade suficiente neste momento.
+O Ollama continua útil para desenvolvimento local, privacidade e testes sem custo por token. Mas, para uma V1 de produção com WhatsApp, ele não oferece previsibilidade suficiente neste momento.
 
 ## Recomendação
 
@@ -32,11 +32,11 @@ Migrar a camada de IA principal da Luma para a OpenAI API, mantendo Ollama como 
 
 Modelo recomendado para V1:
 
-- `gpt-5.4-mini` como modelo principal de producao, priorizando latencia/custo.
-- `gpt-5.5` como opcional para avaliações, prompts complexos, testes de qualidade e casos que exigirem mais raciocinio.
+- `gpt-5.4-mini` como modelo principal de produção, priorizando latência/custo.
+- `gpt-5.5` como opcional para avaliações, prompts complexos, testes de qualidade e casos que exigirem mais raciocínio.
 - Evitar modelos "pro" no webhook sincrono, porque podem ser mais lentos e caros.
 
-Essa recomendação segue a orientação atual da documentação da OpenAI: a página de modelos indica `gpt-5.5` para raciocinio complexo e `gpt-5.4-mini`/`gpt-5.4-nano` quando o objetivo e menor latencia e menor custo.
+Essa recomendação segue a orientação atual da documentação da OpenAI: a página de modelos indica `gpt-5.5` para raciocínio complexo e `gpt-5.4-mini`/`gpt-5.4-nano` quando o objetivo é menor latência e menor custo.
 
 Referência: https://developers.openai.com/api/docs/models
 
@@ -110,13 +110,13 @@ A Luma deve usar function/tool calling para solicitar ações, sempre validadas 
 - `get_last_sexual_activity`
 - `search_luma_knowledge_base`
 
-A OpenAI API possui suporte oficial a function calling/tool calling. A documentação descreve essa capacidade como a forma de conectar modelos a dados e ações fornecidas pela aplicacao.
+A OpenAI API possui suporte oficial a function calling/tool calling. A documentação descreve essa capacidade como a forma de conectar modelos a dados e ações fornecidas pela aplicação.
 
 Referência: https://developers.openai.com/api/docs/guides/function-calling
 
 ## Structured Outputs
 
-Para evitar respostas invalidas do tipo JSON quebrado, tool inexistente ou enum inventado, a migração deve usar Structured Outputs sempre que a Luma precisar devolver uma decisão estruturada.
+Para evitar respostas inválidas do tipo JSON quebrado, tool inexistente ou enum inventado, a migração deve usar Structured Outputs sempre que a Luma precisar devolver uma decisão estruturada.
 
 Exemplo de saída esperada da IA:
 
@@ -134,7 +134,7 @@ Exemplo de saída esperada da IA:
 }
 ```
 
-A documentação oficial indica que Structured Outputs garante aderencia a um JSON Schema definido pela aplicacao, reduzindo erros de formato e valores inesperados.
+A documentação oficial indica que Structured Outputs garante aderência a um JSON Schema definido pela aplicação, reduzindo erros de formato e valores inesperados.
 
 Referência: https://developers.openai.com/api/docs/guides/structured-outputs
 
@@ -148,25 +148,25 @@ Mesmo com OpenAI, alguns pontos devem continuar no backend:
 - Não afirmar gravidez.
 - Não diagnosticar sangramento, dor, aborto, infecção ou risco fetal.
 - Não executar escrita no banco sem validação.
-- Não aceitar saudacao pura como consentimento.
+- Não aceitar saudação pura como consentimento.
 - Timeouts e fallback.
 
-Isso não e retrocesso para "mensagens chumbadas"; e segurança de produto. A IA interpreta e conversa, mas o backend protege o limite legal/médico.
+Isso não é retrocesso para "mensagens chumbadas"; é segurança de produto. A IA interpreta e conversa, mas o backend protege o limite legal/médico.
 
 ## Resposta sobre o problema do "Olá" e "Aceito sim"
 
 Migrar para OpenAI deve melhorar bastante:
 
-- Menor latencia media em comparacao com Ollama local em CPU/Docker.
-- Melhor interpretacao de frases naturais como `Aceito sim`, `claro`, `pode seguir`, `com certeza`.
-- Melhor tool calling e aderencia ao schema.
+- Menor latência média em comparação com Ollama local em CPU/Docker.
+- Melhor interpretação de frases naturais como `Aceito sim`, `claro`, `pode seguir`, `com certeza`.
+- Melhor tool calling e aderência ao schema.
 - Menos necessidade de criar casos manuais para cada frase.
 
 Mas a migração não deve significar "tudo passa pela IA sempre".
 
 Exemplo:
 
-- `Olá` na primeira mensagem pode ser respondido pelo backend imediatamente com o texto de consentimento.
+- `Olá` na primeira mensagem pode ser respondido pelo backend imédiatamente com o texto de consentimento.
 - `Aceito sim` pode ir para a IA ou para um classificador rápido, mas com timeout curto.
 - Mensagens ambiguas, fora de ordem ou ricas em contexto devem ir para o agente.
 
@@ -215,8 +215,8 @@ Assim a Luma fica inteligente sem sacrificar a experiência do WhatsApp.
 ### Etapa F - Fallback e observabilidade
 
 - Se a OpenAI falhar: fallback para resposta segura ou Ollama, dependendo do tipo de mensagem.
-- Logar latencia por chamada.
-- Logar tool escolhida, sem armazenar conteúdo sensivel além do necessário.
+- Logar latência por chamada.
+- Logar tool escolhida, sem armazenar conteúdo sensível além do necessário.
 - Criar metricas:
   - tempo medio por mensagem;
   - taxa de timeout;
@@ -233,7 +233,7 @@ Assim a Luma fica inteligente sem sacrificar a experiência do WhatsApp.
 
 ## Decisão recomendada
 
-Para a V1 de producao/testes reais no WhatsApp, a recomendação e:
+Para a V1 de produção/testes reais no WhatsApp, a recomendação é:
 
 - OpenAI API como provedor principal.
 - Ollama como fallback/local-dev.
@@ -241,4 +241,4 @@ Para a V1 de producao/testes reais no WhatsApp, a recomendação e:
 - Guardrails fixos mínimos.
 - IA responsável por interpretar linguagem natural, chamar tools e humanizar respostas.
 
-Essa combinacao deve deixar a Luma mais inteligente e, principalmente, mais previsivel para uma experiência real de WhatsApp.
+Essa combinação deve deixar a Luma mais inteligente e, principalmente, mais previsível para uma experiência real de WhatsApp.

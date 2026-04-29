@@ -1,32 +1,32 @@
-﻿# EspecificaÃ§Ã£o inicial â€” Bot de Ciclo Menstrual pelo WhatsApp
+# Especificação inicial — Bot de Ciclo Menstrual pelo WhatsApp
 
 > Atualização de escopo para V1.0.0 - 2026-04-28
 >
-> O nucleo transacional da Luma já contempla cadastro, ciclo menstrual, relação sexual, gravidez, histórico básico e guardrails principais. Para a primeira versão de producao, a Luma não deve ser apenas um fluxo fixo de perguntas e respostas. Ela deve evoluir para uma assistente conversacional com orquestracao de IA, RAG e tools/MCP controladas pelo backend.
+> O núcleo transacional da Luma já contempla cadastro, ciclo menstrual, relação sexual, gravidez, histórico básico e guardrails principais. Para a primeira versão de produção, a Luma não deve ser apenas um fluxo fixo de perguntas e respostas. Ela deve evoluir para uma assistente conversacional com orquestração de IA, RAG e tools/MCP controladas pelo backend.
 >
 > Regra central atualizada:
 >
 > **O backend decide. A IA entende, conversa e escreve.**
 >
-> A IA pode interpretar mensagens fora de ordem, consultar conhecimento seguro, sugerir chamadas de ferramentas e humanizar respostas. O backend continua sendo a fonte de verdade para consentimento, LGPD, regras médicas, calculos, persistência e validação de segurança.
+> A IA pode interpretar mensagens fora de ordem, consultar conhecimento seguro, sugerir chamadas de ferramentas e humanizar respostas. O backend continua sendo a fonte de verdade para consentimento, LGPD, regras médicas, cálculos, persistência e validação de segurança.
 
 ---
 
 ## Atualização V1.0.0 - Luma como assistente inteligente
 
-Para fechar a V1.0.0, a Luma deve lidar com situações em que a usuaria não segue o fluxo esperado.
+Para fechar a V1.0.0, a Luma deve lidar com situações em que a usuária não segue o fluxo esperado.
 
 Exemplo:
 
 ```txt
-Estado atual: aguardando nome da usuaria
-Usuaria: menstruei hoje
+Estado atual: aguardando nome da usuária
+Usuária: menstruei hoje
 ```
 
 Comportamento esperado:
 
 ```txt
-Entendi. Já vi que você quer registrar que sua menstruação comecou hoje.
+Entendi. Já vi que você quer registrar que sua menstruação começou hoje.
 Antes disso, preciso terminar seu cadastro rapidinho para salvar tudo certinho e com segurança.
 Como devo te chamar?
 ```
@@ -37,13 +37,13 @@ Depois do cadastro:
 Você tinha me contado que menstruou hoje. Quer que eu registre isso agora?
 ```
 
-Se a usuaria confirmar, o backend registra o evento.
+Se a usuária confirmar, o backend registra o evento.
 
 Isso exige:
 
-- memoria de intenção pendente;
-- interpretacao contextual;
-- confirmação antes de gravar dados sensiveis fora do fluxo esperado;
+- memória de intenção pendente;
+- interpretação contextual;
+- confirmação antes de gravar dados sensíveis fora do fluxo esperado;
 - RAG para respostas educativas e institucionais;
 - tools/MCP para leitura e escrita controladas;
 - backend autoritativo;
@@ -52,11 +52,11 @@ Isso exige:
 Fluxo alvo:
 
 ```txt
-Mensagem da usuaria
+Mensagem da usuária
   ->
 IA interpreta intenção, contexto e estado atual
   ->
-Backend valida segurança, consentimento e regras de negocio
+Backend valida segurança, consentimento e regras de negócio
   ->
 Backend executa tools autorizadas
   ->
@@ -67,31 +67,31 @@ IA escreve resposta acolhedora
 WhatsApp
 ```
 
-Essa camada inteligente e considerada parte obrigatoria da V1.0.0.
+Essa camada inteligente é considerada parte obrigatória da V1.0.0.
 
 ---
 
-## VisÃ£o geral
+## Visão geral
 
-A ideia Ã© criar um SaaS simples e acessÃ­vel, baseado em WhatsApp, para ajudar mulheres a registrarem informaÃ§Ãµes do ciclo menstrual sem precisar abrir um aplicativo especÃ­fico todos os dias.
+A ideia é criar um SaaS simples e acessível, baseado em WhatsApp, para ajudar mulheres a registrarem informações do ciclo menstrual sem precisar abrir um aplicativo específico todos os dias.
 
-O diferencial central do produto Ã©:
+O diferencial central do produto é:
 
-> **Um app de ciclo que vocÃª nÃ£o precisa lembrar de abrir.**
+> **Um app de ciclo que você não precisa lembrar de abrir.**
 
-A usuÃ¡ria interage naturalmente pelo WhatsApp, enviando mensagens como:
+A usuária interage naturalmente pelo WhatsApp, enviando mensagens como:
 
 ```txt
 menstruei hoje
 acabou ontem
-tÃ´ com cÃ³lica forte
-tive relaÃ§Ã£o dia 20
-quando Ã© minha prÃ³xima menstruaÃ§Ã£o?
+tô com cólica forte
+tive relação dia 20
+quando é minha próxima menstruação?
 ```
 
-O sistema interpreta essas mensagens, registra os eventos, calcula previsÃµes e responde de forma humanizada.
+O sistema interpreta essas mensagens, registra os eventos, calcula previsões e responde de forma humanizada.
 
-A IA, como Gemini, nÃ£o deve ser o â€œcÃ©rebro mÃ©dicoâ€ do produto. Ela deve atuar principalmente como camada de interpretaÃ§Ã£o e humanizaÃ§Ã£o.
+A IA, como Gemini, não deve ser o “cérebro médico” do produto. Ela deve atuar principalmente como camada de interpretação e humanização.
 
 Regra de ouro:
 
@@ -101,71 +101,71 @@ Regra de ouro:
 
 ## Objetivo do produto
 
-Permitir que a usuÃ¡ria registre e consulte dados relacionados ao ciclo menstrual por meio de uma conversa no WhatsApp.
+Permitir que a usuária registre e consulte dados relacionados ao ciclo menstrual por meio de uma conversa no WhatsApp.
 
 O sistema deve ajudar com:
 
-- Registro de inÃ­cio e fim da menstruaÃ§Ã£o.
+- Registro de início e fim da menstruação.
 - Registro de intensidade do fluxo.
 - Registro de sintomas.
 - Registro opcional de humor e bem-estar.
-- CÃ¡lculo aproximado da prÃ³xima menstruaÃ§Ã£o.
-- CÃ¡lculo de atraso menstrual.
-- Consulta ao histÃ³rico.
+- Cálculo aproximado da próxima menstruação.
+- Cálculo de atraso menstrual.
+- Consulta ao histórico.
 - Lembretes opcionais.
-- Registro opcional de relaÃ§Ã£o sexual.
+- Registro opcional de relação sexual.
 - Futuramente, modo gravidez.
 
-O sistema **nÃ£o deve**:
+O sistema **não deve**:
 
-- Fazer diagnÃ³stico mÃ©dico.
+- Fazer diagnóstico médico.
 - Confirmar ou descartar gravidez.
-- Dizer que um sangramento Ã© normal ou seguro.
-- Substituir orientaÃ§Ã£o mÃ©dica.
-- Incentivar uso de janela fÃ©rtil como mÃ©todo contraceptivo.
+- Dizer que um sangramento é normal ou seguro.
+- Substituir orientação médica.
+- Incentivar uso de janela fértil como método contraceptivo.
 
 ---
 
-## AtenÃ§Ã£o legal e LGPD
+## Atenção legal e LGPD
 
-Dados de menstruaÃ§Ã£o, sintomas, gravidez, relaÃ§Ã£o sexual, anticoncepcional e saÃºde reprodutiva sÃ£o dados pessoais sensÃ­veis.
+Dados de menstruação, sintomas, gravidez, relação sexual, anticoncepcional e saúde reprodutiva são dados pessoais sensíveis.
 
 Desde o MVP, o produto deve considerar:
 
-- Consentimento explÃ­cito e destacado.
-- PolÃ­tica de privacidade simples e clara.
-- Termo informando que o sistema nÃ£o substitui profissional de saÃºde.
-- OpÃ§Ã£o de apagar conta e dados.
-- OpÃ§Ã£o de exportar dados.
-- Criptografia de dados sensÃ­veis no banco.
+- Consentimento explícito e destacado.
+- Política de privacidade simples e clara.
+- Termo informando que o sistema não substitui profissional de saúde.
+- Opção de apagar conta e dados.
+- Opção de exportar dados.
+- Criptografia de dados sensíveis no banco.
 - Controle rigoroso de acesso.
-- Logs sem conteÃºdo sensÃ­vel sempre que possÃ­vel.
+- Logs sem conteúdo sensível sempre que possível.
 - Cuidado especial com menores de idade.
-- RestriÃ§Ã£o de respostas mÃ©dicas/diagnÃ³sticas.
+- Restrição de respostas médicas/diagnósticas.
 
 Mensagem inicial recomendada:
 
 ```txt
-Oi! Eu sou sua assistente de ciclo pelo WhatsApp ðŸŒ™
+Oi! Eu sou sua assistente de ciclo pelo WhatsApp 🌙
 
-Antes de comeÃ§ar: eu posso te ajudar a registrar menstruaÃ§Ã£o, sintomas, lembretes e histÃ³rico. NÃ£o substituo orientaÃ§Ã£o mÃ©dica e nÃ£o faÃ§o diagnÃ³sticos.
+Antes de começar: eu posso te ajudar a registrar menstruação, sintomas, lembretes e histórico. Não substituo orientação médica e não faço diagnósticos.
 
-Para continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saÃºde menstrual.
+Para continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saúde menstrual.
 
-VocÃª aceita?
+Você aceita?
 1. Aceito
-2. NÃ£o aceito
+2. Não aceito
 ```
 
 ---
 
-# 1. Onboarding da usuÃ¡ria
+# 1. Onboarding da usuária
 
-Na primeira interaÃ§Ã£o, o sistema nÃ£o conhece nada sobre a usuÃ¡ria. O ideal Ã© pedir apenas os dados mÃ­nimos necessÃ¡rios para comeÃ§ar.
+Na primeira interação, o sistema não conhece nada sobre a usuária. O ideal é pedir apenas os dados mínimos necessários para começar.
 
-## Dados obrigatÃ³rios iniciais
+## Dados obrigatórios iniciais
 
-### Nome de exibiÃ§Ã£o
+### Nome de exibição
 
 ```txt
 Como devo te chamar?
@@ -181,27 +181,27 @@ Exemplo salvo:
 
 ---
 
-### ConfirmaÃ§Ã£o de idade
+### Confirmação de idade
 
-Por se tratar de saÃºde e vida sexual, o ideal Ã© confirmar se a usuÃ¡ria tem 18 anos ou mais.
+Por se tratar de saúde e vida sexual, o ideal é confirmar se a usuária tem 18 anos ou mais.
 
 ```txt
-VocÃª tem 18 anos ou mais?
+Você tem 18 anos ou mais?
 1. Sim
-2. NÃ£o
+2. Não
 ```
 
 Isso pode ser importante para reduzir riscos legais e de responsabilidade.
 
 ---
 
-### Ãšltima menstruaÃ§Ã£o
+### Última menstruação
 
-Este Ã© um dos dados mais importantes para iniciar os cÃ¡lculos.
+Este é um dos dados mais importantes para iniciar os cálculos.
 
 ```txt
-Qual foi o primeiro dia da sua Ãºltima menstruaÃ§Ã£o?
-Pode responder tipo: "comeÃ§ou dia 10/04" ou "nÃ£o lembro".
+Qual foi o primeiro dia da sua última menstruação?
+Pode responder tipo: "começou dia 10/04" ou "não lembro".
 ```
 
 Exemplo salvo:
@@ -214,14 +214,14 @@ Exemplo salvo:
 
 ---
 
-### DuraÃ§Ã£o mÃ©dia do ciclo
+### Duração média do ciclo
 
 ```txt
 Seu ciclo costuma ter quantos dias?
-Se nÃ£o souber, posso comeÃ§ar usando 28 dias e ir ajustando com o tempo.
+Se não souber, posso começar usando 28 dias e ir ajustando com o tempo.
 ```
 
-O sistema nÃ£o deve limitar apenas a 27, 28, 29, 30 ou 31 dias. O ideal Ã© aceitar uma faixa razoÃ¡vel, por exemplo, 21 a 45 dias, e tratar valores fora disso com cuidado.
+O sistema não deve limitar apenas a 27, 28, 29, 30 ou 31 dias. O ideal é aceitar uma faixa razoável, por exemplo, 21 a 45 dias, e tratar valores fora disso com cuidado.
 
 Exemplo salvo:
 
@@ -233,10 +233,10 @@ Exemplo salvo:
 
 ---
 
-### DuraÃ§Ã£o mÃ©dia da menstruaÃ§Ã£o
+### Duração média da menstruação
 
 ```txt
-Sua menstruaÃ§Ã£o costuma durar quantos dias?
+Sua menstruação costuma durar quantos dias?
 ```
 
 Exemplo salvo:
@@ -254,15 +254,15 @@ Exemplo salvo:
 ### Uso de anticoncepcional
 
 ```txt
-VocÃª usa anticoncepcional hormonal?
+Você usa anticoncepcional hormonal?
 
-1. NÃ£o
-2. PÃ­lula
-3. InjeÃ§Ã£o
+1. Não
+2. Pílula
+3. Injeção
 4. DIU hormonal
 5. Implante
 6. Outro
-7. Prefiro nÃ£o informar
+7. Prefiro não informar
 ```
 
 Exemplo salvo:
@@ -279,12 +279,12 @@ Exemplo salvo:
 ### Lembretes
 
 ```txt
-VocÃª quer receber lembretes?
+Você quer receber lembretes?
 
-1. Sim, sobre prÃ³xima menstruaÃ§Ã£o
+1. Sim, sobre próxima menstruação
 2. Sim, para registrar sintomas
 3. Sim, para anticoncepcional
-4. NÃ£o quero lembretes
+4. Não quero lembretes
 ```
 
 Exemplo salvo:
@@ -301,15 +301,15 @@ Exemplo salvo:
 ## Fluxo completo sugerido de primeira conversa
 
 ```txt
-Oi! Eu sou sua assistente de ciclo pelo WhatsApp ðŸŒ™
+Oi! Eu sou sua assistente de ciclo pelo WhatsApp 🌙
 
-Antes de comeÃ§ar: eu posso te ajudar a registrar menstruaÃ§Ã£o, sintomas, lembretes e histÃ³rico. NÃ£o substituo orientaÃ§Ã£o mÃ©dica e nÃ£o faÃ§o diagnÃ³sticos.
+Antes de começar: eu posso te ajudar a registrar menstruação, sintomas, lembretes e histórico. Não substituo orientação médica e não faço diagnósticos.
 
-Para continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saÃºde menstrual.
+Para continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saúde menstrual.
 
-VocÃª aceita?
+Você aceita?
 1. Aceito
-2. NÃ£o aceito
+2. Não aceito
 ```
 
 ```txt
@@ -317,35 +317,35 @@ Como devo te chamar?
 ```
 
 ```txt
-VocÃª tem 18 anos ou mais?
+Você tem 18 anos ou mais?
 1. Sim
-2. NÃ£o
+2. Não
 ```
 
 ```txt
-Qual foi o primeiro dia da sua Ãºltima menstruaÃ§Ã£o?
-Pode responder tipo: "comeÃ§ou dia 10/04" ou "nÃ£o lembro".
+Qual foi o primeiro dia da sua última menstruação?
+Pode responder tipo: "começou dia 10/04" ou "não lembro".
 ```
 
 ```txt
 Seu ciclo costuma ter quantos dias?
-Se nÃ£o souber, posso comeÃ§ar usando 28 dias e ir ajustando com o tempo.
+Se não souber, posso começar usando 28 dias e ir ajustando com o tempo.
 ```
 
 ```txt
-Sua menstruaÃ§Ã£o costuma durar quantos dias?
+Sua menstruação costuma durar quantos dias?
 ```
 
 ```txt
-Pronto âœ…
+Pronto ✅
 
-Agora vocÃª pode me mandar coisas como:
+Agora você pode me mandar coisas como:
 
 "menstruei hoje"
 "acabou ontem"
-"tÃ´ com cÃ³lica forte"
-"tive relaÃ§Ã£o dia 20"
-"quando Ã© minha prÃ³xima menstruaÃ§Ã£o?"
+"tô com cólica forte"
+"tive relação dia 20"
+"quando é minha próxima menstruação?"
 ```
 
 ---
@@ -354,7 +354,7 @@ Agora vocÃª pode me mandar coisas como:
 
 O ciclo menstrual deve ser a entidade central do sistema.
 
-Um ciclo comeÃ§a quando a usuÃ¡ria registra o inÃ­cio da menstruaÃ§Ã£o.
+Um ciclo começa quando a usuária registra o início da menstruação.
 
 Exemplo de ciclo:
 
@@ -369,7 +369,7 @@ Exemplo de ciclo:
 }
 ```
 
-## Status possÃ­veis do ciclo
+## Status possíveis do ciclo
 
 ```txt
 ongoing
@@ -385,9 +385,9 @@ unknown
 
 # 3. Event log
 
-Em vez de salvar tudo diretamente em campos fixos no ciclo, Ã© melhor criar um registro de eventos.
+Em vez de salvar tudo diretamente em campos fixos no ciclo, é melhor criar um registro de eventos.
 
-Isso torna o sistema mais flexÃ­vel e auditÃ¡vel.
+Isso torna o sistema mais flexível e auditável.
 
 Exemplo de evento:
 
@@ -424,11 +424,11 @@ note
 
 ---
 
-# 4. Registro de menstruaÃ§Ã£o
+# 4. Registro de menstruação
 
-## InÃ­cio da menstruaÃ§Ã£o
+## Início da menstruação
 
-UsuÃ¡ria envia:
+Usuária envia:
 
 ```txt
 menstruei hoje
@@ -446,16 +446,16 @@ O sistema interpreta:
 Resposta sugerida:
 
 ```txt
-Registrei o inÃ­cio da sua menstruaÃ§Ã£o hoje âœ…
+Registrei o início da sua menstruação hoje ✅
 
-Como estÃ¡ o fluxo?
+Como está o fluxo?
 1. Leve
-2. MÃ©dio
+2. Médio
 3. Intenso
-4. Prefiro nÃ£o informar
+4. Prefiro não informar
 ```
 
-UsuÃ¡ria responde:
+Usuária responde:
 
 ```txt
 2
@@ -477,7 +477,7 @@ Evento salvo:
 
 ## Intensidade do fluxo
 
-Valores possÃ­veis:
+Valores possíveis:
 
 ```txt
 light
@@ -486,46 +486,46 @@ intense
 unknown
 ```
 
-RepresentaÃ§Ã£o amigÃ¡vel:
+Representação amigável:
 
 ```txt
 leve
-mÃ©dio
+médio
 intenso
-prefiro nÃ£o informar
+prefiro não informar
 ```
 
-A usuÃ¡ria pode atualizar o fluxo durante a menstruaÃ§Ã£o:
+A usuária pode atualizar o fluxo durante a menstruação:
 
 ```txt
-hoje tÃ¡ bem forte
+hoje tá bem forte
 ```
 
 O sistema registra um novo `flow_update`.
 
-Para o MVP, a regra mais simples Ã©:
+Para o MVP, a regra mais simples é:
 
-> **1 intensidade por dia. Se a usuÃ¡ria atualizar no mesmo dia, sobrescreve a intensidade daquele dia.**
+> **1 intensidade por dia. Se a usuária atualizar no mesmo dia, sobrescreve a intensidade daquele dia.**
 
 Exemplo de resposta:
 
 ```txt
-VocÃª jÃ¡ registrou fluxo mÃ©dio para hoje.
+Você já registrou fluxo médio para hoje.
 Quer alterar para intenso?
 ```
 
 Se confirmar:
 
 ```txt
-Atualizado âœ…
+Atualizado ✅
 Hoje ficou registrado como fluxo intenso.
 ```
 
 ---
 
-## Fim da menstruaÃ§Ã£o
+## Fim da menstruação
 
-UsuÃ¡ria envia:
+Usuária envia:
 
 ```txt
 parou hoje
@@ -534,7 +534,7 @@ parou hoje
 ou:
 
 ```txt
-minha menstruaÃ§Ã£o acabou ontem
+minha menstruação acabou ontem
 ```
 
 O sistema interpreta:
@@ -546,7 +546,7 @@ O sistema interpreta:
 }
 ```
 
-AtualizaÃ§Ã£o do ciclo:
+Atualização do ciclo:
 
 ```json
 {
@@ -558,32 +558,32 @@ AtualizaÃ§Ã£o do ciclo:
 Resposta sugerida:
 
 ```txt
-Registrei que sua menstruaÃ§Ã£o terminou em 23/04 âœ…
+Registrei que sua menstruação terminou em 23/04 ✅
 
 Ela durou 5 dias neste ciclo.
-Com base nisso, sua prÃ³xima menstruaÃ§Ã£o estÃ¡ prevista para perto de 22/05.
+Com base nisso, sua próxima menstruação está prevista para perto de 22/05.
 ```
 
 Sempre usar linguagem de estimativa:
 
 ```txt
-estÃ¡ prevista para perto de...
+está prevista para perto de...
 pode acontecer por volta de...
-pela sua mÃ©dia atual...
+pela sua média atual...
 ```
 
 Evitar:
 
 ```txt
 vai descer no dia...
-com certeza serÃ¡ em...
+com certeza será em...
 ```
 
 ---
 
 # 5. Atraso menstrual
 
-O atraso nÃ£o precisa ser um evento manual salvo como fonte de verdade.
+O atraso não precisa ser um evento manual salvo como fonte de verdade.
 
 Ele pode ser calculado automaticamente:
 
@@ -602,41 +602,41 @@ Exemplo:
 }
 ```
 
-UsuÃ¡ria pergunta:
+Usuária pergunta:
 
 ```txt
-minha menstruaÃ§Ã£o estÃ¡ atrasada?
+minha menstruação está atrasada?
 ```
 
 Resposta sugerida:
 
 ```txt
-Pela sua previsÃ£o atual, sua menstruaÃ§Ã£o estÃ¡ cerca de 2 dias atrasada.
+Pela sua previsão atual, sua menstruação está cerca de 2 dias atrasada.
 
-Isso pode acontecer por vÃ¡rios motivos, como variaÃ§Ã£o natural do ciclo, estresse, alteraÃ§Ãµes de rotina ou outros fatores. Se houver chance de gravidez ou sintomas preocupantes, o ideal Ã© fazer um teste ou procurar orientaÃ§Ã£o mÃ©dica.
+Isso pode acontecer por vários motivos, como variação natural do ciclo, estresse, alterações de rotina ou outros fatores. Se houver chance de gravidez ou sintomas preocupantes, o ideal é fazer um teste ou procurar orientação médica.
 ```
 
-Se a usuÃ¡ria mandar:
+Se a usuária mandar:
 
 ```txt
-tÃ´ atrasada e com cÃ³lica
+tô atrasada e com cólica
 ```
 
 Isso pode virar um evento do tipo `symptom` ou `note`, mas o atraso em si deve continuar sendo calculado pelo sistema.
 
 ---
 
-# 6. RelaÃ§Ã£o sexual
+# 6. Relação sexual
 
-Esse dado Ã© bastante sensÃ­vel. Deve ser opcional e tratado com cautela.
+Esse dado é bastante sensível. Deve ser opcional e tratado com cautela.
 
 Uso principal:
 
-- HistÃ³rico pessoal da usuÃ¡ria.
-- Responder perguntas como â€œquando foi minha Ãºltima relaÃ§Ã£o?â€.
-- Exibir eventos no calendÃ¡rio pessoal.
+- Histórico pessoal da usuária.
+- Responder perguntas como “quando foi minha última relação?”.
+- Exibir eventos no calendário pessoal.
 
-NÃ£o usar para diagnÃ³stico automÃ¡tico.
+Não usar para diagnóstico automático.
 
 Exemplo de evento:
 
@@ -651,7 +651,7 @@ Exemplo de evento:
 }
 ```
 
-Campos possÃ­veis:
+Campos possíveis:
 
 ```txt
 date
@@ -672,21 +672,21 @@ Para MVP, simplificar:
 Resposta segura:
 
 ```txt
-Registrei a relaÃ§Ã£o em 20/04 âœ…
+Registrei a relação em 20/04 ✅
 
-Esse dado fica salvo apenas para seu histÃ³rico. Eu nÃ£o uso isso para afirmar gravidez ou diagnÃ³stico.
+Esse dado fica salvo apenas para seu histórico. Eu não uso isso para afirmar gravidez ou diagnóstico.
 ```
 
 ---
 
 # 7. Sintomas
 
-Sintomas sÃ£o uma parte importante do valor percebido do produto.
+Sintomas são uma parte importante do valor percebido do produto.
 
-UsuÃ¡ria envia:
+Usuária envia:
 
 ```txt
-tive cÃ³lica forte hoje
+tive cólica forte hoje
 ```
 
 Evento salvo:
@@ -702,21 +702,21 @@ Evento salvo:
 }
 ```
 
-## Sintomas Ãºteis para comeÃ§ar
+## Sintomas úteis para começar
 
 ```txt
-cÃ³lica
-dor de cabeÃ§a
-nÃ¡usea
+cólica
+dor de cabeça
+náusea
 sensibilidade nos seios
-inchaÃ§o
+inchaço
 acne
 dor lombar
-sangramento fora do perÃ­odo
+sangramento fora do período
 corrimento
-alteraÃ§Ã£o de humor
-cansaÃ§o
-insÃ´nia
+alteração de humor
+cansaço
+insônia
 desejo alimentar
 ```
 
@@ -728,12 +728,12 @@ moderado
 forte
 ```
 
-Exemplo de interpretaÃ§Ã£o por IA:
+Exemplo de interpretação por IA:
 
-UsuÃ¡ria:
+Usuária:
 
 ```txt
-hoje tÃ´ com uma cÃ³lica absurda
+hoje tô com uma cólica absurda
 ```
 
 JSON interpretado:
@@ -749,12 +749,12 @@ JSON interpretado:
 
 # 8. Humor e bem-estar
 
-TambÃ©m pode gerar valor, sem necessariamente entrar em diagnÃ³stico.
+Também pode gerar valor, sem necessariamente entrar em diagnóstico.
 
-UsuÃ¡ria envia:
+Usuária envia:
 
 ```txt
-hoje tÃ´ irritada
+hoje tô irritada
 ```
 
 Evento salvo:
@@ -769,61 +769,61 @@ Evento salvo:
 }
 ```
 
-OpÃ§Ãµes iniciais:
+Opções iniciais:
 
 ```txt
 irritada
 triste
 ansiosa
 bem
-sensÃ­vel
+sensível
 cansada
 com energia
 ```
 
-Resposta futura possÃ­vel:
+Resposta futura possível:
 
 ```txt
-Nos Ãºltimos 3 ciclos, vocÃª registrou irritaÃ§Ã£o perto do inÃ­cio da menstruaÃ§Ã£o.
+Nos últimos 3 ciclos, você registrou irritação perto do início da menstruação.
 ```
 
 Melhor ainda:
 
 ```txt
-Parece haver um padrÃ£o nos seus registros de humor perto do inÃ­cio da menstruaÃ§Ã£o.
+Parece haver um padrão nos seus registros de humor perto do início da menstruação.
 ```
 
-Evitar linguagem diagnÃ³stica:
+Evitar linguagem diagnóstica:
 
 ```txt
-VocÃª tem TPM forte.
+Você tem TPM forte.
 ```
 
 ---
 
 # 9. Gravidez
 
-RecomendaÃ§Ã£o: deixar para uma versÃ£o 2.
+Recomendação: deixar para uma versão 2.
 
-O modo gravidez Ã© Ãºtil, mas aumenta a responsabilidade do produto.
+O modo gravidez é útil, mas aumenta a responsabilidade do produto.
 
-Se a usuÃ¡ria disser:
+Se a usuária disser:
 
 ```txt
-descobri que estou grÃ¡vida
+descobri que estou grávida
 ```
 
 Resposta sugerida:
 
 ```txt
-ParabÃ©ns pela notÃ­cia ðŸ’›
+Parabéns pela notícia 💛
 
-Para eu organizar seu acompanhamento, vocÃª sabe alguma dessas informaÃ§Ãµes?
+Para eu organizar seu acompanhamento, você sabe alguma dessas informações?
 
-1. Data da Ãºltima menstruaÃ§Ã£o
+1. Data da última menstruação
 2. Quantas semanas de gravidez
-3. Data provÃ¡vel do parto
-4. Ainda nÃ£o sei
+3. Data provável do parto
+4. Ainda não sei
 ```
 
 Exemplo de estrutura:
@@ -850,7 +850,7 @@ pregnancy_note
 
 Exemplo de sangramento na gravidez:
 
-UsuÃ¡ria:
+Usuária:
 
 ```txt
 tive sangramento hoje
@@ -861,78 +861,78 @@ Resposta segura:
 ```txt
 Registrei o sangramento de hoje.
 
-Sangramentos na gravidez podem ter vÃ¡rias causas, algumas simples e outras que precisam de avaliaÃ§Ã£o. Como vocÃª estÃ¡ grÃ¡vida, Ã© mais seguro entrar em contato com seu mÃ©dico/obstetra, especialmente se o sangramento for intenso, vier com dor forte, tontura, febre ou mal-estar.
+Sangramentos na gravidez podem ter várias causas, algumas simples e outras que precisam de avaliação. Como você está grávida, é mais seguro entrar em contato com seu médico/obstetra, especialmente se o sangramento for intenso, vier com dor forte, tontura, febre ou mal-estar.
 ```
 
-Esse tipo de resposta deve ser guardrail fixo, nÃ£o apenas IA solta.
+Esse tipo de resposta deve ser guardrail fixo, não apenas IA solta.
 
 ---
 
-# 10. CÃ¡lculos do sistema
+# 10. Cálculos do sistema
 
 Com os dados registrados, o sistema pode calcular:
 
 ```txt
-prÃ³xima menstruaÃ§Ã£o prevista
+próxima menstruação prevista
 dias de atraso
-duraÃ§Ã£o mÃ©dia do ciclo
-duraÃ§Ã£o mÃ©dia da menstruaÃ§Ã£o
-variaÃ§Ã£o dos ciclos
-Ãºltima menstruaÃ§Ã£o
-Ãºltima relaÃ§Ã£o registrada
+duração média do ciclo
+duração média da menstruação
+variação dos ciclos
+última menstruação
+última relação registrada
 sintomas mais frequentes
-intensidade mÃ©dia do fluxo
-eventos por mÃªs
-possÃ­vel janela fÃ©rtil estimada
-data provÃ¡vel do parto, se grÃ¡vida
-idade gestacional estimada, se grÃ¡vida
+intensidade média do fluxo
+eventos por mês
+possível janela fértil estimada
+data provável do parto, se grávida
+idade gestacional estimada, se grávida
 ```
 
-## Cuidados com janela fÃ©rtil
+## Cuidados com janela fértil
 
-Se exibir janela fÃ©rtil, usar sempre como estimativa.
+Se exibir janela fértil, usar sempre como estimativa.
 
 Mensagem recomendada:
 
 ```txt
-Essa Ã© apenas uma estimativa baseada nos seus registros. Ela nÃ£o deve ser usada como mÃ©todo contraceptivo.
+Essa é apenas uma estimativa baseada nos seus registros. Ela não deve ser usada como método contraceptivo.
 ```
 
 ---
 
-# 11. Respostas que o bot nÃ£o deve dar
+# 11. Respostas que o bot não deve dar
 
 O sistema deve bloquear ou redirecionar respostas como:
 
 ```txt
-VocÃª estÃ¡ grÃ¡vida.
-VocÃª nÃ£o estÃ¡ grÃ¡vida.
-VocÃª estÃ¡ com infecÃ§Ã£o.
-VocÃª tem endometriose.
-Pode ter relaÃ§Ã£o sem proteÃ§Ã£o hoje.
-VocÃª estÃ¡ no perÃ­odo seguro.
-NÃ£o precisa procurar mÃ©dico.
-Esse sangramento Ã© normal.
+Você está grávida.
+Você não está grávida.
+Você está com infecção.
+Você tem endometriose.
+Pode ter relação sem proteção hoje.
+Você está no período seguro.
+Não precisa procurar médico.
+Esse sangramento é normal.
 ```
 
-Resposta segura padrÃ£o:
+Resposta segura padrão:
 
 ```txt
-NÃ£o consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnÃ³stico ou decisÃ£o mÃ©dica o ideal Ã© procurar um profissional de saÃºde.
+Não consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnóstico ou decisão médica o ideal é procurar um profissional de saúde.
 ```
 
 ---
 
 # 12. Papel do Gemini / IA
 
-A IA deve ser usada em pontos especÃ­ficos.
+A IA deve ser usada em pontos específicos.
 
-## 1. InterpretaÃ§Ã£o da mensagem
+## 1. Interpretação da mensagem
 
-UsuÃ¡ria:
+Usuária:
 
 ```txt
-desceu ontem e hoje tÃ¡ vindo muito
+desceu ontem e hoje tá vindo muito
 ```
 
 Gemini retorna:
@@ -950,9 +950,9 @@ Gemini retorna:
 
 ---
 
-## 2. HumanizaÃ§Ã£o da resposta
+## 2. Humanização da resposta
 
-Sistema determinÃ­stico decide:
+Sistema determinístico decide:
 
 ```json
 {
@@ -965,24 +965,24 @@ Sistema determinÃ­stico decide:
 Gemini transforma em:
 
 ```txt
-Registrei que sua menstruaÃ§Ã£o comeÃ§ou ontem, 23/04, com fluxo intenso âœ…
-Vou considerar esse como o inÃ­cio do seu ciclo atual.
+Registrei que sua menstruação começou ontem, 23/04, com fluxo intenso ✅
+Vou considerar esse como o início do seu ciclo atual.
 ```
 
 ---
 
 ## 3. Perguntas gerais seguras
 
-UsuÃ¡ria:
+Usuária:
 
 ```txt
-Ã© normal atrasar 2 dias?
+é normal atrasar 2 dias?
 ```
 
-Resposta possÃ­vel:
+Resposta possível:
 
 ```txt
-Um atraso pequeno pode acontecer por variaÃ§Ãµes naturais do ciclo, estresse, sono, rotina, uso de medicamentos e outros fatores. Se houver chance de gravidez, vale considerar um teste. Se o atraso persistir, vier com dor forte, sangramento intenso ou outros sintomas preocupantes, procure orientaÃ§Ã£o mÃ©dica.
+Um atraso pequeno pode acontecer por variações naturais do ciclo, estresse, sono, rotina, uso de médicamentos e outros fatores. Se houver chance de gravidez, vale considerar um teste. Se o atraso persistir, vier com dor forte, sangramento intenso ou outros sintomas preocupantes, procure orientação médica.
 ```
 
 ---
@@ -1068,27 +1068,27 @@ Um atraso pequeno pode acontecer por variaÃ§Ãµes naturais do ciclo, estresse
 
 ---
 
-# 14. Arquitetura lÃ³gica
+# 14. Arquitetura lógica
 
 Fluxo geral:
 
 ```txt
 WhatsApp
-  â†“
+  ↓
 Parser com IA ou regras
-  â†“
-Validador de seguranÃ§a
-  â†“
+  ↓
+Validador de segurança
+  ↓
 Motor de eventos
-  â†“
+  ↓
 Banco de dados
-  â†“
-Motor de cÃ¡lculo
-  â†“
-Resposta determinÃ­stica
-  â†“
+  ↓
+Motor de cálculo
+  ↓
+Resposta determinística
+  ↓
 Gemini humaniza
-  â†“
+  ↓
 WhatsApp
 ```
 
@@ -1096,13 +1096,13 @@ WhatsApp
 
 ### WhatsApp API
 
-ResponsÃ¡vel por receber e enviar mensagens.
+Responsável por receber e enviar mensagens.
 
 Pode ser implementado com:
 
 - WhatsApp Cloud API oficial.
 - Z-API.
-- Outro provedor compatÃ­vel.
+- Outro provedor compatível.
 
 ---
 
@@ -1136,23 +1136,23 @@ acabou ontem
 
 ---
 
-### Validador de seguranÃ§a
+### Validador de segurança
 
 Antes de salvar ou responder, verifica:
 
-- A usuÃ¡ria existe?
-- EstÃ¡ com assinatura ativa?
+- A usuária existe?
+- Está com assinatura ativa?
 - Deu consentimento?
-- A mensagem envolve risco mÃ©dico?
-- Deve bloquear diagnÃ³stico?
-- Deve orientar procurar mÃ©dico?
-- EstÃ¡ em rate limit?
+- A mensagem envolve risco médico?
+- Deve bloquear diagnóstico?
+- Deve orientar procurar médico?
+- Está em rate limit?
 
 ---
 
 ### Motor de eventos
 
-Transforma intenÃ§Ãµes em eventos persistidos.
+Transforma intenções em eventos persistidos.
 
 Exemplo:
 
@@ -1165,21 +1165,21 @@ Exemplo:
 
 ---
 
-### Motor de cÃ¡lculo
+### Motor de cálculo
 
-Calcula previsÃµes e mÃ©tricas:
+Calcula previsões e métricas:
 
-- PrÃ³xima menstruaÃ§Ã£o.
+- Próxima menstruação.
 - Atraso.
-- DuraÃ§Ã£o mÃ©dia.
-- PadrÃµes de sintomas.
-- HistÃ³rico.
+- Duração média.
+- Padrões de sintomas.
+- Histórico.
 
 ---
 
 ### Camada de resposta
 
-Gera uma resposta base determinÃ­stica e, se necessÃ¡rio, manda para IA humanizar.
+Gera uma resposta base determinística e, se necessário, manda para IA humanizar.
 
 ---
 
@@ -1190,25 +1190,25 @@ Para evitar abuso e custo excessivo:
 - Limitar mensagens por minuto.
 - Limitar mensagens por dia.
 - Detectar spam.
-- Timeout temporÃ¡rio.
-- NÃ£o chamar IA para toda mensagem simples.
+- Timeout temporário.
+- Não chamar IA para toda mensagem simples.
 
 Exemplo de regra:
 
 ```txt
-5 mensagens em menos de 10 segundos = timeout temporÃ¡rio
+5 mensagens em menos de 10 segundos = timeout temporário
 ```
 
 Resposta:
 
 ```txt
-Recebi muitas mensagens em sequÃªncia. Vou pausar por alguns minutos para evitar erros no registro. Daqui a pouco vocÃª pode continuar normalmente.
+Recebi muitas mensagens em sequência. Vou pausar por alguns minutos para evitar erros no registro. Daqui a pouco você pode continuar normalmente.
 ```
 
 Para casos mais agressivos:
 
 ```txt
-Detectei muitas mensagens em pouco tempo. Por seguranÃ§a, sua conversa ficarÃ¡ pausada atÃ© amanhÃ£.
+Detectei muitas mensagens em pouco tempo. Por segurança, sua conversa ficará pausada até amanhã.
 ```
 
 ---
@@ -1220,39 +1220,39 @@ Detectei muitas mensagens em pouco tempo. Por seguranÃ§a, sua conversa ficarÃ
 ```txt
 cadastro por WhatsApp
 consentimento
-inÃ­cio da menstruaÃ§Ã£o
-fim da menstruaÃ§Ã£o
+início da menstruação
+fim da menstruação
 intensidade do fluxo
 sintomas
-previsÃ£o da prÃ³xima menstruaÃ§Ã£o
+previsão da próxima menstruação
 atraso calculado
-perguntas simples sobre histÃ³rico
+perguntas simples sobre histórico
 ```
 
 ## Opcional no MVP
 
 ```txt
-relaÃ§Ã£o sexual
+relação sexual
 lembretes
 anticoncepcional
 humor
 ```
 
-## Deixar para versÃ£o 2
+## Deixar para versão 2
 
 ```txt
 modo gravidez
-relatÃ³rios avanÃ§ados
-janela fÃ©rtil
-parceiro/mÃ©dico
-exportaÃ§Ã£o PDF
-integraÃ§Ã£o com calendÃ¡rio
-painel web avanÃ§ado
+relatórios avançados
+janela fértil
+parceiro/médico
+exportação PDF
+integração com calendário
+painel web avançado
 ```
 
 ---
 
-# 17. Landing page â€” posicionamento sugerido
+# 17. Landing page — posicionamento sugerido
 
 ## Proposta de valor
 
@@ -1269,46 +1269,46 @@ Seu ciclo, registrado em uma conversa simples.
 ## Subheadline
 
 ```txt
-Anote menstruaÃ§Ã£o, sintomas, fluxo e lembretes direto pelo WhatsApp. Simples, discreto e fÃ¡cil de manter no dia a dia.
+Anote menstruação, sintomas, fluxo e lembretes direto pelo WhatsApp. Simples, discreto e fácil de manter no dia a dia.
 ```
 
-## BenefÃ­cios principais
+## Benefícios principais
 
 ```txt
-NÃ£o precisa lembrar de abrir app
+Não precisa lembrar de abrir app
 Registre tudo por mensagem
-Receba previsÃµes e lembretes
-Consulte seu histÃ³rico quando quiser
-Sem diagnÃ³sticos, sem complicaÃ§Ã£o
+Receba previsões e lembretes
+Consulte seu histórico quando quiser
+Sem diagnósticos, sem complicação
 Privacidade e controle dos seus dados
 ```
 
 ## Exemplos para mostrar na LP
 
 ```txt
-VocÃª: menstruei hoje
-Bot: Registrei o inÃ­cio da sua menstruaÃ§Ã£o hoje âœ… Como estÃ¡ o fluxo?
+Você: menstruei hoje
+Bot: Registrei o início da sua menstruação hoje ✅ Como está o fluxo?
 ```
 
 ```txt
-VocÃª: tÃ´ com cÃ³lica forte
-Bot: Registrei cÃ³lica forte para hoje. Espero que vocÃª fique melhor ðŸ’›
+Você: tô com cólica forte
+Bot: Registrei cólica forte para hoje. Espero que você fique melhor 💛
 ```
 
 ```txt
-VocÃª: quando Ã© minha prÃ³xima menstruaÃ§Ã£o?
-Bot: Pela sua mÃ©dia atual, ela estÃ¡ prevista para perto de 22/05.
+Você: quando é minha próxima menstruação?
+Bot: Pela sua média atual, ela está prevista para perto de 22/05.
 ```
 
-## Aviso de seguranÃ§a na LP
+## Aviso de segurança na LP
 
 ```txt
-Este sistema ajuda vocÃª a organizar seus registros pessoais de ciclo menstrual. Ele nÃ£o substitui orientaÃ§Ã£o mÃ©dica e nÃ£o realiza diagnÃ³sticos.
+Este sistema ajuda você a organizar seus registros pessoais de ciclo menstrual. Ele não substitui orientação médica e não realiza diagnósticos.
 ```
 
 ---
 
-# 18. PossÃ­veis nomes de produto
+# 18. Possíveis nomes de produto
 
 Ideias iniciais:
 
@@ -1319,7 +1319,7 @@ Meu Ciclo Zap
 CicloZap
 Lua
 Lunari
-Ciclo FÃ¡cil
+Ciclo Fácil
 Ciclo no Zap
 MinaCiclo
 Clara Ciclo
@@ -1331,16 +1331,16 @@ Clara Ciclo
 
 A ideia tem potencial porque resolve um problema simples e real:
 
-> Aplicativos de ciclo dependem da usuÃ¡ria lembrar de abrir o app. O WhatsApp jÃ¡ faz parte da rotina.
+> Aplicativos de ciclo dependem da usuária lembrar de abrir o app. O WhatsApp já faz parte da rotina.
 
-A estratÃ©gia ideal Ã© comeÃ§ar pequeno:
+A estratégia ideal é começar pequeno:
 
-1. Registrar menstruaÃ§Ã£o.
-2. Registrar fim da menstruaÃ§Ã£o.
+1. Registrar menstruação.
+2. Registrar fim da menstruação.
 3. Registrar fluxo.
 4. Registrar sintomas.
-5. Calcular prÃ³xima menstruaÃ§Ã£o.
-6. Responder histÃ³rico bÃ¡sico.
+5. Calcular próxima menstruação.
+6. Responder histórico básico.
 7. Usar IA apenas para entender mensagens naturais e humanizar respostas.
 
 Depois, evoluir para:
@@ -1348,9 +1348,9 @@ Depois, evoluir para:
 - Lembretes.
 - Anticoncepcional.
 - Humor.
-- RelaÃ§Ã£o sexual.
+- Relação sexual.
 - Modo gravidez.
-- RelatÃ³rios.
+- Relatórios.
 - Painel web.
 
-O principal cuidado Ã© nÃ£o transformar o bot em mÃ©dico. O produto deve ser um **organizador pessoal de ciclo menstrual por WhatsApp**, nÃ£o uma ferramenta de diagnÃ³stico.
+O principal cuidado é não transformar o bot em médico. O produto deve ser um **organizador pessoal de ciclo menstrual por WhatsApp**, não uma ferramenta de diagnóstico.

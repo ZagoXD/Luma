@@ -35,6 +35,14 @@ public sealed class ConversationServiceTests
     }
 
     [Fact]
+    public void Portuguese_reply_polisher_handles_common_remaining_backend_phrases()
+    {
+        var reply = PortugueseReplyPolisher.Apply("Pela sua previsao atual, sua proxima menstruacao esta cerca de 2 dias atrasada. Isso e so uma estimativa. O ideal e procurar orientacao medica com seguranca.");
+
+        Assert.Equal("Pela sua previsão atual, sua próxima menstruação está cerca de 2 dias atrasada. Isso é só uma estimativa. O ideal é procurar orientação médica com segurança.", reply);
+    }
+
+    [Fact]
     public async Task Name_step_discards_unsafe_ai_age_inference()
     {
         await using var db = CreateDbContext();
@@ -183,7 +191,7 @@ public sealed class ConversationServiceTests
 
         var reply = await SendAsync(service, "+5516992000065", "Ola");
 
-        Assert.Contains("você aceita", MessageText.Normalize(reply));
+        Assert.Contains("voce aceita", MessageText.Normalize(reply));
         Assert.Empty(responseGenerator.Requests);
     }
 
@@ -197,7 +205,7 @@ public sealed class ConversationServiceTests
         responseGenerator.Requests.Clear();
         var reply = await SendAsync(service, "+5516992000061", "Estou gravida?");
 
-        Assert.Contains("não consigo confirmar", MessageText.Normalize(reply));
+        Assert.Contains("nao consigo confirmar", MessageText.Normalize(reply));
         Assert.Empty(responseGenerator.Requests);
     }
 
@@ -254,7 +262,7 @@ public sealed class ConversationServiceTests
         Assert.Equal(OnboardingSteps.AwaitingDisplayName, user.OnboardingStep);
         Assert.Equal(ConversationIntents.PeriodStart, pending.Intent);
         Assert.Equal(new DateOnly(2026, 4, 25), pending.Date);
-        Assert.Contains("ja vi que você quer registrar o inicio da menstruacao hoje", MessageText.Normalize(pendingReply));
+        Assert.Contains("ja vi que voce quer registrar o inicio da menstruacao hoje", MessageText.Normalize(pendingReply));
         Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id).ToListAsync());
 
         await SendAsync(service, phone, "Julia");
@@ -264,7 +272,7 @@ public sealed class ConversationServiceTests
         await SendAsync(service, phone, "5 dias");
         var completedReply = await SendAsync(service, phone, "Prefiro não informar");
 
-        Assert.Contains("você tinha me contado que sua menstruacao comecou hoje", MessageText.Normalize(completedReply));
+        Assert.Contains("voce tinha me contado que sua menstruacao comecou hoje", MessageText.Normalize(completedReply));
         Assert.Contains("quer que eu registre isso agora", MessageText.Normalize(completedReply));
         Assert.Empty(await db.CycleEvents.Where(ev => ev.UserId == user.Id).ToListAsync());
 
@@ -456,7 +464,7 @@ public sealed class ConversationServiceTests
         var metadata = JsonDocument.Parse(ev.MetadataJson).RootElement;
         Assert.Equal(new DateOnly(2026, 4, 20), ev.Date);
         Assert.Equal("yes", metadata.GetProperty("protected").GetString());
-        Assert.Contains("não uso isso para afirmar gravidez", MessageText.Normalize(reply));
+        Assert.Contains("nao uso isso para afirmar gravidez", MessageText.Normalize(reply));
     }
 
     [Fact]
@@ -494,9 +502,9 @@ public sealed class ConversationServiceTests
 
     [Theory]
     [InlineData("quando e minha proxima menstruacao?", "prevista para perto de 23/05")]
-    [InlineData("minha menstruacao esta atrasada?", "ainda não parece atrasada")]
+    [InlineData("minha menstruacao esta atrasada?", "ainda nao parece atrasada")]
     [InlineData("quando foi minha ultima menstruacao?", "ultima menstruacao registrada foi em 25/04")]
-    [InlineData("qual foi meu ultimo sintoma registrado?", "ainda não tenho sintomas registrados")]
+    [InlineData("qual foi meu ultimo sintoma registrado?", "ainda nao tenho sintomas registrados")]
     public async Task Completed_user_answers_basic_history_and_calculation_questions(string question, string expected)
     {
         await using var db = CreateDbContext();
@@ -576,7 +584,7 @@ public sealed class ConversationServiceTests
 
         var reply = await SendAsync(service, "+5516992000028", message);
 
-        Assert.Contains("não consigo confirmar", MessageText.Normalize(reply));
+        Assert.Contains("nao consigo confirmar", MessageText.Normalize(reply));
         Assert.Equal(beforeCount, await db.CycleEvents.CountAsync());
     }
 
@@ -592,7 +600,7 @@ public sealed class ConversationServiceTests
         Assert.Contains("sou a luma", normalized);
         Assert.Contains("ciclo menstrual", normalized);
         Assert.Contains("gravidez", normalized);
-        Assert.Contains("não faco diagnosticos", normalized);
+        Assert.Contains("nao faco diagnosticos", normalized);
     }
 
     [Fact]
@@ -604,7 +612,7 @@ public sealed class ConversationServiceTests
         var reply = await SendAsync(service, "+5516992000041", "Qual investimento devo comprar hoje?");
 
         var normalized = MessageText.Normalize(reply);
-        Assert.Contains("não posso opinar sobre isso", normalized);
+        Assert.Contains("nao posso opinar sobre isso", normalized);
         Assert.Contains("ciclo menstrual", normalized);
     }
 
