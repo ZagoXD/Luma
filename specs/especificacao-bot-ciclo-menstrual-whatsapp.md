@@ -1,1356 +1,203 @@
-# Especificação inicial — Bot de Ciclo Menstrual pelo WhatsApp
+# Especificação do Bot Luma para WhatsApp
 
-> Atualização de escopo para V1.0.0 - 2026-04-28
->
-> O núcleo transacional da Luma já contempla cadastro, ciclo menstrual, relação sexual, gravidez, histórico básico e guardrails principais. Para a primeira versão de produção, a Luma não deve ser apenas um fluxo fixo de perguntas e respostas. Ela deve evoluir para uma assistente conversacional com orquestração de IA, RAG e tools/MCP controladas pelo backend.
->
-> Regra central atualizada:
->
-> **O backend decide. A IA entende, conversa e escreve.**
->
-> A IA pode interpretar mensagens fora de ordem, consultar conhecimento seguro, sugerir chamadas de ferramentas e humanizar respostas. O backend continua sendo a fonte de verdade para consentimento, LGPD, regras médicas, cálculos, persistência e validação de segurança.
+Última atualização: 30/04/2026.
 
----
+## Objetivo
 
-## Atualização V1.0.0 - Luma como assistente inteligente
+A Luma é uma assistente de WhatsApp para apoio ao acompanhamento de ciclo menstrual, sintomas, humor, relação sexual registrada e gravidez. Ela conversa de forma acolhedora, organiza registros e responde perguntas dentro do escopo permitido, sempre deixando claro que não substitui orientação médica e não realiza diagnóstico.
 
-Para fechar a V1.0.0, a Luma deve lidar com situações em que a usuária não segue o fluxo esperado.
+## Princípios do Produto
 
-Exemplo:
+- Conversa natural em PT-BR, com tom humano, cuidadoso e acolhedor.
+- Backend autoritativo: a IA interpreta intenções, mas não grava dados diretamente.
+- Dados sensíveis tratados com consentimento, mínimo necessário e sem salvar corpo das mensagens por padrão.
+- Guardrails fixos para temas médicos, LGPD, privacidade, menores de idade e conversas fora de escopo.
+- Usuárias só podem conversar pelo WhatsApp se tiverem plano ativo ou cancelado ainda dentro do período pago.
 
-```txt
-Estado atual: aguardando nome da usuária
-Usuária: menstruei hoje
-```
-
-Comportamento esperado:
-
-```txt
-Entendi. Já vi que você quer registrar que sua menstruação começou hoje.
-Antes disso, preciso terminar seu cadastro rapidinho para salvar tudo certinho e com segurança.
-Como devo te chamar?
-```
-
-Depois do cadastro:
-
-```txt
-Você tinha me contado que menstruou hoje. Quer que eu registre isso agora?
-```
-
-Se a usuária confirmar, o backend registra o evento.
-
-Isso exige:
-
-- memória de intenção pendente;
-- interpretação contextual;
-- confirmação antes de gravar dados sensíveis fora do fluxo esperado;
-- RAG para respostas educativas e institucionais;
-- tools/MCP para leitura e escrita controladas;
-- backend autoritativo;
-- guardrails fixos para LGPD e saúde.
-
-Fluxo alvo:
-
-```txt
-Mensagem da usuária
-  ->
-IA interpreta intenção, contexto e estado atual
-  ->
-Backend valida segurança, consentimento e regras de negócio
-  ->
-Backend executa tools autorizadas
-  ->
-RAG fornece conteúdo seguro quando necessário
-  ->
-IA escreve resposta acolhedora
-  ->
-WhatsApp
-```
-
-Essa camada inteligente é considerada parte obrigatória da V1.0.0.
-
----
-
-## Visão geral
-
-A ideia é criar um SaaS simples e acessível, baseado em WhatsApp, para ajudar mulheres a registrarem informações do ciclo menstrual sem precisar abrir um aplicativo específico todos os dias.
-
-O diferencial central do produto é:
-
-> **Um app de ciclo que você não precisa lembrar de abrir.**
-
-A usuária interage naturalmente pelo WhatsApp, enviando mensagens como:
-
-```txt
-menstruei hoje
-acabou ontem
-tô com cólica forte
-tive relação dia 20
-quando é minha próxima menstruação?
-```
-
-O sistema interpreta essas mensagens, registra os eventos, calcula previsões e responde de forma humanizada.
-
-A IA, como Gemini, não deve ser o “cérebro médico” do produto. Ela deve atuar principalmente como camada de interpretação e humanização.
-
-Regra de ouro:
-
-> **O sistema decide. A IA escreve.**
-
----
-
-## Objetivo do produto
-
-Permitir que a usuária registre e consulte dados relacionados ao ciclo menstrual por meio de uma conversa no WhatsApp.
-
-O sistema deve ajudar com:
-
-- Registro de início e fim da menstruação.
-- Registro de intensidade do fluxo.
-- Registro de sintomas.
-- Registro opcional de humor e bem-estar.
-- Cálculo aproximado da próxima menstruação.
-- Cálculo de atraso menstrual.
-- Consulta ao histórico.
-- Lembretes opcionais.
-- Registro opcional de relação sexual.
-- Futuramente, modo gravidez.
-
-O sistema **não deve**:
-
-- Fazer diagnóstico médico.
-- Confirmar ou descartar gravidez.
-- Dizer que um sangramento é normal ou seguro.
-- Substituir orientação médica.
-- Incentivar uso de janela fértil como método contraceptivo.
-
----
-
-## Atenção legal e LGPD
-
-Dados de menstruação, sintomas, gravidez, relação sexual, anticoncepcional e saúde reprodutiva são dados pessoais sensíveis.
-
-Desde o MVP, o produto deve considerar:
-
-- Consentimento explícito e destacado.
-- Política de privacidade simples e clara.
-- Termo informando que o sistema não substitui profissional de saúde.
-- Opção de apagar conta e dados.
-- Opção de exportar dados.
-- Criptografia de dados sensíveis no banco.
-- Controle rigoroso de acesso.
-- Logs sem conteúdo sensível sempre que possível.
-- Cuidado especial com menores de idade.
-- Restrição de respostas médicas/diagnósticas.
-
-Mensagem inicial recomendada:
-
-```txt
-Oi! Eu sou sua assistente de ciclo pelo WhatsApp 🌙
-
-Antes de começar: eu posso te ajudar a registrar menstruação, sintomas, lembretes e histórico. Não substituo orientação médica e não faço diagnósticos.
-
-Para continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saúde menstrual.
-
-Você aceita?
-1. Aceito
-2. Não aceito
-```
-
----
-
-# 1. Onboarding da usuária
-
-Na primeira interação, o sistema não conhece nada sobre a usuária. O ideal é pedir apenas os dados mínimos necessários para começar.
-
-## Dados obrigatórios iniciais
-
-### Nome de exibição
-
-```txt
-Como devo te chamar?
-```
-
-Exemplo salvo:
-
-```json
-{
-  "display_name": "Nay"
-}
-```
-
----
-
-### Confirmação de idade
-
-Por se tratar de saúde e vida sexual, o ideal é confirmar se a usuária tem 18 anos ou mais.
-
-```txt
-Você tem 18 anos ou mais?
-1. Sim
-2. Não
-```
-
-Isso pode ser importante para reduzir riscos legais e de responsabilidade.
-
----
-
-### Última menstruação
-
-Este é um dos dados mais importantes para iniciar os cálculos.
-
-```txt
-Qual foi o primeiro dia da sua última menstruação?
-Pode responder tipo: "começou dia 10/04" ou "não lembro".
-```
-
-Exemplo salvo:
-
-```json
-{
-  "last_period_start_date": "2026-04-10"
-}
-```
-
----
-
-### Duração média do ciclo
-
-```txt
-Seu ciclo costuma ter quantos dias?
-Se não souber, posso começar usando 28 dias e ir ajustando com o tempo.
-```
-
-O sistema não deve limitar apenas a 27, 28, 29, 30 ou 31 dias. O ideal é aceitar uma faixa razoável, por exemplo, 21 a 45 dias, e tratar valores fora disso com cuidado.
-
-Exemplo salvo:
-
-```json
-{
-  "average_cycle_length": 28
-}
-```
-
----
-
-### Duração média da menstruação
-
-```txt
-Sua menstruação costuma durar quantos dias?
-```
-
-Exemplo salvo:
-
-```json
-{
-  "average_period_length": 5
-}
-```
-
----
-
-## Dados opcionais do onboarding
-
-### Uso de anticoncepcional
-
-```txt
-Você usa anticoncepcional hormonal?
-
-1. Não
-2. Pílula
-3. Injeção
-4. DIU hormonal
-5. Implante
-6. Outro
-7. Prefiro não informar
-```
-
-Exemplo salvo:
-
-```json
-{
-  "uses_hormonal_contraceptive": true,
-  "contraceptive_type": "pill"
-}
-```
-
----
-
-### Lembretes
-
-```txt
-Você quer receber lembretes?
-
-1. Sim, sobre próxima menstruação
-2. Sim, para registrar sintomas
-3. Sim, para anticoncepcional
-4. Não quero lembretes
-```
-
-Exemplo salvo:
-
-```json
-{
-  "reminders_enabled": true,
-  "reminder_types": ["next_period", "symptoms"]
-}
-```
-
----
-
-## Fluxo completo sugerido de primeira conversa
-
-```txt
-Oi! Eu sou sua assistente de ciclo pelo WhatsApp 🌙
-
-Antes de começar: eu posso te ajudar a registrar menstruação, sintomas, lembretes e histórico. Não substituo orientação médica e não faço diagnósticos.
-
-Para continuar, preciso do seu consentimento para armazenar dados relacionados ao seu ciclo, sintomas e saúde menstrual.
-
-Você aceita?
-1. Aceito
-2. Não aceito
-```
-
-```txt
-Como devo te chamar?
-```
-
-```txt
-Você tem 18 anos ou mais?
-1. Sim
-2. Não
-```
-
-```txt
-Qual foi o primeiro dia da sua última menstruação?
-Pode responder tipo: "começou dia 10/04" ou "não lembro".
-```
-
-```txt
-Seu ciclo costuma ter quantos dias?
-Se não souber, posso começar usando 28 dias e ir ajustando com o tempo.
-```
-
-```txt
-Sua menstruação costuma durar quantos dias?
-```
-
-```txt
-Pronto ✅
-
-Agora você pode me mandar coisas como:
-
-"menstruei hoje"
-"acabou ontem"
-"tô com cólica forte"
-"tive relação dia 20"
-"quando é minha próxima menstruação?"
-```
-
----
-
-# 2. Modelo principal: ciclo menstrual
-
-O ciclo menstrual deve ser a entidade central do sistema.
-
-Um ciclo começa quando a usuária registra o início da menstruação.
-
-Exemplo de ciclo:
-
-```json
-{
-  "id": "cycle_123",
-  "user_id": "user_123",
-  "start_date": "2026-04-24",
-  "end_date": null,
-  "status": "ongoing",
-  "predicted_next_period_date": "2026-05-22"
-}
-```
-
-## Status possíveis do ciclo
-
-```txt
-ongoing
-finished
-unknown
-```
-
-- `ongoing`: ciclo atual em andamento.
-- `finished`: ciclo encerrado.
-- `unknown`: dados insuficientes ou inconsistentes.
-
----
-
-# 3. Event log
-
-Em vez de salvar tudo diretamente em campos fixos no ciclo, é melhor criar um registro de eventos.
-
-Isso torna o sistema mais flexível e auditável.
-
-Exemplo de evento:
-
-```json
-{
-  "id": "event_123",
-  "user_id": "user_123",
-  "cycle_id": "cycle_123",
-  "type": "period_start",
-  "date": "2026-04-24",
-  "metadata": {
-    "flow_intensity": "medium",
-    "notes": null
-  }
-}
-```
-
-## Tipos iniciais de eventos
-
-```txt
-period_start
-period_end
-flow_update
-symptom
-mood
-sexual_activity
-contraceptive_taken
-contraceptive_missed
-pregnancy_positive
-pregnancy_bleeding
-pregnancy_symptom
-note
-```
-
----
-
-# 4. Registro de menstruação
-
-## Início da menstruação
-
-Usuária envia:
-
-```txt
-menstruei hoje
-```
-
-O sistema interpreta:
-
-```json
-{
-  "intent": "period_start",
-  "date": "2026-04-24"
-}
-```
-
-Resposta sugerida:
-
-```txt
-Registrei o início da sua menstruação hoje ✅
-
-Como está o fluxo?
-1. Leve
-2. Médio
-3. Intenso
-4. Prefiro não informar
-```
-
-Usuária responde:
-
-```txt
-2
-```
-
-Evento salvo:
-
-```json
-{
-  "type": "flow_update",
-  "date": "2026-04-24",
-  "metadata": {
-    "flow_intensity": "medium"
-  }
-}
-```
-
----
-
-## Intensidade do fluxo
-
-Valores possíveis:
-
-```txt
-light
-medium
-intense
-unknown
-```
-
-Representação amigável:
-
-```txt
-leve
-médio
-intenso
-prefiro não informar
-```
-
-A usuária pode atualizar o fluxo durante a menstruação:
-
-```txt
-hoje tá bem forte
-```
-
-O sistema registra um novo `flow_update`.
-
-Para o MVP, a regra mais simples é:
-
-> **1 intensidade por dia. Se a usuária atualizar no mesmo dia, sobrescreve a intensidade daquele dia.**
-
-Exemplo de resposta:
-
-```txt
-Você já registrou fluxo médio para hoje.
-Quer alterar para intenso?
-```
-
-Se confirmar:
-
-```txt
-Atualizado ✅
-Hoje ficou registrado como fluxo intenso.
-```
-
----
-
-## Fim da menstruação
-
-Usuária envia:
-
-```txt
-parou hoje
-```
-
-ou:
-
-```txt
-minha menstruação acabou ontem
-```
-
-O sistema interpreta:
-
-```json
-{
-  "intent": "period_end",
-  "date": "2026-04-23"
-}
-```
-
-Atualização do ciclo:
-
-```json
-{
-  "end_date": "2026-04-23",
-  "status": "finished"
-}
-```
-
-Resposta sugerida:
-
-```txt
-Registrei que sua menstruação terminou em 23/04 ✅
-
-Ela durou 5 dias neste ciclo.
-Com base nisso, sua próxima menstruação está prevista para perto de 22/05.
-```
-
-Sempre usar linguagem de estimativa:
-
-```txt
-está prevista para perto de...
-pode acontecer por volta de...
-pela sua média atual...
-```
-
-Evitar:
-
-```txt
-vai descer no dia...
-com certeza será em...
-```
-
----
-
-# 5. Atraso menstrual
-
-O atraso não precisa ser um evento manual salvo como fonte de verdade.
-
-Ele pode ser calculado automaticamente:
-
-```txt
-expected_period_date = last_period_start + average_cycle_length
-delay_days = today - expected_period_date
-```
-
-Exemplo:
-
-```json
-{
-  "expected_period_date": "2026-04-22",
-  "today": "2026-04-24",
-  "delay_days": 2
-}
-```
-
-Usuária pergunta:
-
-```txt
-minha menstruação está atrasada?
-```
-
-Resposta sugerida:
-
-```txt
-Pela sua previsão atual, sua menstruação está cerca de 2 dias atrasada.
-
-Isso pode acontecer por vários motivos, como variação natural do ciclo, estresse, alterações de rotina ou outros fatores. Se houver chance de gravidez ou sintomas preocupantes, o ideal é fazer um teste ou procurar orientação médica.
-```
-
-Se a usuária mandar:
-
-```txt
-tô atrasada e com cólica
-```
-
-Isso pode virar um evento do tipo `symptom` ou `note`, mas o atraso em si deve continuar sendo calculado pelo sistema.
-
----
-
-# 6. Relação sexual
-
-Esse dado é bastante sensível. Deve ser opcional e tratado com cautela.
-
-Uso principal:
-
-- Histórico pessoal da usuária.
-- Responder perguntas como “quando foi minha última relação?”.
-- Exibir eventos no calendário pessoal.
-
-Não usar para diagnóstico automático.
-
-Exemplo de evento:
-
-```json
-{
-  "type": "sexual_activity",
-  "date": "2026-04-20",
-  "metadata": {
-    "protected": "unknown",
-    "notes": null
-  }
-}
-```
-
-Campos possíveis:
-
-```txt
-date
-protected: yes/no/unknown/prefer_not_say
-contraceptive_method: condom/pill/other/unknown
-notes
-```
-
-Para MVP, simplificar:
-
-```json
-{
-  "date": "2026-04-20",
-  "type": "sexual_activity"
-}
-```
-
-Resposta segura:
-
-```txt
-Registrei a relação em 20/04 ✅
-
-Esse dado fica salvo apenas para seu histórico. Eu não uso isso para afirmar gravidez ou diagnóstico.
-```
-
----
-
-# 7. Sintomas
+## Fluxo Atual de Mensagem
 
-Sintomas são uma parte importante do valor percebido do produto.
-
-Usuária envia:
-
-```txt
-tive cólica forte hoje
-```
-
-Evento salvo:
-
-```json
-{
-  "type": "symptom",
-  "date": "2026-04-24",
-  "metadata": {
-    "symptom": "cramp",
-    "intensity": "strong"
-  }
-}
-```
-
-## Sintomas úteis para começar
-
-```txt
-cólica
-dor de cabeça
-náusea
-sensibilidade nos seios
-inchaço
-acne
-dor lombar
-sangramento fora do período
-corrimento
-alteração de humor
-cansaço
-insônia
-desejo alimentar
-```
-
-## Intensidade
-
-```txt
-leve
-moderado
-forte
-```
-
-Exemplo de interpretação por IA:
-
-Usuária:
-
-```txt
-hoje tô com uma cólica absurda
-```
-
-JSON interpretado:
-
-```json
-{
-  "symptom": "cramp",
-  "intensity": "strong"
-}
-```
-
----
-
-# 8. Humor e bem-estar
-
-Também pode gerar valor, sem necessariamente entrar em diagnóstico.
-
-Usuária envia:
-
-```txt
-hoje tô irritada
-```
-
-Evento salvo:
-
-```json
-{
-  "type": "mood",
-  "date": "2026-04-24",
-  "metadata": {
-    "mood": "irritable"
-  }
-}
-```
-
-Opções iniciais:
-
-```txt
-irritada
-triste
-ansiosa
-bem
-sensível
-cansada
-com energia
-```
-
-Resposta futura possível:
-
-```txt
-Nos últimos 3 ciclos, você registrou irritação perto do início da menstruação.
-```
-
-Melhor ainda:
-
-```txt
-Parece haver um padrão nos seus registros de humor perto do início da menstruação.
-```
-
-Evitar linguagem diagnóstica:
-
-```txt
-Você tem TPM forte.
-```
-
----
-
-# 9. Gravidez
-
-Recomendação: deixar para uma versão 2.
-
-O modo gravidez é útil, mas aumenta a responsabilidade do produto.
-
-Se a usuária disser:
-
-```txt
-descobri que estou grávida
-```
-
-Resposta sugerida:
-
-```txt
-Parabéns pela notícia 💛
-
-Para eu organizar seu acompanhamento, você sabe alguma dessas informações?
-
-1. Data da última menstruação
-2. Quantas semanas de gravidez
-3. Data provável do parto
-4. Ainda não sei
-```
-
-Exemplo de estrutura:
-
-```json
-{
-  "pregnancy_status": "pregnant",
-  "pregnancy_start_reference": "last_period",
-  "last_period_date": "2026-03-01",
-  "estimated_due_date": "2026-12-06"
-}
-```
-
-## Eventos de gravidez
-
-```txt
-pregnancy_positive
-pregnancy_bleeding
-pregnancy_symptom
-prenatal_appointment
-ultrasound
-pregnancy_note
-```
-
-Exemplo de sangramento na gravidez:
-
-Usuária:
-
-```txt
-tive sangramento hoje
-```
-
-Resposta segura:
-
-```txt
-Registrei o sangramento de hoje.
-
-Sangramentos na gravidez podem ter várias causas, algumas simples e outras que precisam de avaliação. Como você está grávida, é mais seguro entrar em contato com seu médico/obstetra, especialmente se o sangramento for intenso, vier com dor forte, tontura, febre ou mal-estar.
-```
-
-Esse tipo de resposta deve ser guardrail fixo, não apenas IA solta.
-
----
-
-# 10. Cálculos do sistema
-
-Com os dados registrados, o sistema pode calcular:
-
-```txt
-próxima menstruação prevista
-dias de atraso
-duração média do ciclo
-duração média da menstruação
-variação dos ciclos
-última menstruação
-última relação registrada
-sintomas mais frequentes
-intensidade média do fluxo
-eventos por mês
-possível janela fértil estimada
-data provável do parto, se grávida
-idade gestacional estimada, se grávida
-```
-
-## Cuidados com janela fértil
-
-Se exibir janela fértil, usar sempre como estimativa.
-
-Mensagem recomendada:
-
-```txt
-Essa é apenas uma estimativa baseada nos seus registros. Ela não deve ser usada como método contraceptivo.
-```
-
----
-
-# 11. Respostas que o bot não deve dar
-
-O sistema deve bloquear ou redirecionar respostas como:
-
-```txt
-Você está grávida.
-Você não está grávida.
-Você está com infecção.
-Você tem endometriose.
-Pode ter relação sem proteção hoje.
-Você está no período seguro.
-Não precisa procurar médico.
-Esse sangramento é normal.
-```
-
-Resposta segura padrão:
-
-```txt
-Não consigo confirmar isso por aqui. Posso te ajudar a organizar seus registros, mas para diagnóstico ou decisão médica o ideal é procurar um profissional de saúde.
-```
-
----
-
-# 12. Papel do Gemini / IA
-
-A IA deve ser usada em pontos específicos.
-
-## 1. Interpretação da mensagem
-
-Usuária:
-
-```txt
-desceu ontem e hoje tá vindo muito
-```
-
-Gemini retorna:
-
-```json
-{
-  "intent": "period_start",
-  "date": "2026-04-23",
-  "entities": {
-    "flow_intensity": "intense"
-  },
-  "confidence": 0.92
-}
-```
-
----
-
-## 2. Humanização da resposta
-
-Sistema determinístico decide:
-
-```json
-{
-  "action": "period_start_created",
-  "date": "2026-04-23",
-  "flow": "intense"
-}
-```
-
-Gemini transforma em:
-
-```txt
-Registrei que sua menstruação começou ontem, 23/04, com fluxo intenso ✅
-Vou considerar esse como o início do seu ciclo atual.
-```
-
----
-
-## 3. Perguntas gerais seguras
-
-Usuária:
-
-```txt
-é normal atrasar 2 dias?
-```
-
-Resposta possível:
-
-```txt
-Um atraso pequeno pode acontecer por variações naturais do ciclo, estresse, sono, rotina, uso de médicamentos e outros fatores. Se houver chance de gravidez, vale considerar um teste. Se o atraso persistir, vier com dor forte, sangramento intenso ou outros sintomas preocupantes, procure orientação médica.
-```
-
----
-
-# 13. Modelo de dados inicial
-
-## users
-
-```json
-{
-  "id": "user_123",
-  "phone": "+5516999999999",
-  "display_name": "Nay",
-  "birth_year": 1998,
-  "is_adult_confirmed": true,
-  "created_at": "2026-04-24T20:00:00Z"
-}
-```
-
----
-
-## user_preferences
-
-```json
-{
-  "user_id": "user_123",
-  "average_cycle_length": 28,
-  "average_period_length": 5,
-  "uses_hormonal_contraceptive": false,
-  "reminders_enabled": true,
-  "language": "pt-BR"
-}
-```
-
----
-
-## cycles
-
-```json
-{
-  "id": "cycle_123",
-  "user_id": "user_123",
-  "start_date": "2026-04-24",
-  "end_date": null,
-  "status": "ongoing",
-  "cycle_number": 4
-}
-```
-
----
-
-## events
-
-```json
-{
-  "id": "event_123",
-  "user_id": "user_123",
-  "cycle_id": "cycle_123",
-  "type": "flow_update",
-  "date": "2026-04-24",
-  "source": "whatsapp",
-  "metadata": {
-    "flow_intensity": "medium"
-  },
-  "created_at": "2026-04-24T20:10:00Z"
-}
-```
-
----
-
-## pregnancies
-
-```json
-{
-  "id": "pregnancy_123",
-  "user_id": "user_123",
-  "status": "active",
-  "last_period_date": "2026-03-01",
-  "estimated_due_date": "2026-12-06",
-  "created_at": "2026-04-24T20:00:00Z"
-}
-```
-
----
-
-# 14. Arquitetura lógica
-
-Fluxo geral:
-
-```txt
-WhatsApp
-  ↓
-Parser com IA ou regras
-  ↓
-Validador de segurança
-  ↓
-Motor de eventos
-  ↓
-Banco de dados
-  ↓
-Motor de cálculo
-  ↓
-Resposta determinística
-  ↓
-Gemini humaniza
-  ↓
-WhatsApp
-```
-
-## Componentes
-
-### WhatsApp API
-
-Responsável por receber e enviar mensagens.
-
-Pode ser implementado com:
-
-- WhatsApp Cloud API oficial.
-- Z-API.
-- Outro provedor compatível.
-
----
-
-### Parser
-
-Interpreta mensagens naturais.
-
-Exemplos:
-
-```txt
-menstruei hoje
-```
-
-```json
-{
-  "intent": "period_start",
-  "date": "today"
-}
-```
-
-```txt
-acabou ontem
-```
-
-```json
-{
-  "intent": "period_end",
-  "date": "yesterday"
-}
-```
-
----
-
-### Validador de segurança
-
-Antes de salvar ou responder, verifica:
-
-- A usuária existe?
-- Está com assinatura ativa?
-- Deu consentimento?
-- A mensagem envolve risco médico?
-- Deve bloquear diagnóstico?
-- Deve orientar procurar médico?
-- Está em rate limit?
-
----
-
-### Motor de eventos
-
-Transforma intenções em eventos persistidos.
-
-Exemplo:
-
-```json
-{
-  "type": "period_start",
-  "date": "2026-04-24"
-}
-```
-
----
-
-### Motor de cálculo
-
-Calcula previsões e métricas:
-
-- Próxima menstruação.
-- Atraso.
-- Duração média.
-- Padrões de sintomas.
-- Histórico.
-
----
-
-### Camada de resposta
-
-Gera uma resposta base determinística e, se necessário, manda para IA humanizar.
-
----
-
-# 15. Rate limit e anti-spam
-
-Para evitar abuso e custo excessivo:
-
-- Limitar mensagens por minuto.
-- Limitar mensagens por dia.
-- Detectar spam.
-- Timeout temporário.
-- Não chamar IA para toda mensagem simples.
-
-Exemplo de regra:
-
-```txt
-5 mensagens em menos de 10 segundos = timeout temporário
-```
-
-Resposta:
-
-```txt
-Recebi muitas mensagens em sequência. Vou pausar por alguns minutos para evitar erros no registro. Daqui a pouco você pode continuar normalmente.
-```
-
-Para casos mais agressivos:
-
-```txt
-Detectei muitas mensagens em pouco tempo. Por segurança, sua conversa ficará pausada até amanhã.
-```
-
----
-
-# 16. MVP recomendado
-
-## Essencial para o MVP
-
-```txt
-cadastro por WhatsApp
-consentimento
-início da menstruação
-fim da menstruação
-intensidade do fluxo
-sintomas
-previsão da próxima menstruação
-atraso calculado
-perguntas simples sobre histórico
-```
-
-## Opcional no MVP
-
-```txt
-relação sexual
-lembretes
-anticoncepcional
-humor
-```
-
-## Deixar para versão 2
-
-```txt
-modo gravidez
-relatórios avançados
-janela fértil
-parceiro/médico
-exportação PDF
-integração com calendário
-painel web avançado
-```
-
----
-
-# 17. Landing page — posicionamento sugerido
-
-## Proposta de valor
-
-```txt
-Controle seu ciclo pelo WhatsApp, sem precisar abrir mais um aplicativo.
-```
-
-## Headline alternativa
-
-```txt
-Seu ciclo, registrado em uma conversa simples.
-```
-
-## Subheadline
-
-```txt
-Anote menstruação, sintomas, fluxo e lembretes direto pelo WhatsApp. Simples, discreto e fácil de manter no dia a dia.
-```
-
-## Benefícios principais
-
-```txt
-Não precisa lembrar de abrir app
-Registre tudo por mensagem
-Receba previsões e lembretes
-Consulte seu histórico quando quiser
-Sem diagnósticos, sem complicação
-Privacidade e controle dos seus dados
-```
-
-## Exemplos para mostrar na LP
-
-```txt
-Você: menstruei hoje
-Bot: Registrei o início da sua menstruação hoje ✅ Como está o fluxo?
-```
-
-```txt
-Você: tô com cólica forte
-Bot: Registrei cólica forte para hoje. Espero que você fique melhor 💛
-```
-
 ```txt
-Você: quando é minha próxima menstruação?
-Bot: Pela sua média atual, ela está prevista para perto de 22/05.
+WhatsApp/Twilio
+  -> Webhook da API
+  -> Bloqueio defensivo de grupos
+  -> Deduplicação por MessageSid
+  -> Rate limit/cooldown por telefone
+  -> Lock de processamento por telefone
+  -> Validação de assinatura
+  -> ConversationService
+  -> Agente OpenAI escolhe uma tool
+  -> Backend valida e executa
+  -> OpenAI gera resposta acolhedora quando permitido
+  -> TwiML para Twilio
 ```
-
-## Aviso de segurança na LP
-
-```txt
-Este sistema ajuda você a organizar seus registros pessoais de ciclo menstrual. Ele não substitui orientação médica e não realiza diagnósticos.
-```
-
----
-
-# 18. Possíveis nomes de produto
-
-Ideias iniciais:
-
-```txt
-Cicla
-LunaBot
-Meu Ciclo Zap
-CicloZap
-Lua
-Lunari
-Ciclo Fácil
-Ciclo no Zap
-MinaCiclo
-Clara Ciclo
-```
-
----
-
-# 19. Resumo final
-
-A ideia tem potencial porque resolve um problema simples e real:
-
-> Aplicativos de ciclo dependem da usuária lembrar de abrir o app. O WhatsApp já faz parte da rotina.
-
-A estratégia ideal é começar pequeno:
-
-1. Registrar menstruação.
-2. Registrar fim da menstruação.
-3. Registrar fluxo.
-4. Registrar sintomas.
-5. Calcular próxima menstruação.
-6. Responder histórico básico.
-7. Usar IA apenas para entender mensagens naturais e humanizar respostas.
-
-Depois, evoluir para:
 
-- Lembretes.
-- Anticoncepcional.
-- Humor.
-- Relação sexual.
-- Modo gravidez.
-- Relatórios.
-- Painel web.
+## Cadastro Inicial
+
+O cadastro inicial está implementado e cobre:
+
+1. Consentimento para armazenamento de dados relacionados a ciclo, sintomas e saúde menstrual.
+2. Nome de exibição.
+3. Confirmação de maioridade.
+4. Primeiro dia da última menstruação.
+5. Duração média do ciclo.
+6. Duração média da menstruação.
+7. Método contraceptivo.
 
-O principal cuidado é não transformar o bot em médico. O produto deve ser um **organizador pessoal de ciclo menstrual por WhatsApp**, não uma ferramenta de diagnóstico.
+Durante o cadastro, se a usuária mandar uma intenção fora de ordem, como "menstruei hoje" enquanto a Luma espera o nome, o backend pode salvar uma intenção pendente e retomar depois do cadastro.
+
+## Ciclo Menstrual
+
+Implementado:
+
+- Registro de início de menstruação.
+- Registro de término de menstruação.
+- Registro de fluxo: leve, médio, intenso ou não informado.
+- Registro de sintomas, como cólica, dor, enjoo e outros relatos.
+- Registro de humor.
+- Atualização da duração média da menstruação.
+- Cálculo estimado da próxima menstruação.
+- Cálculo estimado de atraso menstrual.
+- Consulta da última menstruação registrada.
+- Consulta do último sintoma registrado.
+
+Regras:
+
+- Datas relativas e naturais são interpretadas pela IA e validadas pelo backend.
+- Exemplos: "ontem", "anteontem", "há 5 dias", "dia 10", "dia 30 do mês passado".
+- A Luma sempre comunica que previsões são estimativas.
+
+## Relação Sexual
+
+Implementado:
+
+- Registro de relação sexual/intimidade informada pela usuária.
+- Interpretação por IA para variações naturais de linguagem.
+- Consulta da última relação sexual registrada.
+- Registro com proteção informada quando a usuária mencionar.
+
+Guardrail:
+
+- A Luma não calcula "risco seguro" de gravidez, não confirma gravidez e não substitui orientação médica.
+
+## Gravidez
+
+Implementado:
+
+- Início de modo gravidez quando a usuária informa teste positivo ou gravidez.
+- Registro de referência da gravidez:
+  - data da última menstruação;
+  - semanas de gestação;
+  - data provável do parto;
+  - "ainda não sei".
+- Estimativa de semanas e data provável do parto quando houver dados suficientes.
+- Registro de sangramento na gravidez com orientação segura.
+- Registro de sintomas de gravidez.
+- Registro de consulta pré-natal.
+- Registro de ultrassom.
+
+Guardrails:
+
+- A Luma não confirma se a usuária está grávida.
+- A Luma não diz se sangramento é normal.
+- A Luma orienta buscar médico/obstetra em sinais de alerta.
+
+## Inteligência Conversacional
+
+Estado atual:
+
+- A Luma usa OpenAI como motor principal de IA.
+- Ollama foi removido do projeto.
+- O backend expõe tools internas em estilo agente.
+- A IA escolhe uma tool e o backend valida a execução.
+- RAG interno simples é usado com a base `LumaKnowledgeBase`.
+
+Tools principais:
+
+- `complete_onboarding_step`
+- `save_pending_intent`
+- `record_period_start`
+- `record_period_end`
+- `record_flow_update`
+- `record_symptom`
+- `record_mood`
+- `record_sexual_activity`
+- `start_pregnancy_mode`
+- `record_pregnancy_bleeding`
+- `record_pregnancy_symptom`
+- `record_prenatal_appointment`
+- `record_ultrasound`
+- `calculate_next_period`
+- `calculate_delay`
+- `get_last_period`
+- `get_last_symptom`
+- `get_last_sexual_activity`
+- `get_notification_preferences`
+- `update_notification_preferences`
+- `disable_notification_preferences`
+- `search_luma_knowledge_base`
+- `medical_guardrail`
+- `out_of_scope`
+
+## Assinaturas
+
+Implementado:
+
+- Pré-cadastro web com autenticação JWT/cookie.
+- Cadastro com e-mail, CPF, nome, senha e celular.
+- Validação e normalização de CPF e celular.
+- Checkout com Stripe Elements.
+- Planos:
+  - Luma Básico: R$ 5,90/mês.
+  - Luma Essencial: R$ 9,90/mês.
+- Webhooks Stripe para sincronizar assinatura.
+- Cancelamento no fim do período.
+- Retomada de assinatura.
+- Troca de plano.
+- Troca de cartão.
+- Perfil web com dados de conta, plano, dados menstruais e número da Luma.
+
+## Notificações do Plano Essencial
+
+Implementado no backend e na web:
+
+- Preferências de notificação por usuária.
+- Worker de notificações.
+- Registro de entregas.
+- Locks Redis para evitar duplicidade.
+- Painel no perfil web para ativar/desativar lembretes.
+- Tools para IA consultar, ativar, alterar ou desativar lembretes.
+
+Tipos:
+
+- previsão de menstruação amanhã;
+- previsão de menstruação hoje;
+- anticoncepcional diário para pílula;
+- check-in de sintomas/humor.
+
+Status atual:
+
+- Worker deve permanecer desativado até os templates Twilio/Meta serem criados e aprovados.
+- Variável recomendada por enquanto: `Notifications__WorkerEnabled=false`.
+
+## Segurança e Limites
+
+Implementado:
+
+- Usuária menor de 18 anos é bloqueada no WhatsApp.
+- Sem plano ativo, a Luma não responde ao fluxo normal.
+- Bloqueio defensivo para conversas em grupo.
+- Rate limit com Redis e fallback em memória.
+- Deduplicação de webhooks.
+- Corpo de mensagens não é persistido por padrão.
+- Guardrails médicos fixos.
+
+## Fora de Escopo
+
+A Luma deve recusar ou redirecionar quando a usuária pedir:
+
+- diagnóstico;
+- confirmação de gravidez;
+- interpretação de sangramento como normal ou anormal;
+- prescrição ou tratamento;
+- probabilidade médica de gravidez;
+- assuntos fora de ciclo menstrual, gravidez, saúde menstrual, privacidade ou uso da Luma.

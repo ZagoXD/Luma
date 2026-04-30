@@ -1,97 +1,63 @@
-# Proposta de migração da Luma para OpenAI API
+# Proposta e Status da Migração para OpenAI
 
-## Contexto
+Última atualização: 30/04/2026.
 
-Durante os testes pelo WhatsApp/Twilio, o fluxo com OpenAI API funcionou corretamente no backend, mas apresentou latência alta demais para o webhook.
+## Decisão
 
-Exemplo observado em 28/04/2026:
+A Luma passou a usar OpenAI como motor principal de IA em desenvolvimento e produção. A ideia é manter comportamento consistente entre ambientes, reduzir latência imprevisível local e evitar travamentos que aconteceram durante testes com Ollama.
 
-- Usuário enviou: `Aceito sim`
-- Backend chamou `ILumaToolAgent` usando OpenAI API
-- O provedor local respondeu em apróximadamente 16,5 segundos
-- Backend gravou o consentimento e avancou para `awaiting_display_name`
-- Twilio não exibiu a resposta para a usuária, provavelmente por timeout do webhook
+## Status Atual
 
-Ou seja: o sistema processou, mas respondeu tarde demais para uma experiência confiavel no WhatsApp.
+Implementado:
 
-## Diagnóstico
+- OpenAI configurada na API.
+- Ollama removido do projeto e do Docker.
+- Agente de tools com resposta estruturada.
+- Geração de resposta final humanizada pela IA.
+- Backend autoritativo validando todas as ações.
+- RAG interno simples via `LumaKnowledgeBase`.
 
-O problema principal não é apenas "inteligência" do modelo. É a combinação de:
+## Arquitetura Conversacional
 
-- Modelo local pequeno (`gpt-5.4-mini`) com latência variável.
-- Execucao local via Docker/CPU, sem garantia de tempo de resposta.
-- Webhook do Twilio esperando resposta sincrona.
-- Fluxos onde a IA e chamada para interpretar mensagens simples como consentimento.
-- Necessidade de tool calling/JSON confiavel para a Luma agir como agente.
-
-O O provedor local anterior foi removido do projeto para manter paridade entre desenvolvimento e produção com OpenAI API.
-
-## Recomendação
-
-Migrar a camada de IA principal da Luma para a OpenAI API, mantendo sem fallback local de IA.
-
-Modelo recomendado para V1:
-
-- `gpt-5.4-mini` como modelo principal de produção, priorizando latência/custo.
-- `gpt-5.5` como opcional para avaliações, prompts complexos, testes de qualidade e casos que exigirem mais raciocínio.
-- Evitar modelos "pro" no webhook sincrono, porque podem ser mais lentos e caros.
-
-Essa recomendação segue a orientação atual da documentação da OpenAI: a página de modelos indica `gpt-5.5` para raciocínio complexo e `gpt-5.4-mini`/`gpt-5.4-nano` quando o objetivo é menor latência e menor custo.
-
-Referência: https://developers.openai.com/api/docs/models
-
-## Arquitetura proposta
-
-Fluxo de mensagem:
-
-```text
-WhatsApp/Twilio
--> API Luma
--> Guardrails fixos mínimos
--> OpenAI Responses API com tools/structured output
--> Backend valida a ação
--> Backend executa leitura/escrita autorizada
--> OpenAI escreve resposta final quando apropriado
--> Twilio
+```txt
+Mensagem da usuária
+  -> contexto da Luma
+  -> estado atual da usuária
+  -> tools disponíveis
+  -> base RAG relevante
+  -> OpenAI sugere uma ação
+  -> backend valida
+  -> backend executa leitura/escrita autorizada
+  -> OpenAI escreve resposta final quando permitido
+  -> WhatsApp
 ```
 
-O backend continua sendo autoritativo. A IA nunca grava direto no banco.
+## Papel da IA
 
-## O que muda
+A IA pode:
 
-Criar uma abstracao de provedor de IA:
+- interpretar intenção;
+- extrair dados naturais;
+- escolher uma tool;
+- adaptar a resposta ao contexto;
+- consultar conhecimento seguro;
+- responder de forma mais humana.
 
-```text
-ILumaAiProvider
-  - OpenAiLumaAiProvider
-  - OpenAiLumaAiProvider
-```
+A IA não pode:
 
-Configurar via ambiente:
+- gravar direto no banco;
+- ignorar consentimento;
+- confirmar diagnóstico;
+- confirmar gravidez;
+- dizer se sangramento é normal;
+- burlar validações de plano;
+- conversar em grupo;
+- executar ações fora das tools permitidas.
 
-```text
-OPENAI_API_KEY=...
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_REASONING_EFFORT=none
-```
+## Tools Atuais
 
-Manter:
-
-```text
-
-
-
-```
-
-## Tools previstas
-
-A Luma deve usar function/tool calling para solicitar ações, sempre validadas pelo backend:
-
-- `get_user_profile`
-- `get_onboarding_state`
-- `save_pending_intent`
 - `complete_onboarding_step`
+- `save_pending_intent`
 - `record_period_start`
 - `record_period_end`
 - `record_flow_update`
@@ -108,137 +74,32 @@ A Luma deve usar function/tool calling para solicitar ações, sempre validadas 
 - `get_last_period`
 - `get_last_symptom`
 - `get_last_sexual_activity`
+- `get_notification_preferences`
+- `update_notification_preferences`
+- `disable_notification_preferences`
 - `search_luma_knowledge_base`
+- `medical_guardrail`
+- `out_of_scope`
 
-A OpenAI API possui suporte oficial a function calling/tool calling. A documentação descreve essa capacidade como a forma de conectar modelos a dados e ações fornecidas pela aplicação.
+## Variáveis
 
-Referência: https://developers.openai.com/api/docs/guides/function-calling
-
-## Structured Outputs
-
-Para evitar respostas inválidas do tipo JSON quebrado, tool inexistente ou enum inventado, a migração deve usar Structured Outputs sempre que a Luma precisar devolver uma decisão estruturada.
-
-Exemplo de saída esperada da IA:
-
-```json
-{
-  "intent": "complete_onboarding_step",
-  "confidence": 0.94,
-  "tool": {
-    "name": "complete_onboarding_step",
-    "arguments": {
-      "consent_accepted": true
-    }
-  },
-  "final_reply_style": "warm_short"
-}
+```env
+OpenAI__ApiKey=
+OpenAI__BaseUrl=https://api.openai.com/v1
+OpenAI__Model=gpt-5.4-mini
+OpenAI__TimeoutSeconds=12
+OpenAI__MaxOutputTokens=700
+OpenAI__ReasoningEffort=none
 ```
 
-A documentação oficial indica que Structured Outputs garante aderência a um JSON Schema definido pela aplicação, reduzindo erros de formato e valores inesperados.
+## Próximas Melhorias
 
-Referência: https://developers.openai.com/api/docs/guides/structured-outputs
+- Evoluir `LumaKnowledgeBase` para RAG persistido com embeddings.
+- Criar avaliação automática de qualidade das respostas.
+- Adicionar observabilidade de custo/latência por mensagem.
+- Criar suíte de testes de conversas completas com snapshots aprovados.
+- Refinar prompts de identidade e segurança.
 
-## Guardrails que continuam fixos
+## Por Que Não Usar n8n Agora
 
-Mesmo com OpenAI, alguns pontos devem continuar no backend:
-
-- Consentimento LGPD.
-- Bloqueio para menores de 18 anos.
-- Frases de emergência/risco médico.
-- Não afirmar gravidez.
-- Não diagnosticar sangramento, dor, aborto, infecção ou risco fetal.
-- Não executar escrita no banco sem validação.
-- Não aceitar saudação pura como consentimento.
-- Timeouts e fallback.
-
-Isso não é retrocesso para "mensagens chumbadas"; é segurança de produto. A IA interpreta e conversa, mas o backend protege o limite legal/médico.
-
-## Resposta sobre o problema do "Olá" e "Aceito sim"
-
-Migrar para OpenAI deve melhorar bastante:
-
-- Menor latência média em comparação com OpenAI API em CPU/Docker.
-- Melhor interpretação de frases naturais como `Aceito sim`, `claro`, `pode seguir`, `com certeza`.
-- Melhor tool calling e aderência ao schema.
-- Menos necessidade de criar casos manuais para cada frase.
-
-Mas a migração não deve significar "tudo passa pela IA sempre".
-
-Exemplo:
-
-- `Olá` na primeira mensagem pode ser respondido pelo backend imédiatamente com o texto de consentimento.
-- `Aceito sim` pode ir para a IA ou para um classificador rápido, mas com timeout curto.
-- Mensagens ambiguas, fora de ordem ou ricas em contexto devem ir para o agente.
-
-Assim a Luma fica inteligente sem sacrificar a experiência do WhatsApp.
-
-## Plano de implementacao
-
-### Etapa A - Abstracao de provedor
-
-- Criar `ILumaAiProvider`.
-- Migrar chamadas atuais de OpenAI API para uma interface única.
-- Adicionar configuracao por `.env`.
-- Manter OpenAI API funcionando em desenvolvimento.
-
-### Etapa B - OpenAI Responses API
-
-- Implementar `OpenAiLumaAiProvider`.
-- Usar `OPENAI_API_KEY`.
-- Usar `OPENAI_MODEL=gpt-5.4-mini` como padrão.
-- Configurar timeouts curtos para webhook.
-
-### Etapa C - Tool calling real
-
-- Converter `LumaToolAgent` para tools/function calling nativo.
-- Remover dependências de JSON livre quando possível.
-- Validar todos os argumentos no backend antes de executar.
-
-### Etapa D - Structured Outputs
-
-- Definir schema único para decisão da Luma.
-- Criar testes para:
-  - consentimento natural;
-  - nome + idade na mesma frase;
-  - menstruação fora de ordem;
-  - relação sexual fora de ordem;
-  - dúvida de gravidez;
-  - pedido fora do escopo;
-  - mensagem perigosa/médica.
-
-### Etapa E - RAG controlado
-
-- Manter a base RAG local/curada.
-- Passar trechos relevantes no contexto do modelo.
-- Nunca permitir que o modelo invente orientação médica fora da base e dos guardrails.
-
-### Etapa F - Fallback e observabilidade
-
-- Se a OpenAI falhar: fallback para resposta segura ou OpenAI API, dependendo do tipo de mensagem.
-- Logar latência por chamada.
-- Logar tool escolhida, sem armazenar conteúdo sensível além do necessário.
-- Criar metricas:
-  - tempo medio por mensagem;
-  - taxa de timeout;
-  - taxa de fallback;
-  - tools mais usadas;
-  - mensagens não entendidas.
-
-## Riscos
-
-- Custo por token.
-- Dados trafegando para provedor externo, exigindo revisão de política de privacidade/LGPD.
-- Dependência de rede e disponibilidade da API.
-- Necessidade de configurar billing, limites e chave segura.
-
-## Decisão recomendada
-
-Para a V1 de produção/testes reais no WhatsApp, a recomendação é:
-
-- OpenAI API como provedor principal.
-- sem fallback local de IA.
-- Backend autoritativo.
-- Guardrails fixos mínimos.
-- IA responsável por interpretar linguagem natural, chamar tools e humanizar respostas.
-
-Essa combinação deve deixar a Luma mais inteligente e, principalmente, mais previsível para uma experiência real de WhatsApp.
+O n8n não foi adotado na V1 porque a orquestração está fortemente acoplada a regras de saúde, assinatura, privacidade e persistência. Manter a orquestração na API reduz latência, simplifica deploy e mantém o backend como autoridade única.

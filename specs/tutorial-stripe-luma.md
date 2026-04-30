@@ -1,163 +1,166 @@
-# Tutorial Stripe - Assinaturas da Luma
+# Tutorial Stripe da Luma
 
-Este guia explica como configurar a Stripe em modo de teste para os planos da Luma e como validar o pagamento sem cobrança real.
+Última atualização: 30/04/2026.
 
-## 1. Variáveis de ambiente
+## Objetivo
 
-No arquivo `.env`, configure:
+Configurar pagamentos recorrentes da Luma com Stripe Billing e Stripe Elements, começando pelo modo de testes.
+
+## Planos
+
+- Luma Básico: R$ 5,90/mês.
+- Luma Essencial: R$ 9,90/mês.
+
+## O Que Já Está Implementado
+
+- Checkout integrado na aplicação.
+- Stripe Elements embutido na página.
+- Criação de assinatura.
+- Confirmação de pagamento.
+- Webhook Stripe.
+- Cancelamento ao fim do período.
+- Retomada da assinatura.
+- Troca de plano.
+- Troca de cartão.
+- Salvamento do cartão como método padrão da assinatura.
+- Sincronização local de assinatura com `account_subscriptions`.
+
+## Criar Produtos e Preços no Stripe
+
+No Dashboard da Stripe em modo de teste:
+
+1. Acesse **Product catalog**.
+2. Clique em **Add product**.
+3. Crie o produto `Luma Básico`.
+4. Adicione preço recorrente mensal:
+   - moeda: BRL;
+   - valor: 5,90;
+   - intervalo: mensal.
+5. Copie o `price_...`.
+6. Repita para `Luma Essencial` com R$ 9,90/mês.
+
+Variáveis da API:
 
 ```env
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_BASIC_PRICE_ID=price_...
-STRIPE_ESSENTIAL_PRICE_ID=price_...
-STRIPE_WEBHOOK_SECRET=whsec_...
+Stripe__BasicPriceId=price_do_basico
+Stripe__EssentialPriceId=price_do_essencial
 ```
 
-Use sempre chaves `test` enquanto estiver desenvolvendo. As chaves `live` só devem entrar em produção.
+No Docker local, via `.env`:
 
-## 2. Criar produtos e preços na Stripe
+```env
+STRIPE_BASIC_PRICE_ID=price_do_basico
+STRIPE_ESSENTIAL_PRICE_ID=price_do_essencial
+```
 
-A Stripe separa o que você vende em `Product` e quanto/como cobra em `Price`. Para a Luma, crie dois produtos com preço recorrente mensal:
+## Chaves
 
-1. Acesse o Dashboard da Stripe em modo de teste.
-2. Vá em `Product catalog`.
-3. Crie o produto `Luma Básico`.
-4. Adicione um preço recorrente mensal em `BRL`, valor `5,90`.
-5. Copie o ID do preço, algo como `price_...`, para `STRIPE_BASIC_PRICE_ID`.
-6. Crie o produto `Luma Essencial`.
-7. Adicione um preço recorrente mensal em `BRL`, valor `9,90`.
-8. Copie o ID do preço para `STRIPE_ESSENTIAL_PRICE_ID`.
+Modo teste:
 
-O backend também consegue criar preços dinamicamente se esses dois IDs não forem informados, mas para produção é melhor manter IDs fixos no `.env`.
+```env
+Stripe__SecretKey=sk_test_...
+Stripe__PublishableKey=pk_test_...
+```
 
-Referência oficial: https://docs.stripe.com/invoicing/products-prices
+No Docker local:
 
-## 3. Como o checkout funciona
+```env
+STRIPE_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
 
-O checkout é embutido na aplicação com Stripe Elements:
+## Webhook
 
-1. A usuária acessa `/checkout/basico` ou `/checkout/essencial`.
-2. O backend cria ou reutiliza uma `Customer` da Stripe.
-3. O backend cria uma assinatura com pagamento inicial pendente.
-4. A página renderiza o `PaymentElement` usando o `client_secret`.
-5. A Stripe confirma o pagamento no navegador.
-6. O backend valida a assinatura na Stripe e ativa o plano no banco local.
-7. A Luma passa a responder no WhatsApp apenas se o número tiver plano ativo ou cancelado ainda dentro do período pago.
+Endpoint:
 
-Referência oficial do Payment Element: https://docs.stripe.com/payments/accept-a-payment
-
-## 4. Cancelamento
-
-No perfil da usuária, o botão `Cancelar assinatura` chama o backend.
-
-O cancelamento é feito com `cancel_at_period_end=true`, então:
-
-- A assinatura fica cancelada localmente.
-- O acesso continua até o fim do período já pago.
-- Depois da data final, a Luma deixa de responder aquele número.
-
-## 5. Webhooks
-
-A Luma possui o endpoint:
-
-```text
+```txt
 POST /webhooks/stripe
 ```
 
-Em desenvolvimento local, use o Stripe CLI para encaminhar eventos:
+Eventos recomendados:
 
-```powershell
-stripe listen --forward-to localhost:5050/webhooks/stripe
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
+
+Variável:
+
+```env
+Stripe__WebhookSecret=whsec_...
 ```
 
-O comando vai mostrar um `Signing secret`, algo como `whsec_...`. Copie esse valor para:
+No Docker local:
 
 ```env
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-Depois recrie a API:
+## Testar Pagamento
 
-```powershell
-docker compose up -d --build --force-recreate api
+Use cartão de teste:
+
+```txt
+4242 4242 4242 4242
 ```
 
-No Dashboard da Stripe, para produção:
+Dados:
 
-1. Acesse `Developers`.
-2. Abra `Webhooks`.
-3. Clique em `Add endpoint`.
-4. Informe a URL pública da API:
+- validade: qualquer data futura;
+- CVC: qualquer 3 dígitos;
+- nome: qualquer nome;
+- CPF: um CPF válido para o formulário.
 
-```text
-https://seu-dominio.com/webhooks/stripe
-```
+Fluxo:
 
-5. Selecione estes eventos:
-
-```text
-customer.subscription.created
-customer.subscription.updated
-customer.subscription.deleted
-invoice.payment_succeeded
-invoice.payment_failed
-```
-
-6. Depois de criar o endpoint, copie o `Signing secret` de produção para `STRIPE_WEBHOOK_SECRET`.
-
-Esses webhooks sincronizam:
-
-- pagamento inicial confirmado;
-- renovação paga com sucesso;
-- falha de pagamento;
-- cancelamento agendado no fim do período;
-- cancelamento feito diretamente no Dashboard da Stripe;
-- assinatura criada ou alterada fora do fluxo principal da Luma.
-
-## 6. Como testar pagamento sem cobrança real
-
-Use sempre chaves de teste (`pk_test` e `sk_test`) e cartões de teste da Stripe.
-
-Cartão aprovado:
-
-```text
-Número: 4242 4242 4242 4242
-Validade: qualquer data futura, por exemplo 12/34
-CVC: qualquer 3 dígitos, por exemplo 123
-Nome/CPF: qualquer valor válido para o formulário da Luma
-```
-
-Cartão que falha por saldo insuficiente:
-
-```text
-Número: 4000 0000 0000 9995
-Validade: qualquer data futura
-CVC: qualquer 3 dígitos
-```
-
-Cartão que exige autenticação 3D Secure:
-
-```text
-Número: 4000 0000 0000 3220
-Validade: qualquer data futura
-CVC: qualquer 3 dígitos
-```
-
-Referência oficial: https://docs.stripe.com/testing
-
-## 7. Rodar localmente
-
-Depois de preencher o `.env`, suba tudo com:
-
-```powershell
-docker compose up --build
-```
-
-Fluxo esperado:
-
-1. Criar conta ou entrar.
+1. Criar conta na web.
 2. Escolher plano.
-3. Pagar com cartão de teste.
-4. Abrir o perfil e confirmar plano ativo.
-5. Enviar mensagem pelo WhatsApp usando o celular cadastrado.
+3. Preencher Stripe Elements.
+4. Confirmar pagamento.
+5. Verificar perfil.
+6. Verificar no Stripe se a assinatura está ativa.
+7. Enviar mensagem para a Luma no WhatsApp pelo celular cadastrado.
+
+## Cancelamento
+
+O cancelamento usa `CancelAtPeriodEnd=true`.
+
+Comportamento esperado:
+
+- Na Luma, o status fica como cancelado.
+- O acesso continua até `CurrentPeriodEndsAt`.
+- A usuária pode retomar antes do fim do período.
+
+## Troca de Plano
+
+A troca usa atualização de item da assinatura no Stripe com proration.
+
+Comportamento:
+
+- Básico pode migrar para Essencial.
+- Essencial pode migrar para Básico.
+- A Stripe calcula ajustes proporcionais quando aplicável.
+
+## Troca de Cartão
+
+Implementado com `SetupIntent`.
+
+Fluxo:
+
+1. Usuária abre perfil.
+2. Clica em trocar cartão.
+3. Preenche Stripe Elements.
+4. Stripe salva método de pagamento.
+5. API define o cartão como padrão para próximas faturas.
+
+## Produção
+
+Para produção:
+
+1. Criar produtos e preços novamente no modo produção.
+2. Trocar `sk_test` por `sk_live`.
+3. Trocar `pk_test` por `pk_live`.
+4. Criar webhook de produção.
+5. Configurar `Stripe__WebhookSecret` de produção.
+6. Testar com compra real de baixo valor antes de abrir para usuárias.

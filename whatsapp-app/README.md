@@ -1,35 +1,29 @@
-# Luma WhatsApp Bot MVP
+# Luma API e Docker Local
 
-Backend da Luma para cadastro e conversa pelo WhatsApp, usando:
+Este diretório contém a API da Luma, os testes de backend e o Docker Compose usado no desenvolvimento local.
 
-- ASP.NET Core 8
-- PostgreSQL
-- Entity Framework Core
-- OpenAI API
-- Docker Compose
-- Twilio WhatsApp Sandbox via webhook TwiML
+## Serviços Locais
+
+O `docker-compose.yml` sobe:
+
+- `postgres`: banco PostgreSQL.
+- `redis`: cache para rate limit, deduplicação e locks.
+- `api`: API ASP.NET Core.
+- `web`: aplicação Next.js.
 
 ## Subir Localmente
 
-Copie o arquivo de exemplo de ambiente:
-
 ```powershell
 Copy-Item .env.example .env
-```
-
-Configure `OPENAI_API_KEY` no `.env`. O arquivo `.env` não deve ser commitado.
-
-```powershell
 docker compose up -d --build
 ```
 
-API local:
+URLs:
 
-```txt
-http://localhost:5050
-```
-
-Postgres local fica exposto em `localhost:5433` para não conflitar com outro banco que já use `5432`.
+- API: `http://localhost:5050`
+- Web: `http://localhost:3000`
+- Postgres: `localhost:5433`
+- Redis: `localhost:6379`
 
 Health check:
 
@@ -37,64 +31,57 @@ Health check:
 curl.exe http://localhost:5050/health
 ```
 
-Rodar testes:
+## Variáveis Principais
+
+Arquivo local:
+
+```txt
+whatsapp-app/.env
+```
+
+Principais chaves:
+
+```env
+POSTGRES_DB=luma
+POSTGRES_USER=luma
+POSTGRES_PASSWORD=luma_dev_password
+POSTGRES_HOST_PORT=5433
+REDIS_CONNECTION_STRING=redis:6379
+API_HOST_PORT=5050
+WEB_HOST_PORT=3000
+LUMA_REQUIRE_ACTIVE_SUBSCRIPTION=true
+OPENAI_API_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_BASIC_PRICE_ID=
+STRIPE_ESSENTIAL_PRICE_ID=
+STRIPE_WEBHOOK_SECRET=
+NOTIFICATIONS_WORKER_ENABLED=false
+```
+
+## Testes
 
 ```powershell
 dotnet test Luma.sln
 ```
 
-## Variáveis De Ambiente
+## Webhook Twilio
 
-As variáveis ficam em `.env`, baseado em `.env.example`.
-
-```txt
-POSTGRES_DB=luma
-POSTGRES_USER=luma
-POSTGRES_PASSWORD=luma_dev_password
-POSTGRES_HOST_PORT=5433
-API_HOST_PORT=5050
-ASPNETCORE_ENVIRONMENT=Development
-LUMA_STORE_MESSAGE_BODIES=false
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_TIMEOUT_SECONDS=12
-OPENAI_MAX_OUTPUT_TOKENS=700
-OPENAI_REASONING_EFFORT=none
-```
-
-No estado atual, não há segredo da Twilio no backend. A Twilio chama o webhook e a API responde com TwiML na própria requisição.
-
-## Teste Sem Twilio
-
-Use o endpoint local de desenvolvimento:
-
-```powershell
-Invoke-RestMethod -Method Post `
-  -Uri http://localhost:5050/dev/messages `
-  -ContentType 'application/json; charset=utf-8' `
-  -Body (@{ from = '+5516992330309'; body = 'oi' } | ConvertTo-Json -Compress)
-```
-
-## Twilio WhatsApp Sandbox
-
-O webhook implementado é:
+Endpoint:
 
 ```txt
 POST /webhooks/twilio/whatsapp
 ```
 
-Twilio precisa acessar uma URL pública. Para testar localmente, exponha a porta 5050 com ngrok, Cloudflare Tunnel ou ferramenta equivalente.
-
-Exemplo com ngrok:
+Para testar localmente, exponha a API:
 
 ```powershell
 ngrok http 5050
 ```
 
-No painel da Twilio Sandbox, configure **When a message comes in** para:
+Configure no Twilio:
 
 ```txt
-https://SEU-TUNEL.ngrok-free.app/webhooks/twilio/whatsapp
+https://SEU-TUNEL/webhooks/twilio/whatsapp
 ```
 
 Método:
@@ -103,62 +90,47 @@ Método:
 POST
 ```
 
-## O Que Já Está Persistido
+## Endpoint de Teste Sem Twilio
 
-- Usuária identificada por telefone
-- Consentimentos LGPD iniciais
-- Nome de exibição
-- Confirmação de maioridade
-- Última menstruação, duração média do ciclo e duração média da menstruação
-- Método contraceptivo opcional
-- Ciclos e eventos de menstruação
-- Sintomas, fluxo, humor e relação sexual
-- Gravidez e eventos de gravidez
-- Intenções pendentes durante onboarding
-- Mensagens inbound/outbound com corpo desativado por padrão
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://localhost:5050/dev/messages `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body (@{ from = '+5516992330309'; body = 'oi' } | ConvertTo-Json -Compress)
+```
+
+## Notificações
+
+O worker está implementado, mas deve ficar desligado até os templates Twilio/Meta estarem aprovados:
+
+```env
+NOTIFICATIONS_WORKER_ENABLED=false
+```
+
+Teste manual do processador:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:5050/dev/notifications/run
+```
+
+Sem templates configurados, envios reais não devem ser esperados.
 
 ## Comandos Úteis
 
-Ver usuárias cadastradas:
+Ver usuárias:
 
 ```powershell
 curl.exe http://localhost:5050/admin/users
 ```
 
-Ver eventos de uma usuária:
-
-```powershell
-curl.exe http://localhost:5050/admin/users/ID_DA_USUARIA/events
-```
-
-Parar:
+Parar containers:
 
 ```powershell
 docker compose down
 ```
 
-Apagar banco local:
+Apagar volumes locais:
 
 ```powershell
 docker compose down -v
 ```
-
-## IA Via OpenAI API
-
-A Luma usa OpenAI API tanto em desenvolvimento quanto em produção.
-
-```txt
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-5.4-mini
-```
-
-A API usa a Responses API com saídas estruturadas para:
-
-- extrair dados de cadastro;
-- interpretar intenções livres;
-- selecionar tools que o backend valida e executa;
-- humanizar a resposta final da Luma quando não for guardrail fixo.
-
-O backend continua autoritativo: a IA sugere a ação, mas a API valida LGPD, maioridade, limites médicos e escrita no banco.
-
-Regra do produto: o sistema decide e valida; a IA interpreta e escreve.
