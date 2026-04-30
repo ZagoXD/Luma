@@ -1,0 +1,123 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, BadgeCheck } from "lucide-react";
+import { Elements } from "@stripe/react-stripe-js";
+import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
+import { StripeCheckoutForm } from "@/components/organisms/StripeCheckoutForm";
+import { createStripeSubscription, plans, type PlanCode } from "@/lib/luma-api";
+
+type CheckoutPageTemplateProps = {
+  planCode: PlanCode;
+};
+
+export function CheckoutPageTemplate({ planCode }: CheckoutPageTemplateProps) {
+  const [status, setStatus] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [publishableKey, setPublishableKey] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [stripeSubscriptionId, setStripeSubscriptionId] = useState("");
+
+  const plan = plans[planCode];
+  const stripePromise = useMemo(
+    () => publishableKey ? loadStripe(publishableKey) : null,
+    [publishableKey],
+  );
+
+  useEffect(() => {
+    let ignore = false;
+
+    createStripeSubscription({ planCode })
+      .then((result) => {
+        if (ignore) return;
+        setPublishableKey(result.publishableKey);
+        setClientSecret(result.clientSecret);
+        setStripeSubscriptionId(result.stripeSubscriptionId);
+      })
+      .catch((error) => {
+        if (ignore) return;
+        setStatus(error instanceof Error ? error.message : "Não consegui iniciar o checkout da Stripe.");
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [planCode]);
+
+  const options: StripeElementsOptions | undefined = clientSecret
+    ? {
+        clientSecret,
+        appearance: {
+          theme: "stripe",
+          variables: {
+            colorPrimary: "#6d3fb3",
+            borderRadius: "8px",
+            fontFamily: "DM Sans, system-ui, sans-serif",
+          },
+        },
+      }
+    : undefined;
+
+  return (
+    <main className="account-page">
+      <section className="account-shell">
+        <Link href="/" className="account-back">
+          <ArrowLeft size={18} />
+          Voltar
+        </Link>
+
+        <div className="checkout-grid">
+          <aside className="account-panel plan-summary">
+            <span className="account-kicker">Checkout seguro</span>
+            <h1>{plan.name}</h1>
+            <p className="checkout-price">{plan.price}</p>
+            <ul className="checkout-benefits">
+              {plan.benefits.map((benefit) => (
+                <li key={benefit}>
+                  <BadgeCheck size={18} />
+                  {benefit}
+                </li>
+              ))}
+            </ul>
+          </aside>
+
+          <div className="account-panel">
+            {success ? (
+              <div className="checkout-success">
+                <BadgeCheck size={36} />
+                <h2>Plano ativado</h2>
+                <p>Pagamento confirmado pela Stripe. A Luma já pode responder o WhatsApp vinculado à sua conta.</p>
+                <Link className="account-primary as-link" href="/perfil">Ver meu perfil</Link>
+              </div>
+            ) : (
+              <>
+                <div className="account-heading">
+                  <span className="account-kicker">Pagamento</span>
+                  <h2>Dados de pagamento</h2>
+                  <p>Os campos abaixo são renderizados pela Stripe dentro da Luma. Os dados do cartão não passam pelo nosso servidor.</p>
+                </div>
+
+                {loading && <p className="account-status info">Preparando checkout seguro...</p>}
+                {status && <p className="account-status error">{status}</p>}
+                {stripePromise && options && stripeSubscriptionId && (
+                  <Elements stripe={stripePromise} options={options}>
+                    <StripeCheckoutForm
+                      planCode={planCode}
+                      stripeSubscriptionId={stripeSubscriptionId}
+                      onSuccess={() => setSuccess(true)}
+                    />
+                  </Elements>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}

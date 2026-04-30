@@ -29,6 +29,13 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-luma};Username=${POSTGRES_USER:-luma};Password=${POSTGRES_PASSWORD:-luma_dev_password}
       Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
+      Luma__RequireActiveSubscription: ${LUMA_REQUIRE_ACTIVE_SUBSCRIPTION:-true}
+      Luma__JwtSigningKey: ${LUMA_JWT_SIGNING_KEY:-luma-dev-jwt-signing-key-change-me-please}
+      Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
+      Stripe__PublishableKey: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      Stripe__BasicPriceId: ${STRIPE_BASIC_PRICE_ID:-}
+      Stripe__EssentialPriceId: ${STRIPE_ESSENTIAL_PRICE_ID:-}
+      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OpenAI__Model: ${OPENAI_MODEL:-gpt-5.4-mini}
@@ -37,6 +44,26 @@ services:
       OpenAI__ReasoningEffort: ${OPENAI_REASONING_EFFORT:-none}
     ports:
       - "${API_HOST_PORT:-5050}:8080"
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5050}
+        NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+14155238886}
+    container_name: luma-web
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5050}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+14155238886}
+      LUMA_API_BASE_URL: ${LUMA_API_BASE_URL:-http://api:8080}
+      LUMA_COOKIE_SECURE: ${LUMA_COOKIE_SECURE:-false}
+    ports:
+      - "${WEB_HOST_PORT:-3000}:3000"
 
 volumes:
   luma_postgres_data:

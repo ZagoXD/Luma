@@ -140,6 +140,34 @@ public sealed class ConversationServiceTests
     }
 
     [Fact]
+    public async Task WhatsApp_requires_active_subscription_when_enabled()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db, new FakeExtractor(_ => null), requireActiveSubscription: true);
+
+        var reply = await SendAsync(service, "+5516992000070", "Ola");
+
+        Assert.Contains("plano ativo", MessageText.Normalize(reply));
+        Assert.Empty(await db.Users.ToListAsync());
+        Assert.Empty(await db.Messages.ToListAsync());
+    }
+
+    [Fact]
+    public async Task WhatsApp_allows_onboarding_when_active_subscription_exists()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000071";
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+        var service = CreateService(db, new FakeExtractor(_ => null), requireActiveSubscription: true);
+
+        var reply = await SendAsync(service, phone, "Ola");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        Assert.Equal(OnboardingSteps.AwaitingConsent, user.OnboardingStep);
+        Assert.Contains("voce aceita", MessageText.Normalize(reply));
+    }
+
+    [Fact]
     public async Task Agent_tool_call_records_completed_user_period_start_with_unmapped_wording()
     {
         await using var db = CreateDbContext();
@@ -728,12 +756,14 @@ public sealed class ConversationServiceTests
         IOnboardingDataExtractor extractor,
         IConversationIntentExtractor? intentExtractor = null,
         ILumaToolAgent? toolAgent = null,
-        ILumaResponseGenerator? responseGenerator = null)
+        ILumaResponseGenerator? responseGenerator = null,
+        bool requireActiveSubscription = false)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Luma:StoreMessageBodies"] = "false"
+                ["Luma:StoreMessageBodies"] = "false",
+                ["Luma:RequireActiveSubscription"] = requireActiveSubscription.ToString()
             })
             .Build();
 
@@ -776,6 +806,36 @@ public sealed class ConversationServiceTests
         await SendAsync(service, phone, "Prefiro não informar");
         db.ChangeTracker.Clear();
         return service;
+    }
+
+    private static async Task AddAccountWithSubscriptionAsync(
+        LumaDbContext db,
+        string phone,
+        string status,
+        DateTimeOffset currentPeriodEndsAt)
+    {
+        var account = new AccountUser
+        {
+            Email = $"{Guid.NewGuid():N}@example.test",
+            Cpf = Random.Shared.Next(100000000, 999999999).ToString() + "00",
+            FullName = "Usuaria Teste",
+            PhoneNumber = phone,
+            PasswordHash = AccountSecurity.HashPassword("senha-teste-123")
+        };
+
+        db.AccountUsers.Add(account);
+        db.AccountSubscriptions.Add(new AccountSubscription
+        {
+            AccountUserId = account.Id,
+            PhoneNumber = phone,
+            PlanCode = "essencial",
+            Status = status,
+            StartsAt = DateTimeOffset.UtcNow.AddDays(-1),
+            CurrentPeriodEndsAt = currentPeriodEndsAt
+        });
+
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
     }
 
     private sealed class FakeExtractor(Func<string, OnboardingExtraction?> extract) : IOnboardingDataExtractor

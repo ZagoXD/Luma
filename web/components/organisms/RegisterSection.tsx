@@ -6,14 +6,14 @@ import type { ReactNode } from "react";
 const iconProps = { size: 20, strokeWidth: 1.75 };
 
 const items: [ReactNode, string, string][] = [
-  [<CircleDot {...iconProps} />, "Início da menstruação", 'Só falar "menstruei hoje" — ela registra e inicia o ciclo.'],
-  [<CircleCheck {...iconProps} />, "Fim da menstruação", '"Acabou ontem" já é suficiente para fechar o ciclo.'],
-  [<Droplets {...iconProps} />, "Intensidade do fluxo", "Leve, médio ou intenso — você atualiza quando quiser."],
-  [<HeartPulse {...iconProps} />, "Cólicas e sintomas", "Dor de cabeça, náusea, cansaço, inchaço e muito mais."],
-  [<Smile {...iconProps} />, "Humor e bem-estar", "Registre como você está se sentindo ao longo do ciclo."],
-  [<Bell {...iconProps} />, "Lembretes", "Aviso antes da próxima menstruação ou para anticoncepcional."],
-  [<CalendarDays {...iconProps} />, "Histórico do ciclo", "Consulte duração média, sintomas frequentes e padrões."],
-  [<Lock {...iconProps} />, "Registros íntimos", "Dados opcionais e privados, armazenados com cuidado."],
+  [<CircleDot key="start" {...iconProps} />, "Início da menstruação", 'Só falar "menstruei hoje" — ela registra e inicia o ciclo.'],
+  [<CircleCheck key="end" {...iconProps} />, "Fim da menstruação", '"Acabou ontem" já é suficiente para fechar o ciclo.'],
+  [<Droplets key="flow" {...iconProps} />, "Intensidade do fluxo", "Leve, médio ou intenso — você atualiza quando quiser."],
+  [<HeartPulse key="symptoms" {...iconProps} />, "Cólicas e sintomas", "Dor de cabeça, náusea, cansaço, inchaço e muito mais."],
+  [<Smile key="mood" {...iconProps} />, "Humor e bem-estar", "Registre como você está se sentindo ao longo do ciclo."],
+  [<Bell key="reminder" {...iconProps} />, "Lembretes", "Aviso antes da próxima menstruação ou para anticoncepcional."],
+  [<CalendarDays key="history" {...iconProps} />, "Histórico do ciclo", "Consulte duração média, sintomas frequentes e padrões."],
+  [<Lock key="private" {...iconProps} />, "Registros íntimos", "Dados opcionais e privados, armazenados com cuidado."],
 ];
 
 export function RegisterSection() {

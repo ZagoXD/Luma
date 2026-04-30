@@ -16,10 +16,16 @@ public sealed class ConversationService(
     ILogger<ConversationService> logger)
 {
     private readonly bool _storeMessageBodies = configuration.GetValue("Luma:StoreMessageBodies", false);
+    private readonly bool _requireActiveSubscription = configuration.GetValue("Luma:RequireActiveSubscription", false);
 
     public async Task<string> HandleIncomingMessageAsync(IncomingMessage incoming)
     {
         var phone = PhoneNumber.Normalize(incoming.From);
+        if (_requireActiveSubscription && !await HasActiveSubscriptionAsync(phone))
+        {
+            return "Olá! Para conversar com a Luma pelo WhatsApp, é preciso ter um plano ativo vinculado a este número. Acesse sua conta no site, escolha um plano e depois me chame por aqui novamente.";
+        }
+
         var user = await db.Users
             .Include(existing => existing.Preference)
             .FirstOrDefaultAsync(existing => existing.PhoneNumber == phone);
@@ -62,6 +68,15 @@ public sealed class ConversationService(
         logger.LogInformation("Processed message for user {UserId} at step {Step}", user.Id, user.OnboardingStep);
 
         return reply;
+    }
+
+    private async Task<bool> HasActiveSubscriptionAsync(string phone)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return await db.AccountSubscriptions.AnyAsync(subscription =>
+            subscription.PhoneNumber == phone
+            && subscription.CurrentPeriodEndsAt >= now
+            && (subscription.Status == SubscriptionStatuses.Active || subscription.Status == SubscriptionStatuses.Canceled));
     }
 
     private async Task<string> BuildFinalReplyAsync(LumaUser user, string rawBody, string backendReply)

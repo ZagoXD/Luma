@@ -13,6 +13,9 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<Pregnancy> Pregnancies => Set<Pregnancy>();
     public DbSet<PendingIntent> PendingIntents => Set<PendingIntent>();
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
+    public DbSet<AccountUser> AccountUsers => Set<AccountUser>();
+    public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
+    public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -96,6 +99,49 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(message => message.Provider).HasMaxLength(32).IsRequired();
             entity.Property(message => message.ProviderMessageId).HasMaxLength(128);
             entity.Property(message => message.Body).HasMaxLength(4096);
+        });
+
+        modelBuilder.Entity<AccountUser>(entity =>
+        {
+            entity.ToTable("account_users");
+            entity.HasKey(user => user.Id);
+            entity.HasIndex(user => user.Email).IsUnique();
+            entity.HasIndex(user => user.Cpf).IsUnique();
+            entity.HasIndex(user => user.PhoneNumber).IsUnique();
+            entity.Property(user => user.Email).HasMaxLength(180).IsRequired();
+            entity.Property(user => user.Cpf).HasMaxLength(16).IsRequired();
+            entity.Property(user => user.FullName).HasMaxLength(160).IsRequired();
+            entity.Property(user => user.PasswordHash).HasMaxLength(512).IsRequired();
+            entity.Property(user => user.PhoneNumber).HasMaxLength(64).IsRequired();
+            entity.Property(user => user.StripeCustomerId).HasMaxLength(128);
+        });
+
+        modelBuilder.Entity<AccountSession>(entity =>
+        {
+            entity.ToTable("account_sessions");
+            entity.HasKey(session => session.Id);
+            entity.HasIndex(session => session.TokenHash).IsUnique();
+            entity.HasIndex(session => new { session.AccountUserId, session.ExpiresAt });
+            entity.Property(session => session.TokenHash).HasMaxLength(128).IsRequired();
+            entity.HasOne(session => session.AccountUser)
+                .WithMany(user => user.Sessions)
+                .HasForeignKey(session => session.AccountUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AccountSubscription>(entity =>
+        {
+            entity.ToTable("account_subscriptions");
+            entity.HasKey(subscription => subscription.Id);
+            entity.HasIndex(subscription => new { subscription.PhoneNumber, subscription.Status, subscription.CurrentPeriodEndsAt });
+            entity.Property(subscription => subscription.PhoneNumber).HasMaxLength(64).IsRequired();
+            entity.Property(subscription => subscription.PlanCode).HasMaxLength(32).IsRequired();
+            entity.Property(subscription => subscription.Status).HasMaxLength(32).IsRequired();
+            entity.Property(subscription => subscription.StripeSubscriptionId).HasMaxLength(128);
+            entity.HasOne(subscription => subscription.AccountUser)
+                .WithMany(user => user.Subscriptions)
+                .HasForeignKey(subscription => subscription.AccountUserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
