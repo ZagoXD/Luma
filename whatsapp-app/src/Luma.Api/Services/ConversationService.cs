@@ -79,6 +79,16 @@ public sealed class ConversationService(
             && (subscription.Status == SubscriptionStatuses.Active || subscription.Status == SubscriptionStatuses.Canceled));
     }
 
+    private async Task<bool> HasActiveEssentialSubscriptionAsync(string phone)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return await db.AccountSubscriptions.AnyAsync(subscription =>
+            subscription.PhoneNumber == phone
+            && subscription.PlanCode == "essencial"
+            && subscription.CurrentPeriodEndsAt >= now
+            && subscription.Status == SubscriptionStatuses.Active);
+    }
+
     private async Task<string> BuildFinalReplyAsync(LumaUser user, string rawBody, string backendReply)
     {
         var body = MessageText.Normalize(rawBody);
@@ -315,9 +325,125 @@ public sealed class ConversationService(
             case "get_last_sexual_activity":
                 return await BuildLastSexualActivityReplyAsync(user.Id);
 
+            case "get_notification_preferences":
+                return await BuildNotificationPreferencesReplyAsync(user);
+
+            case "update_notification_preferences":
+                return await ExecuteUpdateNotificationPreferencesToolAsync(user, tool);
+
+            case "disable_notification_preferences":
+                return await ExecuteDisableNotificationPreferencesToolAsync(user);
+
             default:
                 return null;
         }
+    }
+
+    private async Task<string> BuildNotificationPreferencesReplyAsync(LumaUser user)
+    {
+        if (user.OnboardingStep != OnboardingSteps.Completed)
+        {
+            return "Consigo configurar seus lembretes, sim. Antes disso, preciso terminar seu cadastro rapidinho para deixar tudo seguro e certinho.";
+        }
+
+        if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
+        {
+            return "Os lembretes automáticos fazem parte do plano Essencial. Se você quiser, pode alterar seu plano na área de perfil do site.";
+        }
+
+        var preference = await db.NotificationPreferences.AsNoTracking().FirstOrDefaultAsync(item => item.UserId == user.Id);
+        if (preference is null)
+        {
+            return "Você ainda não tem lembretes automáticos ativos. Posso configurar avisos de previsão menstrual e, se fizer sentido para seu método contraceptivo, lembrete de anticoncepcional.";
+        }
+
+        return $"Seus lembretes estão assim: previsão menstrual {(preference.PeriodReminderEnabled ? "ativa" : "desativada")}, anticoncepcional {(preference.ContraceptiveReminderEnabled ? "ativo" : "desativado")} e check-in {(preference.SymptomCheckinEnabled ? "ativo" : "desativado")}. Horário preferido: {preference.ReminderTime:HH\\:mm}.";
+    }
+
+    private async Task<string> ExecuteUpdateNotificationPreferencesToolAsync(LumaUser user, LumaToolCall tool)
+    {
+        if (user.OnboardingStep != OnboardingSteps.Completed)
+        {
+            return "Entendi que você quer configurar lembretes. Antes disso, preciso terminar seu cadastro rapidinho para deixar tudo seguro.";
+        }
+
+        if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
+        {
+            return "Eu consigo configurar lembretes automáticos no plano Essencial. Pelo seu cadastro atual, esse recurso ainda não está liberado.";
+        }
+
+        var preference = await db.NotificationPreferences.FirstOrDefaultAsync(item => item.UserId == user.Id);
+        if (preference is null)
+        {
+            preference = new NotificationPreference { UserId = user.Id };
+            db.NotificationPreferences.Add(preference);
+        }
+
+        if (tool.PeriodReminderEnabled is not null)
+        {
+            preference.PeriodReminderEnabled = tool.PeriodReminderEnabled.Value;
+        }
+
+        if (tool.SymptomCheckinEnabled is not null)
+        {
+            preference.SymptomCheckinEnabled = tool.SymptomCheckinEnabled.Value;
+        }
+
+        if (tool.ContraceptiveReminderEnabled is not null)
+        {
+            if (tool.ContraceptiveReminderEnabled.Value && EnsurePreference(user).ContraceptiveType != "pill")
+            {
+                preference.ContraceptiveReminderEnabled = false;
+                preference.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync();
+                return "Por enquanto, o lembrete diário de anticoncepcional fica disponível para pílula. Posso manter os avisos de previsão menstrual, se você quiser.";
+            }
+
+            preference.ContraceptiveReminderEnabled = tool.ContraceptiveReminderEnabled.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(tool.ReminderTime))
+        {
+            if (!NotificationPreferenceService.TryParseReminderTime(tool.ReminderTime, out var reminderTime))
+            {
+                return "Não consegui entender esse horário. Pode me dizer em um formato como 08:30, 20h ou 21h15?";
+            }
+
+            preference.ReminderTime = reminderTime;
+        }
+
+        if (!string.IsNullOrWhiteSpace(tool.TimeZone))
+        {
+            preference.TimeZone = tool.TimeZone;
+        }
+
+        preference.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        return $"Pronto, deixei seus lembretes salvos para {preference.ReminderTime:HH\\:mm}. Você pode pedir para mudar ou desativar quando quiser.";
+    }
+
+    private async Task<string> ExecuteDisableNotificationPreferencesToolAsync(LumaUser user)
+    {
+        if (user.OnboardingStep != OnboardingSteps.Completed)
+        {
+            return "Tudo bem. Quando terminarmos seu cadastro, posso configurar ou deixar os lembretes desativados para você.";
+        }
+
+        var preference = await db.NotificationPreferences.FirstOrDefaultAsync(item => item.UserId == user.Id);
+        if (preference is null)
+        {
+            preference = new NotificationPreference { UserId = user.Id };
+            db.NotificationPreferences.Add(preference);
+        }
+
+        preference.PeriodReminderEnabled = false;
+        preference.ContraceptiveReminderEnabled = false;
+        preference.SymptomCheckinEnabled = false;
+        preference.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        return "Combinado, desativei seus lembretes automáticos. Se mudar de ideia, é só me pedir por aqui.";
     }
 
     private async Task<string?> ExecuteOnboardingToolAsync(LumaUser user, LumaToolCall tool)

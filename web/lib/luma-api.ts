@@ -48,6 +48,20 @@ export type AccountProfile = {
   menstrual?: MenstrualSummary | null;
 };
 
+export type NotificationPreference = {
+  periodReminderEnabled: boolean;
+  contraceptiveReminderEnabled: boolean;
+  symptomCheckinEnabled: boolean;
+  reminderTime: string;
+  timeZone: string;
+};
+
+export type NotificationPreferenceResponse = {
+  available: boolean;
+  message?: string;
+  preference?: NotificationPreference;
+};
+
 export const plans: Record<PlanCode, { name: string; price: string; benefits: string[] }> = {
   basico: {
     name: "Básico",
@@ -99,6 +113,17 @@ export async function logoutAccount() {
 
 export async function getAccountProfile() {
   return appRequest<AccountProfile>("/api/account/me");
+}
+
+export async function getNotificationPreferences() {
+  return appRequest<NotificationPreferenceResponse>("/api/account/notifications/preferences");
+}
+
+export async function updateNotificationPreferences(input: Partial<NotificationPreference>) {
+  return appRequest<{ preference: NotificationPreference }>("/api/account/notifications/preferences", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function createStripeSubscription(input: { planCode: PlanCode }) {

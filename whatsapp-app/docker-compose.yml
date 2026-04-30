@@ -16,6 +16,15 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: luma-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - luma_redis_data:/data
+
   api:
     build:
       context: .
@@ -24,6 +33,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
@@ -31,6 +42,21 @@ services:
       Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
       Luma__RequireActiveSubscription: ${LUMA_REQUIRE_ACTIVE_SUBSCRIPTION:-true}
       Luma__JwtSigningKey: ${LUMA_JWT_SIGNING_KEY:-luma-dev-jwt-signing-key-change-me-please}
+      Luma__RateLimit__WindowSeconds: ${LUMA_RATE_LIMIT_WINDOW_SECONDS:-30}
+      Luma__RateLimit__MaxMessages: ${LUMA_RATE_LIMIT_MAX_MESSAGES:-5}
+      Luma__RateLimit__CooldownSeconds: ${LUMA_RATE_LIMIT_COOLDOWN_SECONDS:-60}
+      Luma__MessageLockSeconds: ${LUMA_MESSAGE_LOCK_SECONDS:-25}
+      Luma__DeduplicationSeconds: ${LUMA_DEDUPLICATION_SECONDS:-300}
+      Redis__ConnectionString: ${REDIS_CONNECTION_STRING:-redis:6379}
+      Notifications__WorkerEnabled: ${NOTIFICATIONS_WORKER_ENABLED:-false}
+      Notifications__WorkerIntervalSeconds: ${NOTIFICATIONS_WORKER_INTERVAL_SECONDS:-60}
+      Twilio__AccountSid: ${TWILIO_ACCOUNT_SID:-}
+      Twilio__AuthToken: ${TWILIO_AUTH_TOKEN:-}
+      Twilio__WhatsAppFrom: ${TWILIO_WHATSAPP_FROM:-whatsapp:+14155238886}
+      Twilio__TemplatePeriodTomorrow: ${TWILIO_TEMPLATE_PERIOD_TOMORROW:-}
+      Twilio__TemplatePeriodToday: ${TWILIO_TEMPLATE_PERIOD_TODAY:-}
+      Twilio__TemplateContraceptiveDaily: ${TWILIO_TEMPLATE_CONTRACEPTIVE_DAILY:-}
+      Twilio__TemplateSymptomCheckin: ${TWILIO_TEMPLATE_SYMPTOM_CHECKIN:-}
       Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
       Stripe__PublishableKey: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
       Stripe__BasicPriceId: ${STRIPE_BASIC_PRICE_ID:-}
@@ -67,3 +93,4 @@ services:
 
 volumes:
   luma_postgres_data:
+  luma_redis_data:

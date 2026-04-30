@@ -16,6 +16,9 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<AccountUser> AccountUsers => Set<AccountUser>();
     public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
     public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+    public DbSet<BlockedConversation> BlockedConversations => Set<BlockedConversation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -142,6 +145,44 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
                 .WithMany(user => user.Subscriptions)
                 .HasForeignKey(subscription => subscription.AccountUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationPreference>(entity =>
+        {
+            entity.ToTable("notification_preferences");
+            entity.HasKey(preference => preference.Id);
+            entity.HasIndex(preference => preference.UserId).IsUnique();
+            entity.Property(preference => preference.TimeZone).HasMaxLength(64).IsRequired();
+            entity.HasOne(preference => preference.User)
+                .WithMany()
+                .HasForeignKey(preference => preference.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationDelivery>(entity =>
+        {
+            entity.ToTable("notification_deliveries");
+            entity.HasKey(delivery => delivery.Id);
+            entity.HasIndex(delivery => new { delivery.UserId, delivery.Type, delivery.ScheduledForDate }).IsUnique();
+            entity.Property(delivery => delivery.Type).HasMaxLength(64).IsRequired();
+            entity.Property(delivery => delivery.Status).HasMaxLength(32).IsRequired();
+            entity.Property(delivery => delivery.Provider).HasMaxLength(32);
+            entity.Property(delivery => delivery.ProviderMessageId).HasMaxLength(128);
+            entity.Property(delivery => delivery.ErrorMessage).HasMaxLength(512);
+            entity.HasOne(delivery => delivery.User)
+                .WithMany()
+                .HasForeignKey(delivery => delivery.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BlockedConversation>(entity =>
+        {
+            entity.ToTable("blocked_conversations");
+            entity.HasKey(blocked => blocked.Id);
+            entity.HasIndex(blocked => new { blocked.Provider, blocked.CreatedAt });
+            entity.Property(blocked => blocked.Provider).HasMaxLength(32).IsRequired();
+            entity.Property(blocked => blocked.From).HasMaxLength(128).IsRequired();
+            entity.Property(blocked => blocked.Reason).HasMaxLength(256).IsRequired();
         });
     }
 }

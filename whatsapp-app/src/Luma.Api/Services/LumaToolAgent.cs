@@ -35,6 +35,11 @@ public sealed class LumaToolCall
     public string? Intensity { get; set; }
     public string? Mood { get; set; }
     public string? Protected { get; set; }
+    public bool? PeriodReminderEnabled { get; set; }
+    public bool? ContraceptiveReminderEnabled { get; set; }
+    public bool? SymptomCheckinEnabled { get; set; }
+    public string? ReminderTime { get; set; }
+    public string? TimeZone { get; set; }
     public int? GestationalWeeks { get; set; }
     public DateOnly? LastPeriodDate { get; set; }
     public DateOnly? EstimatedDueDate { get; set; }

@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, CreditCard, LogOut, MessageCircle, RefreshCcw, Repeat2, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  CalendarDays,
+  CreditCard,
+  LogOut,
+  MessageCircle,
+  RefreshCcw,
+  Repeat2,
+  Save,
+  User,
+} from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
 import { StripePaymentMethodForm } from "@/components/organisms/StripePaymentMethodForm";
@@ -12,10 +23,13 @@ import {
   changeSubscriptionPlan,
   createPaymentMethodSetupIntent,
   getAccountProfile,
+  getNotificationPreferences,
   logoutAccount,
   plans,
   resumeSubscription,
+  updateNotificationPreferences,
   type AccountProfile,
+  type NotificationPreference,
   type PlanCode,
 } from "@/lib/luma-api";
 import { formatBrazilPhoneDisplay } from "@/lib/account-format";
@@ -24,14 +38,26 @@ type ProfilePageTemplateProps = {
   accountId: string;
 };
 
+const defaultNotificationPreference: NotificationPreference = {
+  periodReminderEnabled: false,
+  contraceptiveReminderEnabled: false,
+  symptomCheckinEnabled: false,
+  reminderTime: "09:00",
+  timeZone: "America/Sao_Paulo",
+};
+
 export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   const router = useRouter();
   const lumaWhatsAppNumber = process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+14155238886";
   const lumaWhatsAppLink = buildWhatsAppLink(lumaWhatsAppNumber);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>(defaultNotificationPreference);
+  const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [status, setStatus] = useState("");
+  const [notificationStatus, setNotificationStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
   const [billingAction, setBillingAction] = useState("");
   const [setupClientSecret, setSetupClientSecret] = useState("");
   const [setupIntentId, setSetupIntentId] = useState("");
@@ -42,19 +68,37 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   );
 
   useEffect(() => {
-    getAccountProfile()
-      .then((nextProfile) => {
+    let active = true;
+
+    async function loadProfile() {
+      try {
+        const nextProfile = await getAccountProfile();
+        if (!active) return;
+
         if (nextProfile.user.id !== accountId) {
           router.replace(`/perfil/${nextProfile.user.id}`);
           return;
         }
+
         setProfile(nextProfile);
-      })
-      .catch((error) => {
+        const preferences = await getNotificationPreferences();
+        if (!active) return;
+
+        setNotificationsAvailable(preferences.available);
+        setNotificationPreference(preferences.preference || defaultNotificationPreference);
+      } catch (error) {
         setStatus(error instanceof Error ? error.message : "Não consegui carregar seu perfil.");
         router.replace(`/login?redirect=${encodeURIComponent(`/perfil/${accountId}`)}`);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
   }, [accountId, router]);
 
   async function handleCancel() {
@@ -114,6 +158,20 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
     }
   }
 
+  async function handleSaveNotifications() {
+    setNotificationStatus("");
+    setSavingNotifications(true);
+    try {
+      const result = await updateNotificationPreferences(notificationPreference);
+      setNotificationPreference(result.preference);
+      setNotificationStatus("Preferências de notificação salvas.");
+    } catch (error) {
+      setNotificationStatus(error instanceof Error ? error.message : "Não consegui salvar as notificações agora.");
+    } finally {
+      setSavingNotifications(false);
+    }
+  }
+
   async function handleLogout() {
     await logoutAccount();
     router.push("/");
@@ -131,6 +189,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
 
   const subscription = profile?.subscription;
   const plan = subscription ? plans[subscription.planCode] : null;
+  const hasEssentialPlan = subscription?.planCode === "essencial" && subscription.status === "active";
   const nextPlanCode: PlanCode | null = subscription?.planCode === "basico"
     ? "essencial"
     : subscription?.planCode === "essencial"
@@ -167,7 +226,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
         <div className="account-heading profile-heading">
           <span className="account-kicker">Meu perfil</span>
           <h1>{profile?.user.fullName}</h1>
-          <p>Configurações de conta, assinatura e dados que a Luma usa para liberar o WhatsApp.</p>
+          <p>Configurações de conta, assinatura, WhatsApp e lembretes da Luma.</p>
         </div>
 
         <div className="profile-grid">
@@ -261,9 +320,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
 
           <section className="account-panel profile-card">
             <h2><MessageCircle size={20} /> WhatsApp</h2>
-            <p>
-              A Luma só responde números com plano ativo ou cancelado ainda dentro do período pago.
-            </p>
+            <p>A Luma só responde números com plano ativo ou cancelado ainda dentro do período pago.</p>
             <a className="luma-whatsapp-link" href={lumaWhatsAppLink} target="_blank" rel="noreferrer">
               <MessageCircle size={18} />
               <span>
@@ -272,6 +329,53 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
               </span>
             </a>
             <p className="profile-note">Depois de ativar um plano, envie uma mensagem pelo WhatsApp cadastrado.</p>
+          </section>
+
+          <section className="account-panel profile-card notification-card">
+            <h2><Bell size={20} /> Notificações</h2>
+            {hasEssentialPlan && notificationsAvailable ? (
+              <>
+                <label className="notification-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notificationPreference.periodReminderEnabled}
+                    onChange={(event) => setNotificationPreference((current) => ({ ...current, periodReminderEnabled: event.target.checked }))}
+                  />
+                  Avisos de previsão menstrual
+                </label>
+                <label className="notification-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notificationPreference.contraceptiveReminderEnabled}
+                    onChange={(event) => setNotificationPreference((current) => ({ ...current, contraceptiveReminderEnabled: event.target.checked }))}
+                  />
+                  Lembrete de anticoncepcional
+                </label>
+                <label className="notification-toggle">
+                  <input
+                    type="checkbox"
+                    checked={notificationPreference.symptomCheckinEnabled}
+                    onChange={(event) => setNotificationPreference((current) => ({ ...current, symptomCheckinEnabled: event.target.checked }))}
+                  />
+                  Check-in de sintomas
+                </label>
+                <label className="notification-time">
+                  Horário preferido
+                  <input
+                    type="time"
+                    value={notificationPreference.reminderTime}
+                    onChange={(event) => setNotificationPreference((current) => ({ ...current, reminderTime: event.target.value }))}
+                  />
+                </label>
+                <button className="account-primary" type="button" onClick={handleSaveNotifications} disabled={savingNotifications}>
+                  <Save size={16} />
+                  {savingNotifications ? "Salvando..." : "Salvar notificações"}
+                </button>
+                {notificationStatus && <p className="account-status info">{notificationStatus}</p>}
+              </>
+            ) : (
+              <p>As notificações automáticas ficam disponíveis no plano Essencial depois da primeira conversa com a Luma no WhatsApp.</p>
+            )}
           </section>
         </div>
 

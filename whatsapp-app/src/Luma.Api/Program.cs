@@ -34,6 +34,14 @@ builder.Services.AddScoped<IOnboardingDataExtractor, OpenAiOnboardingDataExtract
 builder.Services.AddScoped<IConversationIntentExtractor, OpenAiConversationIntentExtractor>();
 builder.Services.AddScoped<ILumaToolAgent, OpenAiLumaToolAgent>();
 builder.Services.AddScoped<ILumaResponseGenerator, OpenAiLumaResponseGenerator>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<RedisConnectionProvider>();
+builder.Services.AddSingleton<MessageIngressGuard>();
+builder.Services.AddSingleton<ConversationScopeDetector>();
+builder.Services.AddHttpClient<IWhatsAppNotificationSender, TwilioWhatsAppNotificationSender>();
+builder.Services.AddScoped<NotificationPreferenceService>();
+builder.Services.AddScoped<NotificationProcessor>();
+builder.Services.AddHostedService<NotificationWorker>();
 
 builder.Services.AddSingleton<IDateProvider, SystemDateProvider>();
 builder.Services.AddScoped<ConversationService>();
@@ -149,6 +157,76 @@ app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db) =>
     });
 })
 .WithName("GetAccountProfile")
+.WithOpenApi();
+
+app.MapGet("/account/notifications/preferences", async (HttpRequest request, LumaDbContext db) =>
+{
+    var account = await GetAuthenticatedAccountAsync(request, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var lumaUser = await db.Users
+        .AsNoTracking()
+        .FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+
+    if (lumaUser is null)
+    {
+        return Results.Ok(new
+        {
+            available = false,
+            message = "As notificações ficam disponíveis depois da primeira conversa da Luma pelo WhatsApp."
+        });
+    }
+
+    var preference = await db.NotificationPreferences
+        .AsNoTracking()
+        .FirstOrDefaultAsync(item => item.UserId == lumaUser.Id);
+
+    return Results.Ok(new
+    {
+        available = true,
+        preference = BuildNotificationPreferenceResponse(preference)
+    });
+})
+.WithName("GetNotificationPreferences")
+.WithOpenApi();
+
+app.MapPost("/account/notifications/preferences", async (
+    HttpRequest request,
+    NotificationPreferenceUpdate update,
+    LumaDbContext db,
+    NotificationPreferenceService preferences) =>
+{
+    var account = await GetAuthenticatedAccountAsync(request, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
+    if (subscription is null || subscription.PlanCode != "essencial" || subscription.Status != LumaSubscriptionStatuses.Active)
+    {
+        return Results.Forbid();
+    }
+
+    if (!string.IsNullOrWhiteSpace(update.ReminderTime)
+        && !NotificationPreferenceService.TryParseReminderTime(update.ReminderTime, out _))
+    {
+        return Results.BadRequest(new { message = "Horário inválido. Use algo como 08:30 ou 20h." });
+    }
+
+    var lumaUser = await db.Users.FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+    if (lumaUser is null)
+    {
+        return Results.BadRequest(new { message = "Converse com a Luma pelo WhatsApp pelo menos uma vez antes de configurar notificações." });
+    }
+
+    var saved = await preferences.UpsertAsync(lumaUser.Id, update);
+    return Results.Ok(new { preference = BuildNotificationPreferenceResponse(saved) });
+})
+.WithName("UpdateNotificationPreferences")
 .WithOpenApi();
 
 app.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutCreateSubscriptionRequest request, LumaDbContext db, IConfiguration configuration) =>
@@ -561,7 +639,12 @@ app.MapPost("/webhooks/stripe", async (HttpRequest request, LumaDbContext db, IC
 .WithName("StripeWebhook")
 .WithOpenApi();
 
-app.MapPost("/webhooks/twilio/whatsapp", async (HttpRequest request, ConversationService conversations) =>
+app.MapPost("/webhooks/twilio/whatsapp", async (
+    HttpRequest request,
+    ConversationService conversations,
+    ConversationScopeDetector scopeDetector,
+    MessageIngressGuard ingressGuard,
+    LumaDbContext db) =>
 {
     if (!request.HasFormContentType)
     {
@@ -578,17 +661,37 @@ app.MapPost("/webhooks/twilio/whatsapp", async (HttpRequest request, Conversatio
         return Results.BadRequest("Missing Twilio From field.");
     }
 
+    var scope = scopeDetector.DetectTwilio(form);
+    if (scope.IsGroup)
+    {
+        db.BlockedConversations.Add(new BlockedConversation
+        {
+            Provider = "twilio",
+            From = from,
+            Reason = scope.Reason
+        });
+        await db.SaveChangesAsync();
+
+        return TwilioXmlReply("Oi, eu sou a Luma. Por privacidade, eu só consigo conversar em atendimentos individuais. Se quiser continuar, me chame no privado.");
+    }
+
+    var normalizedFrom = PhoneNumber.Normalize(from);
+    var decision = await ingressGuard.BeginAsync("twilio", normalizedFrom, string.IsNullOrWhiteSpace(messageSid) ? null : messageSid);
+    if (!decision.AllowProcessing)
+    {
+        return string.IsNullOrWhiteSpace(decision.Reply)
+            ? TwilioEmptyReply()
+            : TwilioXmlReply(decision.Reply);
+    }
+
+    await using var lease = decision.Lease;
     var reply = await conversations.HandleIncomingMessageAsync(new IncomingMessage(
         Provider: "twilio",
-        From: PhoneNumber.Normalize(from),
+        From: normalizedFrom,
         Body: body,
         ProviderMessageId: string.IsNullOrWhiteSpace(messageSid) ? null : messageSid));
 
-    var twiml = new XDocument(
-        new XElement("Response",
-            new XElement("Message", reply)));
-
-    return Results.Text(twiml.ToString(SaveOptions.DisableFormatting), "application/xml", Encoding.UTF8);
+    return TwilioXmlReply(reply);
 })
 .WithName("TwilioWhatsAppWebhook")
 .WithOpenApi();
@@ -604,6 +707,14 @@ app.MapPost("/dev/messages", async (DevIncomingMessage message, ConversationServ
     return Results.Ok(new { reply });
 })
 .WithName("DevIncomingMessage")
+.WithOpenApi();
+
+app.MapPost("/dev/notifications/run", async (NotificationProcessor processor) =>
+{
+    var processed = await processor.RunDueNotificationsAsync();
+    return Results.Ok(new { processed });
+})
+.WithName("RunDueNotifications")
 .WithOpenApi();
 
 app.MapGet("/admin/users", async (LumaDbContext db) =>
@@ -664,6 +775,21 @@ app.MapGet("/admin/users/{id:guid}/events", async (Guid id, LumaDbContext db) =>
 .WithOpenApi();
 
 app.Run();
+
+static IResult TwilioXmlReply(string reply)
+{
+    var twiml = new XDocument(
+        new XElement("Response",
+            new XElement("Message", reply)));
+
+    return Results.Text(twiml.ToString(SaveOptions.DisableFormatting), "application/xml", Encoding.UTF8);
+}
+
+static IResult TwilioEmptyReply()
+{
+    var twiml = new XDocument(new XElement("Response"));
+    return Results.Text(twiml.ToString(SaveOptions.DisableFormatting), "application/xml", Encoding.UTF8);
+}
 
 static async Task EnsureRuntimeSchemaAsync(LumaDbContext db)
 {
@@ -735,6 +861,42 @@ CREATE TABLE IF NOT EXISTS account_subscriptions (
     "UpdatedAt" timestamp with time zone NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_account_subscriptions_PhoneNumber_Status_CurrentPeriodEndsAt" ON account_subscriptions ("PhoneNumber", "Status", "CurrentPeriodEndsAt");
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    "Id" uuid PRIMARY KEY,
+    "UserId" uuid NOT NULL REFERENCES users ("Id") ON DELETE CASCADE,
+    "PeriodReminderEnabled" boolean NOT NULL,
+    "ContraceptiveReminderEnabled" boolean NOT NULL,
+    "SymptomCheckinEnabled" boolean NOT NULL,
+    "ReminderTime" time without time zone NOT NULL,
+    "TimeZone" character varying(64) NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_notification_preferences_UserId" ON notification_preferences ("UserId");
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+    "Id" uuid PRIMARY KEY,
+    "UserId" uuid NOT NULL REFERENCES users ("Id") ON DELETE CASCADE,
+    "AccountSubscriptionId" uuid,
+    "Type" character varying(64) NOT NULL,
+    "ScheduledForDate" date NOT NULL,
+    "ScheduledFor" timestamp with time zone NOT NULL,
+    "SentAt" timestamp with time zone,
+    "Status" character varying(32) NOT NULL,
+    "Provider" character varying(32),
+    "ProviderMessageId" character varying(128),
+    "ErrorMessage" character varying(512),
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_notification_deliveries_UserId_Type_ScheduledForDate" ON notification_deliveries ("UserId", "Type", "ScheduledForDate");
+CREATE TABLE IF NOT EXISTS blocked_conversations (
+    "Id" uuid PRIMARY KEY,
+    "Provider" character varying(32) NOT NULL,
+    "From" character varying(128) NOT NULL,
+    "Reason" character varying(256) NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "IX_blocked_conversations_Provider_CreatedAt" ON blocked_conversations ("Provider", "CreatedAt");
 ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "StripeCustomerId" character varying(128);
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "StripeSubscriptionId" character varying(128);
 UPDATE account_users
@@ -1123,6 +1285,18 @@ static object BuildSubscriptionResponse(AccountSubscription subscription)
         subscription.StartsAt,
         subscription.CurrentPeriodEndsAt,
         subscription.CanceledAt
+    };
+}
+
+static object BuildNotificationPreferenceResponse(NotificationPreference? preference)
+{
+    return new
+    {
+        periodReminderEnabled = preference?.PeriodReminderEnabled ?? false,
+        contraceptiveReminderEnabled = preference?.ContraceptiveReminderEnabled ?? false,
+        symptomCheckinEnabled = preference?.SymptomCheckinEnabled ?? false,
+        reminderTime = preference?.ReminderTime.ToString("HH:mm") ?? "09:00",
+        timeZone = preference?.TimeZone ?? "America/Sao_Paulo"
     };
 }
 

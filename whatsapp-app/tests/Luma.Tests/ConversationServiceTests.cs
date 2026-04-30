@@ -195,6 +195,33 @@ public sealed class ConversationServiceTests
     }
 
     [Fact]
+    public async Task Agent_tool_call_updates_essential_notification_preferences()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000072";
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("lembrete", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "update_notification_preferences",
+                    PeriodReminderEnabled = true,
+                    ReminderTime = "21h15",
+                    Confidence = 0.95
+                }
+                : null);
+        var service = await CreateCompletedUserServiceAsync(db, phone, toolAgent: agent);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+
+        var reply = await SendAsync(service, phone, "Quero receber lembrete da menstruação às 21h15");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        var preference = await db.NotificationPreferences.SingleAsync(item => item.UserId == user.Id);
+        Assert.True(preference.PeriodReminderEnabled);
+        Assert.Equal(new TimeOnly(21, 15), preference.ReminderTime);
+        Assert.Contains("21:15", reply);
+    }
+
+    [Fact]
     public async Task Non_guardrail_reply_is_written_by_luma_ai_response_generator()
     {
         await using var db = CreateDbContext();

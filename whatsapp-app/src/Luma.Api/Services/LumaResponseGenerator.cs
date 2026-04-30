@@ -47,6 +47,9 @@ public static class LumaTools
         "get_last_period: consulta ultima menstruacao registrada",
         "get_last_symptom: consulta ultimo sintoma registrado",
         "get_last_sexual_activity: consulta ultima relacao sexual registrada",
+        "get_notification_preferences: consulta preferencias de notificacao da usuaria",
+        "update_notification_preferences: ativa/atualiza lembretes de menstruacao, anticoncepcional, check-in e horario",
+        "disable_notification_preferences: desativa lembretes automaticos",
         "search_luma_knowledge_base: busca trechos RAG seguros sobre Luma, ciclo, gravidez, privacidade e limites medicos"
     ];
 }

@@ -482,6 +482,46 @@ nav .nav-cta:focus {
   padding: 1rem;
 }
 
+.notification-card {
+  grid-column: 1 / -1;
+}
+
+.notification-toggle,
+.notification-time {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 48px;
+  padding: 0.75rem 0.9rem;
+  font-weight: 800;
+}
+
+.notification-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--plum-soft);
+  flex: 0 0 auto;
+}
+
+.notification-time {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.notification-time input {
+  min-height: 40px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dark);
+  font: inherit;
+  font-weight: 800;
+  padding: 0 0.75rem;
+}
+
 .profile-plan-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -47,6 +47,9 @@ Regras:
 - "quando e minha proxima menstruacao" => calculate_next_period.
 - "estou atrasada" => calculate_delay.
 - "quando foi minha ultima relacao" => get_last_sexual_activity.
+- perguntas sobre lembretes/notificacoes configuradas => get_notification_preferences.
+- ativar/alterar notificacoes/lembretes com horario => update_notification_preferences.
+- cancelar/desativar/parar lembretes/notificacoes => disable_notification_preferences.
 - pergunta sobre quem e a Luma, privacidade, LGPD, ciclo ou gravidez sem diagnostico => search_luma_knowledge_base.
 - diagnostico, confirmar gravidez, dizer se sangramento e normal, periodo seguro, risco fetal ou tratamento => medical_guardrail.
 - fora do escopo da Luma => out_of_scope.
@@ -95,6 +98,11 @@ Mensagem da usuaria:
             Intensity = raw.Intensity,
             Mood = Clean(raw.Mood),
             Protected = raw.Protected,
+            PeriodReminderEnabled = raw.PeriodReminderEnabled,
+            ContraceptiveReminderEnabled = raw.ContraceptiveReminderEnabled,
+            SymptomCheckinEnabled = raw.SymptomCheckinEnabled,
+            ReminderTime = Clean(raw.ReminderTime),
+            TimeZone = Clean(raw.TimeZone),
             GestationalWeeks = raw.GestationalWeeks is >= 1 and <= 45 ? raw.GestationalWeeks : null,
             LastPeriodDate = ParseSafeDate(raw.LastPeriodDate, request.Today),
             EstimatedDueDate = ParseSafeDate(raw.EstimatedDueDate, request.Today.AddYears(1)),
@@ -142,6 +150,9 @@ Mensagem da usuaria:
                 or "get_last_period"
                 or "get_last_symptom"
                 or "get_last_sexual_activity"
+                or "get_notification_preferences"
+                or "update_notification_preferences"
+                or "disable_notification_preferences"
                 or "search_luma_knowledge_base"
                 or "out_of_scope"
                 or "medical_guardrail" => tool,
@@ -191,6 +202,21 @@ Mensagem da usuaria:
         public string? Intensity { get; set; }
         public string? Mood { get; set; }
         public string? Protected { get; set; }
+
+        [JsonPropertyName("period_reminder_enabled")]
+        public bool? PeriodReminderEnabled { get; set; }
+
+        [JsonPropertyName("contraceptive_reminder_enabled")]
+        public bool? ContraceptiveReminderEnabled { get; set; }
+
+        [JsonPropertyName("symptom_checkin_enabled")]
+        public bool? SymptomCheckinEnabled { get; set; }
+
+        [JsonPropertyName("reminder_time")]
+        public string? ReminderTime { get; set; }
+
+        [JsonPropertyName("timezone")]
+        public string? TimeZone { get; set; }
 
         [JsonPropertyName("gestational_weeks")]
         public int? GestationalWeeks { get; set; }
