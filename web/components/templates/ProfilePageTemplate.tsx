@@ -306,13 +306,19 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
           <section className="account-panel profile-card">
             <h2><CalendarDays size={20} /> Dados menstruais</h2>
             {profile?.menstrual ? (
-              <dl className="profile-list">
-                <div><dt>Nome na conversa</dt><dd>{profile.menstrual.displayName || "Não informado"}</dd></div>
-                <div><dt>Última menstruação</dt><dd>{formatDateOnly(profile.menstrual.lastPeriodStartDate)}</dd></div>
-                <div><dt>Ciclo médio</dt><dd>{formatDays(profile.menstrual.averageCycleLength)}</dd></div>
-                <div><dt>Duração média</dt><dd>{formatDays(profile.menstrual.averagePeriodLength)}</dd></div>
-                <div><dt>Contraceptivo</dt><dd>{formatContraceptive(profile.menstrual.contraceptiveType)}</dd></div>
-              </dl>
+              <>
+                <dl className="profile-list">
+                  <div><dt>Nome na conversa</dt><dd>{profile.menstrual.displayName || "Não informado"}</dd></div>
+                  <div><dt>Última menstruação</dt><dd>{formatDateOnly(profile.menstrual.lastPeriodStartDate)}</dd></div>
+                  <div><dt>Ciclo médio</dt><dd>{formatDays(profile.menstrual.averageCycleLength)}</dd></div>
+                  <div><dt>Duração média</dt><dd>{formatDays(profile.menstrual.averagePeriodLength)}</dd></div>
+                  <div><dt>Contraceptivo</dt><dd>{formatContraceptive(profile.menstrual.contraceptiveType)}</dd></div>
+                </dl>
+                <Link className="account-primary as-link profile-calendar-link" href={`/perfil/${accountId}/calendario`}>
+                  <CalendarDays size={16} />
+                  Abrir calendário
+                </Link>
+              </>
             ) : (
               <p>A Luma ainda não recebeu dados menstruais pelo WhatsApp para este celular.</p>
             )}

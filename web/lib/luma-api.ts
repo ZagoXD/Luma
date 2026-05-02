@@ -62,6 +62,28 @@ export type NotificationPreferenceResponse = {
   preference?: NotificationPreference;
 };
 
+export type CalendarItem = {
+  type: string;
+  label: string;
+  isPrediction: boolean;
+};
+
+export type CalendarDay = {
+  date: string;
+  items: CalendarItem[];
+};
+
+export type CycleCalendar = {
+  month: string;
+  summary: {
+    lastPeriodDate?: string | null;
+    nextPeriodDate?: string | null;
+    activePregnancy: boolean;
+    estimatedDueDate?: string | null;
+  };
+  days: CalendarDay[];
+};
+
 export const plans: Record<PlanCode, { name: string; price: string; benefits: string[] }> = {
   basico: {
     name: "Básico",
@@ -124,6 +146,10 @@ export async function updateNotificationPreferences(input: Partial<NotificationP
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function getAccountCalendar(month: string) {
+  return appRequest<CycleCalendar>(`/api/account/calendar?month=${encodeURIComponent(month)}`);
 }
 
 export async function createStripeSubscription(input: { planCode: PlanCode }) {

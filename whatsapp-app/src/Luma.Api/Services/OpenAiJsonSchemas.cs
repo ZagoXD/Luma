@@ -109,6 +109,9 @@ public static class OpenAiJsonSchemas
             "gestational_weeks",
             "last_period_date",
             "estimated_due_date",
+            "baby_development_week",
+            "generate_baby_image",
+            "calendar_month",
             "confidence"
         },
         properties = new Dictionary<string, object>
@@ -127,6 +130,9 @@ public static class OpenAiJsonSchemas
                 "record_pregnancy_symptom",
                 "record_prenatal_appointment",
                 "record_ultrasound",
+                "get_baby_development",
+                "generate_baby_size_image",
+                "get_cycle_calendar",
                 "calculate_next_period",
                 "calculate_delay",
                 "get_last_period",
@@ -158,6 +164,9 @@ public static class OpenAiJsonSchemas
             ["gestational_weeks"] = IntegerOrNull,
             ["last_period_date"] = StringOrNull,
             ["estimated_due_date"] = StringOrNull,
+            ["baby_development_week"] = IntegerOrNull,
+            ["generate_baby_image"] = BooleanOrNull,
+            ["calendar_month"] = StringOrNull,
             ["confidence"] = NumberOrNull
         }
     };

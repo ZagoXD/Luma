@@ -13,17 +13,26 @@ public sealed class ConversationService(
     ILumaToolAgent toolAgent,
     ILumaResponseGenerator responseGenerator,
     IDateProvider dateProvider,
-    ILogger<ConversationService> logger)
+    ILogger<ConversationService> logger,
+    IBabyImageService? babyImages = null,
+    IBabyImageJobQueue? babyImageJobs = null)
 {
     private readonly bool _storeMessageBodies = configuration.GetValue("Luma:StoreMessageBodies", false);
     private readonly bool _requireActiveSubscription = configuration.GetValue("Luma:RequireActiveSubscription", false);
+    private string? _mediaUrlForCurrentReply;
 
     public async Task<string> HandleIncomingMessageAsync(IncomingMessage incoming)
     {
+        return (await HandleIncomingMessageRichAsync(incoming)).Body;
+    }
+
+    public async Task<ConversationResult> HandleIncomingMessageRichAsync(IncomingMessage incoming)
+    {
         var phone = PhoneNumber.Normalize(incoming.From);
+        _mediaUrlForCurrentReply = null;
         if (_requireActiveSubscription && !await HasActiveSubscriptionAsync(phone))
         {
-            return "Olá! Para conversar com a Luma pelo WhatsApp, é preciso ter um plano ativo vinculado a este número. Acesse sua conta no site, escolha um plano e depois me chame por aqui novamente.";
+            return new ConversationResult("Olá! Para conversar com a Luma pelo WhatsApp, é preciso ter um plano ativo vinculado a este número. Acesse sua conta no site, escolha um plano e depois me chame por aqui novamente.");
         }
 
         var user = await db.Users
@@ -67,7 +76,7 @@ public sealed class ConversationService(
 
         logger.LogInformation("Processed message for user {UserId} at step {Step}", user.Id, user.OnboardingStep);
 
-        return reply;
+        return new ConversationResult(reply, _mediaUrlForCurrentReply);
     }
 
     private async Task<bool> HasActiveSubscriptionAsync(string phone)
@@ -93,7 +102,7 @@ public sealed class ConversationService(
     {
         var body = MessageText.Normalize(rawBody);
         var isGuardrail = IsFixedGuardrailReply(backendReply);
-        if (isGuardrail || IsRequiredBackendPrompt(user, backendReply))
+        if (isGuardrail || IsRequiredBackendPrompt(user, backendReply) || IsOperationalAsyncReply(backendReply) || IsSubscriptionRestrictionReply(backendReply))
         {
             return backendReply;
         }
@@ -114,6 +123,30 @@ public sealed class ConversationService(
     private async Task<string> BuildReplyAsync(LumaUser user, string rawBody)
     {
         var body = MessageText.Normalize(rawBody);
+
+        if (user.OnboardingStep == OnboardingSteps.AwaitingAgeConfirmation
+            && (IsAffirmative(body) || IsNegative(body)))
+        {
+            return await ContinueOnboardingAsync(user, body, rawBody);
+        }
+
+        if (user.OnboardingStep == OnboardingSteps.Completed)
+        {
+            if (IsBabyDevelopmentImageQuestion(body))
+            {
+                return await BuildBabyDevelopmentImageReplyAsync(user, ParseGestationalWeeks(body), Today());
+            }
+
+            if (IsBabyDevelopmentQuestion(body))
+            {
+                return await BuildBabyDevelopmentReplyAsync(user.Id, ParseGestationalWeeks(body), Today());
+            }
+
+            if (IsCalendarQuestion(body))
+            {
+                return await BuildCycleCalendarLinkReplyAsync(user, ParseCalendarMonth(body, Today()), Today());
+            }
+        }
 
         var agentReply = await TryHandleAgentToolAsync(user, rawBody, body, Today());
         if (agentReply is not null)
@@ -309,6 +342,15 @@ public sealed class ConversationService(
             case "record_ultrasound":
                 await AddCycleEventAsync(user.Id, null, CycleEventTypes.Ultrasound, tool.Date ?? today, new { });
                 return $"Registrei o ultrassom em {FormatDate(tool.Date ?? today)}.";
+
+            case "get_baby_development":
+                return await BuildBabyDevelopmentReplyAsync(user.Id, tool.BabyDevelopmentWeek, today);
+
+            case "generate_baby_size_image":
+                return await BuildBabyDevelopmentImageReplyAsync(user, tool.BabyDevelopmentWeek, today);
+
+            case "get_cycle_calendar":
+                return await BuildCycleCalendarLinkReplyAsync(user, tool.CalendarMonth, today);
 
             case "calculate_next_period":
                 return BuildNextPeriodReply(user);
@@ -1171,6 +1213,11 @@ public sealed class ConversationService(
             return knowledgeReply;
         }
 
+        if (IsBabyDevelopmentQuestion(body))
+        {
+            return await BuildBabyDevelopmentReplyAsync(user.Id, ParseGestationalWeeks(body), today);
+        }
+
         if (intent.Intent == ConversationIntents.OutOfScope)
         {
             return OutOfScopeMessage();
@@ -1921,6 +1968,87 @@ public sealed class ConversationService(
         return $"Pelos seus registros, a data provavel do parto esta por volta de {FormatDate(pregnancy.EstimatedDueDate.Value)}. Essa e uma estimativa e deve ser confirmada no seu pre-natal.";
     }
 
+    private async Task<string> BuildBabyDevelopmentReplyAsync(Guid userId, int? requestedWeek, DateOnly today)
+    {
+        var week = requestedWeek ?? await GetCurrentPregnancyWeekAsync(userId, today);
+        if (week is null)
+        {
+            return "Ainda não tenho semanas de gravidez suficientes para estimar o tamanho do bebê. Você pode me dizer algo como \"estou de 12 semanas\" ou a data da sua última menstruação.";
+        }
+
+        var info = BabyDevelopmentKnowledgeBase.GetByWeek(week.Value);
+        if (info is null)
+        {
+            return "Consigo acompanhar estimativas entre 4 e 42 semanas de gravidez. Se quiser, me diga com quantas semanas você está.";
+        }
+
+        return $"Com {info.Week} semanas, o bebê costuma medir {info.SizeRange} e pesar {info.WeightRange}, algo próximo de {info.Comparison}.\n\n{info.Summary}\n\n{info.SafeNote}";
+    }
+
+    private async Task<string> BuildBabyDevelopmentImageReplyAsync(LumaUser user, int? requestedWeek, DateOnly today)
+    {
+        var week = requestedWeek ?? await GetCurrentPregnancyWeekAsync(user.Id, today);
+        if (week is null)
+        {
+            return "Consigo gerar uma imagem educativa do tamanho aproximado do bebê, mas preciso saber a semana da gravidez primeiro.";
+        }
+
+        var info = BabyDevelopmentKnowledgeBase.GetByWeek(week.Value);
+        if (info is null)
+        {
+            return "Consigo gerar imagens educativas para estimativas entre 4 e 42 semanas de gravidez.";
+        }
+
+        if (babyImageJobs is not null)
+        {
+            babyImageJobs.Enqueue(new BabyImageJob(user.Id, user.PhoneNumber, info.Week, DateTimeOffset.UtcNow));
+            return $"Claro. Vou gerar uma imagem educativa de {info.Week} semanas agora. Ela pode levar até 1 minuto e chegará em uma segunda mensagem, com a imagem anexada. Você não precisa mandar outra mensagem.\n\nEnquanto isso: com {info.Week} semanas, o bebê costuma medir {info.SizeRange} e pesar {info.WeightRange}, algo próximo de {info.Comparison}.\n\n{info.SafeNote}";
+        }
+
+        var result = await (babyImages ?? DisabledBabyImageService.Instance).GenerateAsync(info, user.Id);
+        if (result.PublicUrl is not null)
+        {
+            _mediaUrlForCurrentReply = result.PublicUrl;
+            return $"Preparei uma imagem educativa para {info.Week} semanas, com uma comparação aproximada ao tamanho de {info.Comparison}.\n\n{info.SafeNote}";
+        }
+
+        return $"{result.Message}\n\n{await BuildBabyDevelopmentReplyAsync(user.Id, week, today)}";
+    }
+
+    private async Task<int?> GetCurrentPregnancyWeekAsync(Guid userId, DateOnly today)
+    {
+        var pregnancy = await GetActivePregnancyAsync(userId);
+        if (pregnancy is null)
+        {
+            return null;
+        }
+
+        if (pregnancy.LastPeriodDate is not null)
+        {
+            return Math.Max(1, (today.DayNumber - pregnancy.LastPeriodDate.Value.DayNumber) / 7);
+        }
+
+        return pregnancy.GestationalWeeksAtRegistration;
+    }
+
+    private async Task<string> BuildCycleCalendarLinkReplyAsync(LumaUser user, string? requestedMonth, DateOnly today)
+    {
+        var month = YearMonth.TryParse(requestedMonth, out var parsed)
+            ? parsed
+            : new YearMonth(today.Year, today.Month);
+
+        var label = new DateTime(month.Year, month.Month, 1).ToString("MMMM/yyyy", new System.Globalization.CultureInfo("pt-BR"));
+        var account = await db.AccountUsers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.PhoneNumber == user.PhoneNumber);
+        var baseUrl = (configuration.GetValue<string>("Luma:WebBaseUrl") ?? "http://localhost:3000").TrimEnd('/');
+        var path = account is null
+            ? $"/perfil/calendario?month={month}"
+            : $"/perfil/{account.Id}/calendario?month={month}";
+
+        return $"Claro. Montei seu calendário de {label}. Você pode abrir pelo site aqui: {baseUrl}{path}";
+    }
+
     private async Task<string> HandlePregnancyBleedingAsync(Guid userId, DateOnly date)
     {
         await AddCycleEventAsync(userId, null, CycleEventTypes.PregnancyBleeding, date, new { });
@@ -2254,6 +2382,88 @@ public sealed class ConversationService(
             || body.Contains("quando e o parto", StringComparison.Ordinal);
     }
 
+    private static bool IsBabyDevelopmentQuestion(string body)
+    {
+        return body.Contains("tamanho do meu bebe", StringComparison.Ordinal)
+            || body.Contains("tamanho do bebe", StringComparison.Ordinal)
+            || body.Contains("tamanho estimado", StringComparison.Ordinal)
+            || body.Contains("como esta meu bebe", StringComparison.Ordinal)
+            || body.Contains("desenvolvimento do bebe", StringComparison.Ordinal)
+            || body.Contains("qual tamanho", StringComparison.Ordinal)
+            || body.Contains("quanto mede", StringComparison.Ordinal);
+    }
+
+    private static bool IsBabyDevelopmentImageQuestion(string body)
+    {
+        var asksForImage = body.Contains("imagem", StringComparison.Ordinal)
+            || body.Contains("foto", StringComparison.Ordinal)
+            || body.Contains("visual", StringComparison.Ordinal);
+
+        return asksForImage
+            && (IsBabyDevelopmentQuestion(body)
+                || body.Contains("meu bebe", StringComparison.Ordinal)
+                || body.Contains("o bebe", StringComparison.Ordinal)
+                || body.Contains("bebezinho", StringComparison.Ordinal));
+    }
+
+    private static bool IsCalendarQuestion(string body)
+    {
+        return body.Contains("calendario", StringComparison.Ordinal)
+            && (body.Contains("mostrar", StringComparison.Ordinal)
+                || body.Contains("mostra", StringComparison.Ordinal)
+                || body.Contains("ver", StringComparison.Ordinal)
+                || body.Contains("abrir", StringComparison.Ordinal)
+                || body.Contains("completo", StringComparison.Ordinal)
+                || body.Contains("ciclo", StringComparison.Ordinal));
+    }
+
+    private static string? ParseCalendarMonth(string body, DateOnly today)
+    {
+        if (!IsCalendarQuestion(body))
+        {
+            return null;
+        }
+
+        if (body.Contains("mes passado", StringComparison.Ordinal))
+        {
+            return new YearMonth(today.AddMonths(-1).Year, today.AddMonths(-1).Month).ToString();
+        }
+
+        if (body.Contains("mes que vem", StringComparison.Ordinal) || body.Contains("proximo mes", StringComparison.Ordinal))
+        {
+            return new YearMonth(today.AddMonths(1).Year, today.AddMonths(1).Month).ToString();
+        }
+
+        var months = new Dictionary<string, int>
+        {
+            ["janeiro"] = 1,
+            ["fevereiro"] = 2,
+            ["marco"] = 3,
+            ["abril"] = 4,
+            ["maio"] = 5,
+            ["junho"] = 6,
+            ["julho"] = 7,
+            ["agosto"] = 8,
+            ["setembro"] = 9,
+            ["outubro"] = 10,
+            ["novembro"] = 11,
+            ["dezembro"] = 12
+        };
+
+        foreach (var month in months)
+        {
+            if (body.Contains(month.Key, StringComparison.Ordinal))
+            {
+                var year = MessageText.ExtractFirstInteger(body) is >= 2020 and <= 2200
+                    ? MessageText.ExtractFirstInteger(body)!.Value
+                    : today.Year;
+                return new YearMonth(year, month.Value).ToString();
+            }
+        }
+
+        return new YearMonth(today.Year, today.Month).ToString();
+    }
+
     private static bool IsLumaIdentityQuestion(string body)
     {
         return body.Contains("quem e voce", StringComparison.Ordinal)
@@ -2394,6 +2604,23 @@ public sealed class ConversationService(
             || normalized.Contains("procure atendimento", StringComparison.Ordinal)
             || normalized.Contains("menores de 18 anos", StringComparison.Ordinal)
             || normalized.Contains("sem o seu consentimento", StringComparison.Ordinal);
+    }
+
+    private static bool IsOperationalAsyncReply(string reply)
+    {
+        var normalized = MessageText.Normalize(reply);
+        return normalized.Contains("imagem educativa", StringComparison.Ordinal)
+            && normalized.Contains("segunda mensagem", StringComparison.Ordinal)
+            && normalized.Contains("imagem anexada", StringComparison.Ordinal);
+    }
+
+    private static bool IsSubscriptionRestrictionReply(string reply)
+    {
+        var normalized = MessageText.Normalize(reply);
+        return normalized.Contains("plano essencial", StringComparison.Ordinal)
+            && (normalized.Contains("lembrete", StringComparison.Ordinal)
+                || normalized.Contains("notificac", StringComparison.Ordinal)
+                || normalized.Contains("recurso ainda nao esta liberado", StringComparison.Ordinal));
     }
 
     private static bool IsRequiredBackendPrompt(LumaUser user, string reply)

@@ -115,6 +115,11 @@ public interface IWhatsAppNotificationSender
     Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default);
 }
 
+public interface IWhatsAppMediaSender
+{
+    Task<NotificationSendResult> SendMediaAsync(string to, string body, string mediaUrl, CancellationToken cancellationToken = default);
+}
+
 public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppNotificationSender> logger) : IWhatsAppNotificationSender
 {
     private readonly TwilioOptions _options = new()
@@ -177,6 +182,53 @@ public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfigura
             NotificationTypes.SymptomCheckin => _options.TemplateSymptomCheckin,
             _ => string.Empty
         };
+    }
+}
+
+public sealed class TwilioWhatsAppMediaSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppMediaSender> logger) : IWhatsAppMediaSender
+{
+    private readonly TwilioOptions _options = new()
+    {
+        AccountSid = configuration.GetValue<string>("Twilio:AccountSid") ?? string.Empty,
+        AuthToken = configuration.GetValue<string>("Twilio:AuthToken") ?? string.Empty,
+        WhatsAppFrom = configuration.GetValue<string>("Twilio:WhatsAppFrom") ?? string.Empty
+    };
+
+    public async Task<NotificationSendResult> SendMediaAsync(string to, string body, string mediaUrl, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_options.AccountSid)
+            || string.IsNullOrWhiteSpace(_options.AuthToken)
+            || string.IsNullOrWhiteSpace(_options.WhatsAppFrom))
+        {
+            logger.LogInformation("Twilio media message skipped because credentials are not configured.");
+            return new NotificationSendResult(false, null, "twilio_media_not_configured");
+        }
+
+        var url = $"https://api.twilio.com/2010-04-01/Accounts/{_options.AccountSid}/Messages.json";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        var auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.AccountSid}:{_options.AuthToken}"));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", auth);
+        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["From"] = _options.WhatsAppFrom,
+            ["To"] = to.StartsWith("whatsapp:", StringComparison.OrdinalIgnoreCase) ? to : $"whatsapp:{to}",
+            ["Body"] = body,
+            ["MediaUrl"] = mediaUrl
+        });
+
+        var response = await http.SendAsync(request, cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new NotificationSendResult(false, null, content.Length > 512 ? content[..512] : content);
+        }
+
+        using var document = JsonDocument.Parse(content);
+        var sid = document.RootElement.TryGetProperty("sid", out var sidProperty)
+            ? sidProperty.GetString()
+            : null;
+
+        return new NotificationSendResult(true, sid, null);
     }
 }
 

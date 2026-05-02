@@ -1,6 +1,6 @@
 # Luma
 
-A Luma é uma assistente de WhatsApp para acompanhamento de ciclo menstrual e gravidez. Ela ajuda usuárias a registrar menstruação, sintomas, humor, relação sexual, dados de gravidez e lembretes, com uma conversa acolhedora e limites claros de segurança.
+A Luma é uma assistente de WhatsApp para acompanhamento de ciclo menstrual e gravidez. Ela ajuda usuárias a registrar menstruação, sintomas, humor, relação sexual, dados de gravidez, calendário e lembretes, com conversa acolhedora e limites claros de segurança.
 
 Ela não faz diagnósticos, não confirma gravidez, não substitui orientação médica e orienta buscar um profissional de saúde quando o assunto envolve risco.
 
@@ -14,15 +14,18 @@ Implementado:
 - PostgreSQL.
 - Redis.
 - OpenAI como motor de IA.
-- Stripe Billing.
-- Cadastro web com autenticação.
-- Checkout com Stripe Elements.
+- Stripe Billing com Stripe Elements.
+- Cadastro web com autenticação JWT/cookie.
 - Perfil da usuária.
 - Validação de assinatura antes de responder no WhatsApp.
 - Cadastro inicial pelo WhatsApp.
 - Fluxo menstrual completo.
+- Registro de relação sexual.
 - Fluxo de gravidez.
-- Relação sexual registrada.
+- Respostas sobre desenvolvimento do bebê por semana.
+- Geração opcional de imagem educativa do bebê com OpenAI Images + Cloudflare R2.
+- Calendário visual mensal na web.
+- Pedido de calendário pelo WhatsApp com link direto para o mês solicitado.
 - Guardrails médicos.
 - Rate limit e anti-spam.
 - Bloqueio defensivo de grupos.
@@ -34,6 +37,7 @@ Pendente para produção completa:
 - Ativar worker de notificações.
 - Configurar WhatsApp Business real fora do Sandbox.
 - Configurar Stripe em modo produção.
+- Configurar domínio customizado para mídia do R2.
 - Publicar termos e política de privacidade.
 
 ## Arquitetura
@@ -44,7 +48,8 @@ Usuária no WhatsApp
   -> API Luma
   -> Redis para rate limit, dedupe e locks
   -> PostgreSQL para dados autoritativos
-  -> OpenAI para interpretação e resposta
+  -> OpenAI para interpretação, resposta e imagem opcional
+  -> Cloudflare R2 para mídia temporária
   -> Twilio responde no WhatsApp
 ```
 
@@ -58,7 +63,7 @@ Next.js
   -> PostgreSQL
 ```
 
-## Estrutura do Projeto
+## Estrutura
 
 ```txt
 Luma/
@@ -90,7 +95,16 @@ STRIPE_ESSENTIAL_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 ```
 
-3. Suba os serviços:
+3. Para geração de imagens do bebê, configure também:
+
+```env
+OPENAI_IMAGE_MODEL=gpt-image-1
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_PUBLIC_BASE_URL=https://pub-7621f98d02d741da84d6fd1b054da6d5.r2.dev
+```
+
+4. Suba os serviços:
 
 ```powershell
 cd whatsapp-app
@@ -119,6 +133,14 @@ Web:
 cd web
 npm run lint
 npm run build
+```
+
+Docker:
+
+```powershell
+cd whatsapp-app
+docker compose --env-file .env -f docker-compose.yml config --quiet
+docker compose --env-file .env -f docker-compose.yml build api web
 ```
 
 ## WhatsApp com Twilio
@@ -157,7 +179,7 @@ Cartão de teste:
 4242 4242 4242 4242
 ```
 
-Mais detalhes em:
+Mais detalhes:
 
 ```txt
 specs/tutorial-stripe-luma.md
@@ -176,6 +198,12 @@ Render/API:
 ```env
 Redis__ConnectionString=HOST:PORT,user=default,password=SENHA
 ```
+
+## R2
+
+O bucket atual é `luma`, com prefixo `baby-image-generation/`.
+
+Use uma Lifecycle Rule no R2 para remover objetos desse prefixo depois de 1 dia. Não apague instantaneamente, porque Twilio/Meta pode buscar a mídia com atraso ou retry.
 
 ## Notificações
 
@@ -199,5 +227,6 @@ Principais documentos:
 - `specs/especificacao-stacks-luma.md`
 - `specs/roadmap-proximas-etapas-luma.md`
 - `specs/plano-fechamento-v1-operacional.md`
+- `specs/plano-final-v1-gravidez-bebe-calendario.md`
 - `specs/tutorial-stripe-luma.md`
 - `specs/proposta-migracao-openai-luma.md`

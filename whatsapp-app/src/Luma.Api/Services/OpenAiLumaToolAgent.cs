@@ -44,11 +44,17 @@ Regras:
 - relacao/sexo/intimidade sexual => record_sexual_activity.
 - teste positivo/estou gravida => start_pregnancy_mode, sem confirmar diagnostico.
 - sangramento na gravidez => record_pregnancy_bleeding.
+- perguntas sobre tamanho/desenvolvimento do bebe => get_baby_development com baby_development_week, usando gestational_weeks/contexto quando houver.
+- pedido de imagem/foto/visual do tamanho do bebe => generate_baby_size_image com baby_development_week e generate_baby_image=true.
+- pedido de calendario mensal => get_cycle_calendar com calendar_month em YYYY-MM. Se a usuaria disser "este mes", use o mes de Hoje.
 - "quando e minha proxima menstruacao" => calculate_next_period.
 - "estou atrasada" => calculate_delay.
 - "quando foi minha ultima relacao" => get_last_sexual_activity.
-- perguntas sobre lembretes/notificacoes configuradas => get_notification_preferences.
+- perguntas como "quais lembretes tenho", "minhas notificacoes", "qual horario do lembrete" => get_notification_preferences.
 - ativar/alterar notificacoes/lembretes com horario => update_notification_preferences.
+- lembrete para tomar pilula, remedio, anticoncepcional, contraceptivo oral => update_notification_preferences com contraceptive_reminder_enabled=true e reminder_time no horario pedido.
+- lembrete de proxima menstruacao, aviso menstrual, menstruacao amanha/hoje => update_notification_preferences com period_reminder_enabled=true e reminder_time quando houver.
+- check-in de sintomas/humor => update_notification_preferences com symptom_checkin_enabled=true e reminder_time quando houver.
 - cancelar/desativar/parar lembretes/notificacoes => disable_notification_preferences.
 - pergunta sobre quem e a Luma, privacidade, LGPD, ciclo ou gravidez sem diagnostico => search_luma_knowledge_base.
 - diagnostico, confirmar gravidez, dizer se sangramento e normal, periodo seguro, risco fetal ou tratamento => medical_guardrail.
@@ -106,6 +112,9 @@ Mensagem da usuaria:
             GestationalWeeks = raw.GestationalWeeks is >= 1 and <= 45 ? raw.GestationalWeeks : null,
             LastPeriodDate = ParseSafeDate(raw.LastPeriodDate, request.Today),
             EstimatedDueDate = ParseSafeDate(raw.EstimatedDueDate, request.Today.AddYears(1)),
+            BabyDevelopmentWeek = raw.BabyDevelopmentWeek is >= 4 and <= 42 ? raw.BabyDevelopmentWeek : null,
+            GenerateBabyImage = raw.GenerateBabyImage,
+            CalendarMonth = Clean(raw.CalendarMonth),
             Confidence = raw.Confidence
         };
     }
@@ -145,6 +154,9 @@ Mensagem da usuaria:
                 or "record_pregnancy_symptom"
                 or "record_prenatal_appointment"
                 or "record_ultrasound"
+                or "get_baby_development"
+                or "generate_baby_size_image"
+                or "get_cycle_calendar"
                 or "calculate_next_period"
                 or "calculate_delay"
                 or "get_last_period"
@@ -226,6 +238,15 @@ Mensagem da usuaria:
 
         [JsonPropertyName("estimated_due_date")]
         public string? EstimatedDueDate { get; set; }
+
+        [JsonPropertyName("baby_development_week")]
+        public int? BabyDevelopmentWeek { get; set; }
+
+        [JsonPropertyName("generate_baby_image")]
+        public bool? GenerateBabyImage { get; set; }
+
+        [JsonPropertyName("calendar_month")]
+        public string? CalendarMonth { get; set; }
 
         public double? Confidence { get; set; }
     }

@@ -28,8 +28,10 @@ builder.Services.AddDbContext<LumaDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
+builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
 builder.Services.Configure<StripeBillingOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.AddHttpClient<OpenAiResponsesClient>();
+builder.Services.AddHttpClient<IBabyImageService, BabyImageService>();
 builder.Services.AddScoped<IOnboardingDataExtractor, OpenAiOnboardingDataExtractor>();
 builder.Services.AddScoped<IConversationIntentExtractor, OpenAiConversationIntentExtractor>();
 builder.Services.AddScoped<ILumaToolAgent, OpenAiLumaToolAgent>();
@@ -39,9 +41,14 @@ builder.Services.AddSingleton<RedisConnectionProvider>();
 builder.Services.AddSingleton<MessageIngressGuard>();
 builder.Services.AddSingleton<ConversationScopeDetector>();
 builder.Services.AddHttpClient<IWhatsAppNotificationSender, TwilioWhatsAppNotificationSender>();
+builder.Services.AddHttpClient<IWhatsAppMediaSender, TwilioWhatsAppMediaSender>();
+builder.Services.AddSingleton<BabyImageJobQueue>();
+builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
 builder.Services.AddScoped<NotificationPreferenceService>();
 builder.Services.AddScoped<NotificationProcessor>();
+builder.Services.AddScoped<CycleCalendarService>();
 builder.Services.AddHostedService<NotificationWorker>();
+builder.Services.AddHostedService<BabyImageWorker>();
 
 builder.Services.AddSingleton<IDateProvider, SystemDateProvider>();
 builder.Services.AddScoped<ConversationService>();
@@ -157,6 +164,39 @@ app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db) =>
     });
 })
 .WithName("GetAccountProfile")
+.WithOpenApi();
+
+app.MapGet("/account/calendar", async (
+    HttpRequest request,
+    string? month,
+    LumaDbContext db,
+    CycleCalendarService calendars) =>
+{
+    var account = await GetAuthenticatedAccountAsync(request, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var targetMonth = YearMonth.TryParse(month, out var parsed)
+        ? parsed
+        : new YearMonth(DateTimeOffset.UtcNow.Year, DateTimeOffset.UtcNow.Month);
+
+    var lumaUser = await db.Users
+        .AsNoTracking()
+        .FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+
+    if (lumaUser is null)
+    {
+        return Results.NotFound(new { message = "A Luma ainda não recebeu dados pelo WhatsApp para este celular." });
+    }
+
+    var calendar = await calendars.BuildMonthAsync(lumaUser.Id, targetMonth);
+    return calendar is null
+        ? Results.NotFound(new { message = "Calendário não encontrado." })
+        : Results.Ok(BuildCalendarResponse(calendar));
+})
+.WithName("GetAccountCalendar")
 .WithOpenApi();
 
 app.MapGet("/account/notifications/preferences", async (HttpRequest request, LumaDbContext db) =>
@@ -685,13 +725,13 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     }
 
     await using var lease = decision.Lease;
-    var reply = await conversations.HandleIncomingMessageAsync(new IncomingMessage(
+    var reply = await conversations.HandleIncomingMessageRichAsync(new IncomingMessage(
         Provider: "twilio",
         From: normalizedFrom,
         Body: body,
         ProviderMessageId: string.IsNullOrWhiteSpace(messageSid) ? null : messageSid));
 
-    return TwilioXmlReply(reply);
+    return TwilioXmlReply(reply.Body, reply.MediaUrl);
 })
 .WithName("TwilioWhatsAppWebhook")
 .WithOpenApi();
@@ -776,11 +816,17 @@ app.MapGet("/admin/users/{id:guid}/events", async (Guid id, LumaDbContext db) =>
 
 app.Run();
 
-static IResult TwilioXmlReply(string reply)
+static IResult TwilioXmlReply(string reply, string? mediaUrl = null)
 {
+    var message = new XElement("Message", reply);
+    if (!string.IsNullOrWhiteSpace(mediaUrl))
+    {
+        message.Add(new XElement("Media", mediaUrl));
+    }
+
     var twiml = new XDocument(
         new XElement("Response",
-            new XElement("Message", reply)));
+            message));
 
     return Results.Text(twiml.ToString(SaveOptions.DisableFormatting), "application/xml", Encoding.UTF8);
 }
@@ -1285,6 +1331,31 @@ static object BuildSubscriptionResponse(AccountSubscription subscription)
         subscription.StartsAt,
         subscription.CurrentPeriodEndsAt,
         subscription.CanceledAt
+    };
+}
+
+static object BuildCalendarResponse(CycleCalendar calendar)
+{
+    return new
+    {
+        month = calendar.Month.ToString(),
+        summary = new
+        {
+            calendar.Summary.LastPeriodDate,
+            calendar.Summary.NextPeriodDate,
+            calendar.Summary.ActivePregnancy,
+            calendar.Summary.EstimatedDueDate
+        },
+        days = calendar.Days.Select(day => new
+        {
+            day.Date,
+            items = day.Items.Select(item => new
+            {
+                item.Type,
+                item.Label,
+                item.IsPrediction
+            })
+        })
     };
 }
 

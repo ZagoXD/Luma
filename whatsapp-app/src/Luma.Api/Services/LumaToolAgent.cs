@@ -5,6 +5,8 @@ public interface ILumaToolAgent
     Task<LumaToolCall?> DecideAsync(LumaToolAgentRequest request, CancellationToken cancellationToken = default);
 }
 
+public sealed record ConversationResult(string Body, string? MediaUrl = null);
+
 public sealed record LumaToolAgentRequest(
     string UserMessage,
     DateOnly Today,
@@ -43,5 +45,8 @@ public sealed class LumaToolCall
     public int? GestationalWeeks { get; set; }
     public DateOnly? LastPeriodDate { get; set; }
     public DateOnly? EstimatedDueDate { get; set; }
+    public int? BabyDevelopmentWeek { get; set; }
+    public bool? GenerateBabyImage { get; set; }
+    public string? CalendarMonth { get; set; }
     public double? Confidence { get; set; }
 }

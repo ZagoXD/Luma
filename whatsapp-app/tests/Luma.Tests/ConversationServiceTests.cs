@@ -222,6 +222,98 @@ public sealed class ConversationServiceTests
     }
 
     [Fact]
+    public async Task Agent_tool_call_updates_essential_pill_contraceptive_reminder()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000081";
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("anticoncepcional", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "update_notification_preferences",
+                    ContraceptiveReminderEnabled = true,
+                    ReminderTime = "06:45",
+                    Confidence = 0.97
+                }
+                : null);
+        var service = await CreateCompletedUserServiceAsync(db, phone, toolAgent: agent);
+        await MarkUserContraceptiveAsync(db, phone, "pill");
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+
+        var reply = await SendAsync(service, phone, "Quero receber lembrete para tomar o anticoncepcional às 06:45");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        var preference = await db.NotificationPreferences.SingleAsync(item => item.UserId == user.Id);
+        Assert.True(preference.ContraceptiveReminderEnabled);
+        Assert.Equal(new TimeOnly(6, 45), preference.ReminderTime);
+        Assert.Contains("06:45", reply);
+    }
+
+    [Fact]
+    public async Task Agent_tool_call_blocks_notification_update_for_basic_plan_without_ai_rewriting()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000082";
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("lembrete", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "update_notification_preferences",
+                    PeriodReminderEnabled = true,
+                    ReminderTime = "08h",
+                    Confidence = 0.98
+                }
+                : null);
+        var responseGenerator = new FakeResponseGenerator(_ => "Pronto, ativei seus lembretes.");
+        var service = await CreateCompletedUserServiceAsync(db, phone, toolAgent: agent, responseGenerator: responseGenerator);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), planCode: "basico");
+        responseGenerator.Requests.Clear();
+
+        var reply = await SendAsync(service, phone, "Quero lembrete de menstruação às 08h");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        Assert.False(await db.NotificationPreferences.AnyAsync(item => item.UserId == user.Id));
+        Assert.Contains("plano essencial", MessageText.Normalize(reply));
+        Assert.Empty(responseGenerator.Requests);
+    }
+
+    [Fact]
+    public async Task Agent_tool_call_reads_existing_notification_preferences()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000083";
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("notificações", StringComparison.OrdinalIgnoreCase)
+                || request.UserMessage.Contains("notificacoes", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "get_notification_preferences",
+                    Confidence = 0.96
+                }
+                : null);
+        var service = await CreateCompletedUserServiceAsync(db, phone, toolAgent: agent);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        db.NotificationPreferences.Add(new NotificationPreference
+        {
+            UserId = user.Id,
+            PeriodReminderEnabled = true,
+            ContraceptiveReminderEnabled = true,
+            SymptomCheckinEnabled = false,
+            ReminderTime = new TimeOnly(8, 30)
+        });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var reply = await SendAsync(service, phone, "Quais notificações eu tenho configuradas?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("previsao menstrual ativa", normalized);
+        Assert.Contains("anticoncepcional ativo", normalized);
+        Assert.Contains("08:30", reply);
+    }
+
+    [Fact]
     public async Task Non_guardrail_reply_is_written_by_luma_ai_response_generator()
     {
         await using var db = CreateDbContext();
@@ -277,6 +369,28 @@ public sealed class ConversationServiceTests
 
         var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
         Assert.Equal("Nay", user.DisplayName);
+        Assert.True(user.IsAdultConfirmed);
+        Assert.Equal(OnboardingSteps.AwaitingLastPeriodStart, user.OnboardingStep);
+        Assert.Contains("qual foi o primeiro dia da sua ultima menstruacao", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Age_step_accepts_simple_yes_without_waiting_for_agent()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000075";
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Equals("Sim", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall { ToolName = "search_luma_knowledge_base", Confidence = 0.9 }
+                : null);
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        await SendAsync(service, phone, "Olá");
+        await SendAsync(service, phone, "Aceito");
+        await SendAsync(service, phone, "Nay");
+        var reply = await SendAsync(service, phone, "Sim");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
         Assert.True(user.IsAdultConfirmed);
         Assert.Equal(OnboardingSteps.AwaitingLastPeriodStart, user.OnboardingStep);
         Assert.Contains("qual foi o primeiro dia da sua ultima menstruacao", MessageText.Normalize(reply));
@@ -769,6 +883,145 @@ public sealed class ConversationServiceTests
         Assert.Contains("estimativa", MessageText.Normalize(reply));
     }
 
+    [Fact]
+    public async Task Pregnancy_answers_baby_development_question_from_active_pregnancy()
+    {
+        await using var db = CreateDbContext();
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000073");
+
+        await SendAsync(service, "+5516992000073", "Estou gravida de 12 semanas");
+        var reply = await SendAsync(service, "+5516992000073", "Qual o tamanho do meu bebe?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("12 semanas", normalized);
+        Assert.Contains("cm", normalized);
+        Assert.Contains("estimativa", normalized);
+    }
+
+    [Fact]
+    public async Task Pregnancy_baby_development_question_bypasses_overzealous_agent_guardrail()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000076";
+        await CreateCompletedUserServiceAsync(db, phone);
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("tamanho", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall { ToolName = "medical_guardrail", Confidence = 0.99 }
+                : null);
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        await SendAsync(service, phone, "Estou gravida de 7 semanas");
+        var reply = await SendAsync(service, phone, "Qual é o tamanho estimado do meu bebê?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("7 semanas", normalized);
+        Assert.Contains("estimativa", normalized);
+        Assert.DoesNotContain("nao consigo confirmar", normalized);
+    }
+
+    [Fact]
+    public async Task Pregnancy_baby_image_request_uses_baby_image_tool_even_without_size_word()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000078";
+        await CreateCompletedUserServiceAsync(db, phone);
+        var service = CreateService(db, new FakeExtractor(_ => null), babyImageService: new FakeBabyImageService(new BabyImageResult(
+            false,
+            null,
+            "A imagem pode levar um pouquinho para ficar pronta.")));
+
+        await SendAsync(service, phone, "Estou gravida de 7 semanas");
+        var reply = await SendAsync(service, phone, "Poderia me mostrar meu bebê com uma imagem?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("imagem", normalized);
+        Assert.Contains("7 semanas", normalized);
+    }
+
+    [Fact]
+    public async Task Pregnancy_baby_image_request_can_return_media_url()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000079";
+        await CreateCompletedUserServiceAsync(db, phone);
+        var service = CreateService(db, new FakeExtractor(_ => null), babyImageService: new FakeBabyImageService(new BabyImageResult(
+            true,
+            "https://media.example/baby.png",
+            "Imagem gerada.")));
+
+        await SendAsync(service, phone, "Estou gravida de 7 semanas");
+        var reply = await service.HandleIncomingMessageRichAsync(new IncomingMessage("test", phone, "Poderia me mostrar meu bebê com uma imagem?", null));
+
+        Assert.Equal("https://media.example/baby.png", reply.MediaUrl);
+        Assert.Contains("imagem educativa", MessageText.Normalize(reply.Body));
+    }
+
+    [Fact]
+    public async Task Pregnancy_baby_image_request_enqueues_background_job_when_queue_is_available()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000080";
+        await CreateCompletedUserServiceAsync(db, phone);
+        var queue = new FakeBabyImageJobQueue();
+        var responseGenerator = new FakeResponseGenerator(_ => "Não entendi sua resposta.");
+        var service = CreateService(db, new FakeExtractor(_ => null), responseGenerator: responseGenerator, babyImageJobQueue: queue);
+
+        await SendAsync(service, phone, "Estou gravida de 7 semanas");
+        responseGenerator.Requests.Clear();
+        var reply = await service.HandleIncomingMessageRichAsync(new IncomingMessage("test", phone, "Poderia me mostrar meu bebe com uma imagem?", null));
+
+        Assert.Null(reply.MediaUrl);
+        Assert.Single(queue.Jobs);
+        Assert.Equal(7, queue.Jobs[0].Week);
+        Assert.Equal(PhoneNumber.Normalize(phone), queue.Jobs[0].PhoneNumber);
+        var normalized = MessageText.Normalize(reply.Body);
+        Assert.Contains("segunda mensagem", normalized);
+        Assert.Contains("imagem anexada", normalized);
+        Assert.Contains("nao precisa mandar outra mensagem", normalized);
+        Assert.DoesNotContain("nao entendi", normalized);
+        Assert.Empty(responseGenerator.Requests);
+    }
+
+    [Fact]
+    public async Task Calendar_question_bypasses_rag_and_returns_profile_link()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000077";
+        await CreateCompletedUserServiceAsync(db, phone);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+        var account = await db.AccountUsers.SingleAsync(user => user.PhoneNumber == phone);
+        var agent = new FakeToolAgent(_ => new LumaToolCall { ToolName = "search_luma_knowledge_base", Confidence = 0.99 });
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        var reply = await SendAsync(service, phone, "Poderia me mostrar meu calendário completo de ciclo?");
+
+        Assert.Contains($"/perfil/{account.Id}/calendario?month=2026-04", reply);
+    }
+
+    [Fact]
+    public async Task Agent_tool_call_returns_calendar_link_for_requested_month()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000074";
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("calendario", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall
+                {
+                    ToolName = "get_cycle_calendar",
+                    CalendarMonth = "2026-05",
+                    Confidence = 0.96
+                }
+                : null);
+        var service = await CreateCompletedUserServiceAsync(db, phone, toolAgent: agent);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+
+        var reply = await SendAsync(service, phone, "Pode me mostrar o calendario de maio?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("maio/2026", normalized);
+        Assert.Contains("calendario?month=2026-05", reply);
+    }
+
     private static LumaDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<LumaDbContext>()
@@ -784,7 +1037,9 @@ public sealed class ConversationServiceTests
         IConversationIntentExtractor? intentExtractor = null,
         ILumaToolAgent? toolAgent = null,
         ILumaResponseGenerator? responseGenerator = null,
-        bool requireActiveSubscription = false)
+        bool requireActiveSubscription = false,
+        IBabyImageService? babyImageService = null,
+        IBabyImageJobQueue? babyImageJobQueue = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -802,7 +1057,9 @@ public sealed class ConversationServiceTests
             toolAgent ?? new NullLumaToolAgent(),
             responseGenerator ?? new PassthroughLumaResponseGenerator(),
             new FixedDateProvider(new DateTimeOffset(2026, 4, 25, 12, 0, 0, TimeSpan.Zero)),
-            NullLogger<ConversationService>.Instance);
+            NullLogger<ConversationService>.Instance,
+            babyImageService,
+            babyImageJobQueue);
     }
 
     private static Task<string> SendAsync(ConversationService service, string phone, string body)
@@ -839,7 +1096,8 @@ public sealed class ConversationServiceTests
         LumaDbContext db,
         string phone,
         string status,
-        DateTimeOffset currentPeriodEndsAt)
+        DateTimeOffset currentPeriodEndsAt,
+        string planCode = "essencial")
     {
         var account = new AccountUser
         {
@@ -855,11 +1113,26 @@ public sealed class ConversationServiceTests
         {
             AccountUserId = account.Id,
             PhoneNumber = phone,
-            PlanCode = "essencial",
+            PlanCode = planCode,
             Status = status,
             StartsAt = DateTimeOffset.UtcNow.AddDays(-1),
             CurrentPeriodEndsAt = currentPeriodEndsAt
         });
+
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+    }
+
+    private static async Task MarkUserContraceptiveAsync(LumaDbContext db, string phone, string contraceptiveType)
+    {
+        var user = await db.Users.Include(user => user.Preference).SingleAsync(user => user.PhoneNumber == phone);
+        var preference = user.Preference ?? new UserPreference { UserId = user.Id };
+        preference.ContraceptiveType = contraceptiveType;
+        preference.UsesHormonalContraceptive = contraceptiveType is "pill" or "injection" or "hormonal_iud" or "implant";
+        if (user.Preference is null)
+        {
+            db.UserPreferences.Add(preference);
+        }
 
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
@@ -914,5 +1187,23 @@ public sealed class ConversationServiceTests
     private sealed class FixedDateProvider(DateTimeOffset utcNow) : IDateProvider
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
+    }
+
+    private sealed class FakeBabyImageService(BabyImageResult result) : IBabyImageService
+    {
+        public Task<BabyImageResult> GenerateAsync(BabyDevelopmentInfo development, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class FakeBabyImageJobQueue : IBabyImageJobQueue
+    {
+        public List<BabyImageJob> Jobs { get; } = [];
+
+        public void Enqueue(BabyImageJob job)
+        {
+            Jobs.Add(job);
+        }
     }
 }

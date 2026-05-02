@@ -42,6 +42,7 @@ services:
       Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
       Luma__RequireActiveSubscription: ${LUMA_REQUIRE_ACTIVE_SUBSCRIPTION:-true}
       Luma__JwtSigningKey: ${LUMA_JWT_SIGNING_KEY:-luma-dev-jwt-signing-key-change-me-please}
+      Luma__WebBaseUrl: ${LUMA_WEB_BASE_URL:-http://localhost:3000}
       Luma__RateLimit__WindowSeconds: ${LUMA_RATE_LIMIT_WINDOW_SECONDS:-30}
       Luma__RateLimit__MaxMessages: ${LUMA_RATE_LIMIT_MAX_MESSAGES:-5}
       Luma__RateLimit__CooldownSeconds: ${LUMA_RATE_LIMIT_COOLDOWN_SECONDS:-60}
@@ -65,9 +66,19 @@ services:
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OpenAI__Model: ${OPENAI_MODEL:-gpt-5.4-mini}
+      OpenAI__ImageModel: ${OPENAI_IMAGE_MODEL:-gpt-image-1}
       OpenAI__TimeoutSeconds: ${OPENAI_TIMEOUT_SECONDS:-12}
       OpenAI__MaxOutputTokens: ${OPENAI_MAX_OUTPUT_TOKENS:-700}
       OpenAI__ReasoningEffort: ${OPENAI_REASONING_EFFORT:-none}
+      R2__AccountId: ${R2_ACCOUNT_ID:-52ed8799dba98c8a90611db618a89e3e}
+      R2__BucketName: ${R2_BUCKET_NAME:-luma}
+      R2__AccessKeyId: ${R2_ACCESS_KEY_ID:-}
+      R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:-}
+      R2__Endpoint: ${R2_ENDPOINT:-https://52ed8799dba98c8a90611db618a89e3e.r2.cloudflarestorage.com}
+      R2__PublicBaseUrl: ${R2_PUBLIC_BASE_URL:-https://pub-7621f98d02d741da84d6fd1b054da6d5.r2.dev}
+      R2__BabyImagePrefix: ${R2_BABY_IMAGE_PREFIX:-baby-image-generation}
+      R2__ImageRetentionDays: ${R2_IMAGE_RETENTION_DAYS:-1}
+      R2__ImageGenerationTimeoutSeconds: ${R2_IMAGE_GENERATION_TIMEOUT_SECONDS:-60}
     ports:
       - "${API_HOST_PORT:-5050}:8080"
 
