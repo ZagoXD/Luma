@@ -814,6 +814,8 @@ public sealed class ConversationServiceTests
         Assert.Equal(8, pregnancy.GestationalWeeksAtRegistration);
         Assert.Equal(new DateOnly(2026, 2, 28), pregnancy.LastPeriodDate);
         Assert.Equal(new DateOnly(2026, 12, 5), pregnancy.EstimatedDueDate);
+        Assert.Contains("parabéns", MessageText.Normalize(reply));
+        Assert.Contains("que bom que você me contou", MessageText.Normalize(reply));
         Assert.Contains("8 semanas", MessageText.Normalize(reply));
         Assert.Contains("05/12", MessageText.Normalize(reply));
     }

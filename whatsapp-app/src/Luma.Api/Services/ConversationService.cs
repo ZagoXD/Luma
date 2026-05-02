@@ -1928,20 +1928,21 @@ public sealed class ConversationService(
     {
         var parts = new List<string>
         {
-            "Pronto, deixei sua gravidez registrada para acompanhamento por aqui."
+            "Parabéns por esse momento. Que bom que você me contou. Vou te acompanhar por aqui com carinho, organização e cuidado, sempre como apoio ao seu pré-natal.",
+            "Deixei sua gravidez registrada para acompanhamento."
         };
 
         if (pregnancy.GestationalWeeksAtRegistration is not null)
         {
-            parts.Add($"Pelos dados informados, a estimativa inicial e de cerca de {pregnancy.GestationalWeeksAtRegistration} semanas.");
+            parts.Add($"Pelos dados informados, a estimativa inicial é de cerca de {pregnancy.GestationalWeeksAtRegistration} semanas.");
         }
 
         if (pregnancy.EstimatedDueDate is not null)
         {
-            parts.Add($"A data provavel do parto fica por volta de {FormatDate(pregnancy.EstimatedDueDate.Value)}.");
+            parts.Add($"A data provável do parto fica por volta de {FormatDate(pregnancy.EstimatedDueDate.Value)}.");
         }
 
-        parts.Add("Vou tratar esses dados sempre como estimativas e apoio ao seu historico, sem substituir seu pre-natal.");
+        parts.Add("Vou tratar esses dados sempre como estimativas e apoio ao seu histórico, sem substituir seu pré-natal. Também posso te ajudar a acompanhar sintomas, consultas, ultrassons e o desenvolvimento do bebê semana a semana.");
         return string.Join("\n\n", parts);
     }
 
