@@ -11,7 +11,7 @@ export function DevelopmentSection() {
           <em>Você pode ajudar.</em>
         </h2>
         <p className="section-lead">
-          A Luma ainda não está disponível. Estamos reunindo pessoas interessadas para testar a primeira versão e
+          A Luma ja está disponível!! Aproveite para testar a primeira versão e
           construir juntas uma experiência que realmente faça sentido na rotina.
         </p>
         <div className="dev-counter">
