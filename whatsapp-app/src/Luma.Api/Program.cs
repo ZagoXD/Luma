@@ -10,6 +10,7 @@ using LumaSubscriptionStatuses = Luma.Api.Models.SubscriptionStatuses;
 using StripeSubscription = Stripe.Subscription;
 
 var builder = WebApplication.CreateBuilder(args);
+PrivacyRuntime.Configure(builder.Configuration.GetSection("Privacy").Get<PrivacyOptions>() ?? new PrivacyOptions());
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -101,8 +102,11 @@ app.MapPost("/account/register", async (AccountRegisterRequest request, LumaDbCo
         return Results.BadRequest(new { message = normalized.Error });
     }
 
+    var emailHash = PrivacyRuntime.LookupHash(normalized.Email, "account.email");
+    var cpfHash = PrivacyRuntime.LookupHash(normalized.Cpf, "account.cpf");
+    var phoneHash = PrivacyRuntime.LookupHash(normalized.PhoneNumber, "account.phone");
     var exists = await db.AccountUsers.AnyAsync(user =>
-        user.Email == normalized.Email || user.Cpf == normalized.Cpf || user.PhoneNumber == normalized.PhoneNumber);
+        user.EmailHash == emailHash || user.CpfHash == cpfHash || user.PhoneHash == phoneHash);
 
     if (exists)
     {
@@ -129,7 +133,8 @@ app.MapPost("/account/register", async (AccountRegisterRequest request, LumaDbCo
 app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext db) =>
 {
     var email = request.Email.Trim().ToLowerInvariant();
-    var account = await db.AccountUsers.FirstOrDefaultAsync(user => user.Email == email);
+    var emailHash = PrivacyRuntime.LookupHash(email, "account.email");
+    var account = await db.AccountUsers.FirstOrDefaultAsync(user => user.EmailHash == emailHash);
     if (account is null || !AccountSecurity.VerifyPassword(request.Password, account.PasswordHash))
     {
         return Results.Unauthorized();
@@ -149,10 +154,11 @@ app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db) =>
     }
 
     var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
+    var userPhoneHash = PrivacyRuntime.LookupHash(account.PhoneNumber, "user.phone");
     var lumaUser = await db.Users
         .AsNoTracking()
         .Include(user => user.Preference)
-        .FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+        .FirstOrDefaultAsync(user => user.PhoneHash == userPhoneHash);
 
     return Results.Ok(new
     {
@@ -193,7 +199,7 @@ app.MapGet("/account/calendar", async (
 
     var lumaUser = await db.Users
         .AsNoTracking()
-        .FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+        .FirstOrDefaultAsync(user => user.PhoneHash == PrivacyRuntime.LookupHash(account.PhoneNumber, "user.phone"));
 
     if (lumaUser is null)
     {
@@ -218,7 +224,7 @@ app.MapGet("/account/notifications/preferences", async (HttpRequest request, Lum
 
     var lumaUser = await db.Users
         .AsNoTracking()
-        .FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+        .FirstOrDefaultAsync(user => user.PhoneHash == PrivacyRuntime.LookupHash(account.PhoneNumber, "user.phone"));
 
     if (lumaUser is null)
     {
@@ -266,7 +272,7 @@ app.MapPost("/account/notifications/preferences", async (
         return Results.BadRequest(new { message = "Horário inválido. Use algo como 08:30 ou 20h." });
     }
 
-    var lumaUser = await db.Users.FirstOrDefaultAsync(user => user.PhoneNumber == account.PhoneNumber);
+    var lumaUser = await db.Users.FirstOrDefaultAsync(user => user.PhoneHash == PrivacyRuntime.LookupHash(account.PhoneNumber, "user.phone"));
     if (lumaUser is null)
     {
         return Results.BadRequest(new { message = "Converse com a Luma pelo WhatsApp pelo menos uma vez antes de configurar notificações." });
@@ -302,8 +308,9 @@ app.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutCr
     account.StripeCustomerId = await EnsureStripeCustomerAsync(account);
 
     var now = DateTimeOffset.UtcNow;
+    var accountPhoneHash = PrivacyRuntime.LookupHash(account.PhoneNumber, "account.phone");
     var previousPending = await db.AccountSubscriptions
-        .Where(subscription => subscription.PhoneNumber == account.PhoneNumber
+        .Where(subscription => subscription.PhoneHash == accountPhoneHash
             && subscription.Status == LumaSubscriptionStatuses.Pending)
         .ToListAsync();
 
@@ -718,7 +725,7 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
         db.BlockedConversations.Add(new BlockedConversation
         {
             Provider = "twilio",
-            From = from,
+            From = PhoneNumber.Normalize(from),
             Reason = scope.Reason
         });
         await db.SaveChangesAsync();
@@ -881,8 +888,9 @@ static IResult TwilioEmptyReply()
 static async Task<bool> HasEssentialFeatureAccessAsync(LumaDbContext db, string phone)
 {
     var now = DateTimeOffset.UtcNow;
+    var phoneHash = PrivacyRuntime.LookupHash(phone, "account.phone");
     return await db.AccountSubscriptions.AnyAsync(subscription =>
-        subscription.PhoneNumber == phone
+        subscription.PhoneHash == phoneHash
         && subscription.PlanCode == "essencial"
         && subscription.CurrentPeriodEndsAt >= now
         && (subscription.Status == LumaSubscriptionStatuses.Active || subscription.Status == LumaSubscriptionStatuses.Canceled));
@@ -891,8 +899,9 @@ static async Task<bool> HasEssentialFeatureAccessAsync(LumaDbContext db, string 
 static async Task<bool> HasActiveSubscriptionAccessAsync(LumaDbContext db, string phone)
 {
     var now = DateTimeOffset.UtcNow;
+    var phoneHash = PrivacyRuntime.LookupHash(phone, "account.phone");
     return await db.AccountSubscriptions.AnyAsync(subscription =>
-        subscription.PhoneNumber == phone
+        subscription.PhoneHash == phoneHash
         && subscription.CurrentPeriodEndsAt >= now
         && (subscription.Status == LumaSubscriptionStatuses.Active || subscription.Status == LumaSubscriptionStatuses.Canceled));
 }
@@ -901,11 +910,11 @@ static async Task<string> BuildFeatureUpgradeReplyAsync(LumaDbContext db, IConfi
 {
     var account = await db.AccountUsers
         .AsNoTracking()
-        .FirstOrDefaultAsync(item => item.PhoneNumber == phone);
+        .FirstOrDefaultAsync(item => item.PhoneHash == PrivacyRuntime.LookupHash(phone, "account.phone"));
 
     var lumaUser = await db.Users
         .AsNoTracking()
-        .FirstOrDefaultAsync(user => user.PhoneNumber == phone);
+        .FirstOrDefaultAsync(user => user.PhoneHash == PrivacyRuntime.LookupHash(phone, "user.phone"));
 
     var baseUrl = (configuration.GetValue<string>("Luma:WebBaseUrl") ?? "http://localhost:3000").TrimEnd('/');
     var profilePath = account is null ? "/perfil" : $"/perfil/{account.Id}";
@@ -949,11 +958,14 @@ CREATE TABLE IF NOT EXISTS pending_intents (
 CREATE INDEX IF NOT EXISTS "IX_pending_intents_UserId_Status_CreatedAt" ON pending_intents ("UserId", "Status", "CreatedAt");
 CREATE TABLE IF NOT EXISTS account_users (
     "Id" uuid PRIMARY KEY,
-    "Email" character varying(180) NOT NULL,
-    "Cpf" character varying(16) NOT NULL,
-    "FullName" character varying(160) NOT NULL,
+    "Email" text NOT NULL,
+    "EmailHash" character varying(128) NOT NULL DEFAULT '',
+    "Cpf" text NOT NULL,
+    "CpfHash" character varying(128) NOT NULL DEFAULT '',
+    "FullName" text NOT NULL,
     "PasswordHash" character varying(512) NOT NULL,
-    "PhoneNumber" character varying(64) NOT NULL,
+    "PhoneNumber" text NOT NULL,
+    "PhoneHash" character varying(128) NOT NULL DEFAULT '',
     "StripeCustomerId" character varying(128),
     "CreatedAt" timestamp with time zone NOT NULL,
     "UpdatedAt" timestamp with time zone NOT NULL
@@ -973,7 +985,8 @@ CREATE INDEX IF NOT EXISTS "IX_account_sessions_AccountUserId_ExpiresAt" ON acco
 CREATE TABLE IF NOT EXISTS account_subscriptions (
     "Id" uuid PRIMARY KEY,
     "AccountUserId" uuid NOT NULL REFERENCES account_users ("Id") ON DELETE CASCADE,
-    "PhoneNumber" character varying(64) NOT NULL,
+    "PhoneNumber" text NOT NULL,
+    "PhoneHash" character varying(128) NOT NULL DEFAULT '',
     "PlanCode" character varying(32) NOT NULL,
     "Status" character varying(32) NOT NULL,
     "StripeSubscriptionId" character varying(128),
@@ -1015,13 +1028,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS "IX_notification_deliveries_UserId_Type_Schedu
 CREATE TABLE IF NOT EXISTS blocked_conversations (
     "Id" uuid PRIMARY KEY,
     "Provider" character varying(32) NOT NULL,
-    "From" character varying(128) NOT NULL,
-    "Reason" character varying(256) NOT NULL,
+    "From" text NOT NULL,
+    "FromHash" character varying(128) NOT NULL DEFAULT '',
+    "Reason" text NOT NULL,
     "CreatedAt" timestamp with time zone NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_blocked_conversations_Provider_CreatedAt" ON blocked_conversations ("Provider", "CreatedAt");
 ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "StripeCustomerId" character varying(128);
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "EmailHash" character varying(128) NOT NULL DEFAULT '';
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "CpfHash" character varying(128) NOT NULL DEFAULT '';
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "PhoneHash" character varying(128) NOT NULL DEFAULT '';
+ALTER TABLE account_users ALTER COLUMN "Email" TYPE text;
+ALTER TABLE account_users ALTER COLUMN "Cpf" TYPE text;
+ALTER TABLE account_users ALTER COLUMN "FullName" TYPE text;
+ALTER TABLE account_users ALTER COLUMN "PhoneNumber" TYPE text;
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_account_users_EmailHash" ON account_users ("EmailHash") WHERE "EmailHash" <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_account_users_CpfHash" ON account_users ("CpfHash") WHERE "CpfHash" <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_account_users_PhoneHash" ON account_users ("PhoneHash") WHERE "PhoneHash" <> '';
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "StripeSubscriptionId" character varying(128);
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PhoneHash" character varying(128) NOT NULL DEFAULT '';
+ALTER TABLE account_subscriptions ALTER COLUMN "PhoneNumber" TYPE text;
+CREATE INDEX IF NOT EXISTS "IX_account_subscriptions_PhoneHash_Status_CurrentPeriodEndsAt" ON account_subscriptions ("PhoneHash", "Status", "CurrentPeriodEndsAt");
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "PhoneHash" character varying(128) NOT NULL DEFAULT '';
+ALTER TABLE users ALTER COLUMN "PhoneNumber" TYPE text;
+ALTER TABLE users ALTER COLUMN "DisplayName" TYPE text;
+ALTER TABLE user_preferences ALTER COLUMN "ContraceptiveType" TYPE text;
+ALTER TABLE pregnancies ALTER COLUMN "StartReference" TYPE text;
+ALTER TABLE messages ALTER COLUMN "Body" TYPE text;
+ALTER TABLE blocked_conversations ADD COLUMN IF NOT EXISTS "FromHash" character varying(128) NOT NULL DEFAULT '';
+ALTER TABLE blocked_conversations ALTER COLUMN "From" TYPE text;
+ALTER TABLE blocked_conversations ALTER COLUMN "Reason" TYPE text;
 UPDATE account_users
 SET "PhoneNumber" = '+55' || substring("PhoneNumber" from 2)
 WHERE "PhoneNumber" ~ '^\+[1-9][0-9]{{9,10}}$' AND "PhoneNumber" NOT LIKE '+55%';
@@ -1032,6 +1068,58 @@ UPDATE users
 SET "PhoneNumber" = '+55' || substring("PhoneNumber" from 2)
 WHERE "PhoneNumber" ~ '^\+[1-9][0-9]{{9,10}}$' AND "PhoneNumber" NOT LIKE '+55%';
 """);
+
+    await BackfillPrivacyIndexesAsync(db);
+}
+
+static async Task BackfillPrivacyIndexesAsync(LumaDbContext db)
+{
+    foreach (var account in await db.AccountUsers.ToListAsync())
+    {
+        db.Entry(account).State = EntityState.Modified;
+    }
+
+    foreach (var user in await db.Users.ToListAsync())
+    {
+        db.Entry(user).State = EntityState.Modified;
+    }
+
+    foreach (var subscription in await db.AccountSubscriptions.ToListAsync())
+    {
+        db.Entry(subscription).State = EntityState.Modified;
+    }
+
+    foreach (var blocked in await db.BlockedConversations.ToListAsync())
+    {
+        db.Entry(blocked).State = EntityState.Modified;
+    }
+
+    foreach (var preference in await db.UserPreferences.Where(item => item.ContraceptiveType != null).ToListAsync())
+    {
+        db.Entry(preference).State = EntityState.Modified;
+    }
+
+    foreach (var pregnancy in await db.Pregnancies.Where(item => item.StartReference != null).ToListAsync())
+    {
+        db.Entry(pregnancy).State = EntityState.Modified;
+    }
+
+    foreach (var message in await db.Messages.Where(item => item.Body != null).ToListAsync())
+    {
+        db.Entry(message).State = EntityState.Modified;
+    }
+
+    foreach (var pending in await db.PendingIntents.ToListAsync())
+    {
+        db.Entry(pending).State = EntityState.Modified;
+    }
+
+    foreach (var cycleEvent in await db.CycleEvents.ToListAsync())
+    {
+        db.Entry(cycleEvent).State = EntityState.Modified;
+    }
+
+    await db.SaveChangesAsync();
 }
 
 static async Task<AccountUser?> GetAuthenticatedAccountAsync(HttpRequest request, LumaDbContext db)
@@ -1064,8 +1152,9 @@ static async Task<AccountUser?> GetAuthenticatedAccountAsync(HttpRequest request
 static async Task<AccountSubscription?> GetVisibleSubscriptionAsync(LumaDbContext db, string phoneNumber)
 {
     var now = DateTimeOffset.UtcNow;
+    var phoneHash = PrivacyRuntime.LookupHash(phoneNumber, "account.phone");
     return await db.AccountSubscriptions
-        .Where(subscription => subscription.PhoneNumber == phoneNumber
+        .Where(subscription => subscription.PhoneHash == phoneHash
             && subscription.CurrentPeriodEndsAt >= now
             && (subscription.Status == LumaSubscriptionStatuses.Active || subscription.Status == LumaSubscriptionStatuses.Canceled))
         .OrderByDescending(subscription => subscription.CurrentPeriodEndsAt)

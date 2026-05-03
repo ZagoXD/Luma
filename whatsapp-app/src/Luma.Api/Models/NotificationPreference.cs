@@ -39,6 +39,7 @@ public sealed class BlockedConversation
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Provider { get; set; } = string.Empty;
     public string From { get; set; } = string.Empty;
+    public string FromHash { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

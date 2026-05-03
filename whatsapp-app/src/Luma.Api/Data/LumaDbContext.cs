@@ -1,5 +1,7 @@
 using Luma.Api.Models;
+using Luma.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Luma.Api.Data;
 
@@ -20,15 +22,42 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<BlockedConversation> BlockedConversations => Set<BlockedConversation>();
 
+    public override int SaveChanges()
+    {
+        ApplyPrivacyIndexes();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyPrivacyIndexes();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var accountEmailConverter = ProtectedString("account.email");
+        var accountCpfConverter = ProtectedString("account.cpf");
+        var accountNameConverter = ProtectedString("account.full_name");
+        var accountPhoneConverter = ProtectedString("account.phone");
+        var userPhoneConverter = ProtectedString("user.phone");
+        var displayNameConverter = ProtectedNullableString("user.display_name");
+        var contraceptiveConverter = ProtectedNullableString("user.preference.contraceptive_type");
+        var metadataConverter = ProtectedString("cycle_event.metadata");
+        var pendingPayloadConverter = ProtectedString("pending_intent.payload");
+        var messageBodyConverter = ProtectedNullableString("conversation_message.body");
+        var blockedFromConverter = ProtectedString("blocked_conversation.from");
+        var blockedReasonConverter = ProtectedString("blocked_conversation.reason");
+        var pregnancyReferenceConverter = ProtectedNullableString("pregnancy.start_reference");
+
         modelBuilder.Entity<LumaUser>(entity =>
         {
             entity.ToTable("users");
             entity.HasKey(user => user.Id);
-            entity.HasIndex(user => user.PhoneNumber).IsUnique();
-            entity.Property(user => user.PhoneNumber).HasMaxLength(64).IsRequired();
-            entity.Property(user => user.DisplayName).HasMaxLength(120);
+            entity.HasIndex(user => user.PhoneHash).IsUnique();
+            entity.Property(user => user.PhoneNumber).HasConversion(userPhoneConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(user => user.PhoneHash).HasMaxLength(128).IsRequired();
+            entity.Property(user => user.DisplayName).HasConversion(displayNameConverter).HasMaxLength(1024);
             entity.Property(user => user.OnboardingStep).HasMaxLength(64).IsRequired();
             entity.Property(user => user.PendingAction).HasMaxLength(64);
             entity.HasOne(user => user.Preference)
@@ -43,7 +72,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.HasKey(preference => preference.Id);
             entity.HasIndex(preference => preference.UserId).IsUnique();
             entity.Property(preference => preference.Language).HasMaxLength(16).IsRequired();
-            entity.Property(preference => preference.ContraceptiveType).HasMaxLength(64);
+            entity.Property(preference => preference.ContraceptiveType).HasConversion(contraceptiveConverter).HasMaxLength(1024);
         });
 
         modelBuilder.Entity<ConsentRecord>(entity =>
@@ -70,7 +99,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.HasIndex(ev => new { ev.UserId, ev.Date, ev.Type });
             entity.Property(ev => ev.Type).HasMaxLength(64).IsRequired();
             entity.Property(ev => ev.Source).HasMaxLength(32).IsRequired();
-            entity.Property(ev => ev.MetadataJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(ev => ev.MetadataJson).HasConversion(metadataConverter).HasColumnType("jsonb").IsRequired();
         });
 
         modelBuilder.Entity<Pregnancy>(entity =>
@@ -79,7 +108,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.HasKey(pregnancy => pregnancy.Id);
             entity.HasIndex(pregnancy => new { pregnancy.UserId, pregnancy.Status });
             entity.Property(pregnancy => pregnancy.Status).HasMaxLength(32).IsRequired();
-            entity.Property(pregnancy => pregnancy.StartReference).HasMaxLength(64);
+            entity.Property(pregnancy => pregnancy.StartReference).HasConversion(pregnancyReferenceConverter).HasMaxLength(1024);
         });
 
         modelBuilder.Entity<PendingIntent>(entity =>
@@ -90,7 +119,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(intent => intent.Intent).HasMaxLength(64).IsRequired();
             entity.Property(intent => intent.RequiredBeforeAction).HasMaxLength(64).IsRequired();
             entity.Property(intent => intent.Status).HasMaxLength(32).IsRequired();
-            entity.Property(intent => intent.PayloadJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(intent => intent.PayloadJson).HasConversion(pendingPayloadConverter).HasColumnType("jsonb").IsRequired();
         });
 
         modelBuilder.Entity<ConversationMessage>(entity =>
@@ -101,21 +130,24 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(message => message.Direction).HasMaxLength(16).IsRequired();
             entity.Property(message => message.Provider).HasMaxLength(32).IsRequired();
             entity.Property(message => message.ProviderMessageId).HasMaxLength(128);
-            entity.Property(message => message.Body).HasMaxLength(4096);
+            entity.Property(message => message.Body).HasConversion(messageBodyConverter).HasMaxLength(8192);
         });
 
         modelBuilder.Entity<AccountUser>(entity =>
         {
             entity.ToTable("account_users");
             entity.HasKey(user => user.Id);
-            entity.HasIndex(user => user.Email).IsUnique();
-            entity.HasIndex(user => user.Cpf).IsUnique();
-            entity.HasIndex(user => user.PhoneNumber).IsUnique();
-            entity.Property(user => user.Email).HasMaxLength(180).IsRequired();
-            entity.Property(user => user.Cpf).HasMaxLength(16).IsRequired();
-            entity.Property(user => user.FullName).HasMaxLength(160).IsRequired();
+            entity.HasIndex(user => user.EmailHash).IsUnique();
+            entity.HasIndex(user => user.CpfHash).IsUnique();
+            entity.HasIndex(user => user.PhoneHash).IsUnique();
+            entity.Property(user => user.Email).HasConversion(accountEmailConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(user => user.EmailHash).HasMaxLength(128).IsRequired();
+            entity.Property(user => user.Cpf).HasConversion(accountCpfConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(user => user.CpfHash).HasMaxLength(128).IsRequired();
+            entity.Property(user => user.FullName).HasConversion(accountNameConverter).HasMaxLength(1024).IsRequired();
             entity.Property(user => user.PasswordHash).HasMaxLength(512).IsRequired();
-            entity.Property(user => user.PhoneNumber).HasMaxLength(64).IsRequired();
+            entity.Property(user => user.PhoneNumber).HasConversion(accountPhoneConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(user => user.PhoneHash).HasMaxLength(128).IsRequired();
             entity.Property(user => user.StripeCustomerId).HasMaxLength(128);
         });
 
@@ -136,8 +168,9 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
         {
             entity.ToTable("account_subscriptions");
             entity.HasKey(subscription => subscription.Id);
-            entity.HasIndex(subscription => new { subscription.PhoneNumber, subscription.Status, subscription.CurrentPeriodEndsAt });
-            entity.Property(subscription => subscription.PhoneNumber).HasMaxLength(64).IsRequired();
+            entity.HasIndex(subscription => new { subscription.PhoneHash, subscription.Status, subscription.CurrentPeriodEndsAt });
+            entity.Property(subscription => subscription.PhoneNumber).HasConversion(accountPhoneConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(subscription => subscription.PhoneHash).HasMaxLength(128).IsRequired();
             entity.Property(subscription => subscription.PlanCode).HasMaxLength(32).IsRequired();
             entity.Property(subscription => subscription.Status).HasMaxLength(32).IsRequired();
             entity.Property(subscription => subscription.StripeSubscriptionId).HasMaxLength(128);
@@ -181,8 +214,60 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.HasKey(blocked => blocked.Id);
             entity.HasIndex(blocked => new { blocked.Provider, blocked.CreatedAt });
             entity.Property(blocked => blocked.Provider).HasMaxLength(32).IsRequired();
-            entity.Property(blocked => blocked.From).HasMaxLength(128).IsRequired();
-            entity.Property(blocked => blocked.Reason).HasMaxLength(256).IsRequired();
+            entity.Property(blocked => blocked.From).HasConversion(blockedFromConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(blocked => blocked.FromHash).HasMaxLength(128).IsRequired();
+            entity.Property(blocked => blocked.Reason).HasConversion(blockedReasonConverter).HasMaxLength(1024).IsRequired();
         });
+    }
+
+    private void ApplyPrivacyIndexes()
+    {
+        foreach (var entry in ChangeTracker.Entries<AccountUser>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.EmailHash = PrivacyRuntime.LookupHash(entry.Entity.Email, "account.email");
+                entry.Entity.CpfHash = PrivacyRuntime.LookupHash(entry.Entity.Cpf, "account.cpf");
+                entry.Entity.PhoneHash = PrivacyRuntime.LookupHash(entry.Entity.PhoneNumber, "account.phone");
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<LumaUser>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.PhoneHash = PrivacyRuntime.LookupHash(entry.Entity.PhoneNumber, "user.phone");
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AccountSubscription>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.PhoneHash = PrivacyRuntime.LookupHash(entry.Entity.PhoneNumber, "account.phone");
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<BlockedConversation>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.FromHash = PrivacyRuntime.LookupHash(entry.Entity.From, "blocked_conversation.from");
+            }
+        }
+    }
+
+    private static ValueConverter<string, string> ProtectedString(string purpose)
+    {
+        return new ValueConverter<string, string>(
+            value => PrivacyRuntime.Protect(value, purpose),
+            value => PrivacyRuntime.Unprotect(value, purpose));
+    }
+
+    private static ValueConverter<string?, string?> ProtectedNullableString(string purpose)
+    {
+        return new ValueConverter<string?, string?>(
+            value => string.IsNullOrEmpty(value) ? value : PrivacyRuntime.Protect(value, purpose),
+            value => string.IsNullOrEmpty(value) ? value : PrivacyRuntime.Unprotect(value, purpose));
     }
 }

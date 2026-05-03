@@ -4,10 +4,13 @@ public sealed class AccountUser
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Email { get; set; } = string.Empty;
+    public string EmailHash { get; set; } = string.Empty;
     public string Cpf { get; set; } = string.Empty;
+    public string CpfHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
+    public string PhoneHash { get; set; } = string.Empty;
     public string? StripeCustomerId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -32,6 +35,7 @@ public sealed class AccountSubscription
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid AccountUserId { get; set; }
     public string PhoneNumber { get; set; } = string.Empty;
+    public string PhoneHash { get; set; } = string.Empty;
     public string PlanCode { get; set; } = string.Empty;
     public string Status { get; set; } = SubscriptionStatuses.Active;
     public string? StripeSubscriptionId { get; set; }

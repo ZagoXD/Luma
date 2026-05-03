@@ -29,6 +29,7 @@ public sealed class ConversationService(
     public async Task<ConversationResult> HandleIncomingMessageRichAsync(IncomingMessage incoming)
     {
         var phone = PhoneNumber.Normalize(incoming.From);
+        var userPhoneHash = PrivacyRuntime.LookupHash(phone, "user.phone");
         _mediaUrlForCurrentReply = null;
         if (_requireActiveSubscription && !await HasActiveSubscriptionAsync(phone))
         {
@@ -37,7 +38,7 @@ public sealed class ConversationService(
 
         var user = await db.Users
             .Include(existing => existing.Preference)
-            .FirstOrDefaultAsync(existing => existing.PhoneNumber == phone);
+            .FirstOrDefaultAsync(existing => existing.PhoneHash == userPhoneHash);
 
         if (user is null)
         {
@@ -82,8 +83,9 @@ public sealed class ConversationService(
     private async Task<bool> HasActiveSubscriptionAsync(string phone)
     {
         var now = DateTimeOffset.UtcNow;
+        var phoneHash = PrivacyRuntime.LookupHash(phone, "account.phone");
         return await db.AccountSubscriptions.AnyAsync(subscription =>
-            subscription.PhoneNumber == phone
+            subscription.PhoneHash == phoneHash
             && subscription.CurrentPeriodEndsAt >= now
             && (subscription.Status == SubscriptionStatuses.Active || subscription.Status == SubscriptionStatuses.Canceled));
     }
@@ -91,8 +93,9 @@ public sealed class ConversationService(
     private async Task<bool> HasActiveEssentialSubscriptionAsync(string phone)
     {
         var now = DateTimeOffset.UtcNow;
+        var phoneHash = PrivacyRuntime.LookupHash(phone, "account.phone");
         return await db.AccountSubscriptions.AnyAsync(subscription =>
-            subscription.PhoneNumber == phone
+            subscription.PhoneHash == phoneHash
             && subscription.PlanCode == "essencial"
             && subscription.CurrentPeriodEndsAt >= now
             && (subscription.Status == SubscriptionStatuses.Active || subscription.Status == SubscriptionStatuses.Canceled));
@@ -102,7 +105,7 @@ public sealed class ConversationService(
     {
         var account = await db.AccountUsers
             .AsNoTracking()
-            .FirstOrDefaultAsync(item => item.PhoneNumber == user.PhoneNumber);
+            .FirstOrDefaultAsync(item => item.PhoneHash == PrivacyRuntime.LookupHash(user.PhoneNumber, "account.phone"));
 
         var baseUrl = (configuration.GetValue<string>("Luma:WebBaseUrl") ?? "http://localhost:3000").TrimEnd('/');
         var profilePath = account is null ? "/perfil" : $"/perfil/{account.Id}";
@@ -2069,7 +2072,7 @@ public sealed class ConversationService(
         var label = new DateTime(month.Year, month.Month, 1).ToString("MMMM/yyyy", new System.Globalization.CultureInfo("pt-BR"));
         var account = await db.AccountUsers
             .AsNoTracking()
-            .FirstOrDefaultAsync(item => item.PhoneNumber == user.PhoneNumber);
+            .FirstOrDefaultAsync(item => item.PhoneHash == PrivacyRuntime.LookupHash(user.PhoneNumber, "account.phone"));
         var baseUrl = (configuration.GetValue<string>("Luma:WebBaseUrl") ?? "http://localhost:3000").TrimEnd('/');
         var path = account is null
             ? $"/perfil/calendario?month={month}"

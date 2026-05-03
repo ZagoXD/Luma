@@ -37,6 +37,9 @@ desktop.ini
 *.log
 logs/
 
+# Security planning notes
+specs/plano-criptografia-dados-reais-usuarios-luma.md
+
 # Docker/local data
 docker-data/
 postgres-data/

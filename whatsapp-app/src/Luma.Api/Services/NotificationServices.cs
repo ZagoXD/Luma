@@ -269,8 +269,9 @@ public sealed class NotificationProcessor(
     private async Task<int> ProcessUserAsync(NotificationPreference preference, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var user = preference.User!;
+        var phoneHash = PrivacyRuntime.LookupHash(user.PhoneNumber, "account.phone");
         var subscription = await db.AccountSubscriptions
-            .Where(subscription => subscription.PhoneNumber == user.PhoneNumber
+            .Where(subscription => subscription.PhoneHash == phoneHash
                 && subscription.PlanCode == "essencial"
                 && subscription.CurrentPeriodEndsAt >= now
                 && (subscription.Status == SubscriptionStatuses.Active || subscription.Status == SubscriptionStatuses.Canceled))

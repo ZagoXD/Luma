@@ -4,6 +4,7 @@ public sealed class LumaUser
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string PhoneNumber { get; set; } = string.Empty;
+    public string PhoneHash { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
     public bool? IsAdultConfirmed { get; set; }
     public string OnboardingStep { get; set; } = OnboardingSteps.AwaitingConsent;

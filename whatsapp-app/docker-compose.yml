@@ -48,6 +48,10 @@ services:
       Luma__RateLimit__CooldownSeconds: ${LUMA_RATE_LIMIT_COOLDOWN_SECONDS:-60}
       Luma__MessageLockSeconds: ${LUMA_MESSAGE_LOCK_SECONDS:-25}
       Luma__DeduplicationSeconds: ${LUMA_DEDUPLICATION_SECONDS:-300}
+      Privacy__EncryptionEnabled: ${PRIVACY_ENCRYPTION_ENABLED:-true}
+      Privacy__EncryptionKey: ${PRIVACY_ENCRYPTION_KEY:-}
+      Privacy__LookupPepper: ${PRIVACY_LOOKUP_PEPPER:-}
+      Privacy__ActiveKeyId: ${PRIVACY_ACTIVE_KEY_ID:-local-dev}
       Redis__ConnectionString: ${REDIS_CONNECTION_STRING:-redis:6379}
       Notifications__WorkerEnabled: ${NOTIFICATIONS_WORKER_ENABLED:-false}
       Notifications__WorkerIntervalSeconds: ${NOTIFICATIONS_WORKER_INTERVAL_SECONDS:-60}
