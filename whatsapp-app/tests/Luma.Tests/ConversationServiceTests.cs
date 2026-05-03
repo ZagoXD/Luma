@@ -273,7 +273,8 @@ public sealed class ConversationServiceTests
 
         var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
         Assert.False(await db.NotificationPreferences.AnyAsync(item => item.UserId == user.Id));
-        Assert.Contains("plano essencial", MessageText.Normalize(reply));
+        Assert.Contains("plano atual nao oferece", MessageText.Normalize(reply));
+        Assert.Contains("/perfil/", reply);
         Assert.Empty(responseGenerator.Requests);
     }
 
@@ -814,8 +815,8 @@ public sealed class ConversationServiceTests
         Assert.Equal(8, pregnancy.GestationalWeeksAtRegistration);
         Assert.Equal(new DateOnly(2026, 2, 28), pregnancy.LastPeriodDate);
         Assert.Equal(new DateOnly(2026, 12, 5), pregnancy.EstimatedDueDate);
-        Assert.Contains("parabéns", MessageText.Normalize(reply));
-        Assert.Contains("que bom que você me contou", MessageText.Normalize(reply));
+        Assert.Contains("parabens", MessageText.Normalize(reply));
+        Assert.Contains("que bom que voce me contou", MessageText.Normalize(reply));
         Assert.Contains("8 semanas", MessageText.Normalize(reply));
         Assert.Contains("05/12", MessageText.Normalize(reply));
     }
@@ -873,6 +874,7 @@ public sealed class ConversationServiceTests
     [Theory]
     [InlineData("de quantas semanas estou?", "8 semanas")]
     [InlineData("qual minha data provavel do parto?", "05/12")]
+    [InlineData("qual e a previsao para o meu parto?", "05/12")]
     public async Task Pregnancy_answers_week_and_due_date_questions(string question, string expected)
     {
         await using var db = CreateDbContext();
@@ -883,6 +885,28 @@ public sealed class ConversationServiceTests
 
         Assert.Contains(expected, MessageText.Normalize(reply));
         Assert.Contains("estimativa", MessageText.Normalize(reply));
+        Assert.DoesNotContain("nao consigo confirmar", MessageText.Normalize(reply));
+    }
+
+    [Fact]
+    public async Task Pregnancy_due_date_question_bypasses_overzealous_agent_guardrail()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000084";
+        await CreateCompletedUserServiceAsync(db, phone);
+        var agent = new FakeToolAgent(request =>
+            request.UserMessage.Contains("previsao", StringComparison.OrdinalIgnoreCase)
+                ? new LumaToolCall { ToolName = "medical_guardrail", Confidence = 0.99 }
+                : null);
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        await SendAsync(service, phone, "Estou gravida de 8 semanas");
+        var reply = await SendAsync(service, phone, "Qual é a previsão para o meu parto?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("05/12", normalized);
+        Assert.Contains("estimativa", normalized);
+        Assert.DoesNotContain("nao consigo confirmar", normalized);
     }
 
     [Fact]
@@ -927,6 +951,7 @@ public sealed class ConversationServiceTests
         await using var db = CreateDbContext();
         var phone = "+5516992000078";
         await CreateCompletedUserServiceAsync(db, phone);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
         var service = CreateService(db, new FakeExtractor(_ => null), babyImageService: new FakeBabyImageService(new BabyImageResult(
             false,
             null,
@@ -946,6 +971,7 @@ public sealed class ConversationServiceTests
         await using var db = CreateDbContext();
         var phone = "+5516992000079";
         await CreateCompletedUserServiceAsync(db, phone);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
         var service = CreateService(db, new FakeExtractor(_ => null), babyImageService: new FakeBabyImageService(new BabyImageResult(
             true,
             "https://media.example/baby.png",
@@ -964,6 +990,7 @@ public sealed class ConversationServiceTests
         await using var db = CreateDbContext();
         var phone = "+5516992000080";
         await CreateCompletedUserServiceAsync(db, phone);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
         var queue = new FakeBabyImageJobQueue();
         var responseGenerator = new FakeResponseGenerator(_ => "Não entendi sua resposta.");
         var service = CreateService(db, new FakeExtractor(_ => null), responseGenerator: responseGenerator, babyImageJobQueue: queue);
@@ -981,6 +1008,28 @@ public sealed class ConversationServiceTests
         Assert.Contains("imagem anexada", normalized);
         Assert.Contains("nao precisa mandar outra mensagem", normalized);
         Assert.DoesNotContain("nao entendi", normalized);
+        Assert.Empty(responseGenerator.Requests);
+    }
+
+    [Fact]
+    public async Task Pregnancy_baby_image_request_blocks_basic_plan_without_queue_or_ai_rewriting()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000085";
+        await CreateCompletedUserServiceAsync(db, phone);
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30), planCode: "basico");
+        var queue = new FakeBabyImageJobQueue();
+        var responseGenerator = new FakeResponseGenerator(_ => "Claro, vou gerar sua imagem.");
+        var service = CreateService(db, new FakeExtractor(_ => null), responseGenerator: responseGenerator, babyImageJobQueue: queue);
+
+        await SendAsync(service, phone, "Estou gravida de 7 semanas");
+        responseGenerator.Requests.Clear();
+        var reply = await service.HandleIncomingMessageRichAsync(new IncomingMessage("test", phone, "Poderia me mostrar meu bebê com uma imagem?", null));
+
+        Assert.Null(reply.MediaUrl);
+        Assert.Empty(queue.Jobs);
+        Assert.Contains("plano atual nao oferece", MessageText.Normalize(reply.Body));
+        Assert.Contains("/perfil/", reply.Body);
         Assert.Empty(responseGenerator.Requests);
     }
 
@@ -1047,7 +1096,8 @@ public sealed class ConversationServiceTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Luma:StoreMessageBodies"] = "false",
-                ["Luma:RequireActiveSubscription"] = requireActiveSubscription.ToString()
+                ["Luma:RequireActiveSubscription"] = requireActiveSubscription.ToString(),
+                ["Luma:WebBaseUrl"] = "https://app.luma.test"
             })
             .Build();
 

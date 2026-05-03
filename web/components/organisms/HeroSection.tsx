@@ -5,7 +5,7 @@ export function HeroSection() {
   return (
     <section className="hero">
       <div className="hero-text fade-up">
-        <span className="hero-badge">Em breve</span>
+        <span className="hero-badge">Disponível agora</span>
         <h1>
           Seu ciclo,
           <br />
@@ -14,7 +14,7 @@ export function HeroSection() {
           em uma conversa.
         </h1>
         <p className="hero-sub">
-          Chega de abrir aplicativo que você esquece de usar. Com a Luma, você usa direto pelo WhatsApp: é só mandar uma mensagem e ela organiza tudo.
+          Chega de abrir aplicativo que você esquece de usar. Com a Luma, você conversa direto pelo WhatsApp: registre seu ciclo, acompanhe sintomas, gravidez e lembretes em uma rotina mais leve.
         </p>
         <div className="hero-actions">
           <ButtonLink variant="primary" href="#precos">

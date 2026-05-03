@@ -1,8 +1,8 @@
 import { SectionHeading } from "@/components/molecules/SectionHeading";
 
 const steps = [
-  ["1", "Entre na lista", "Cadastre seu interesse aqui na página. É rápido e gratuito."],
-  ["2", "Receba o acesso", "Quando a Luma estiver disponível, você recebe um convite no WhatsApp."],
+  ["1", "Crie sua conta", "Cadastre seus dados e o celular que será usado no WhatsApp."],
+  ["2", "Escolha seu plano", "Ative o plano que combina com a sua rotina e libere a Luma."],
   ["3", "Converse normalmente", "Mande mensagens como você faz com qualquer contato."],
   ["4", "Tudo organizado", "A Luma registra, calcula previsões e responde quando você perguntar."],
 ];

@@ -50,6 +50,13 @@ public sealed class AccountSecurityTests
     }
 
     [Fact]
+    public void Account_data_consent_is_required_for_registration()
+    {
+        Assert.Null(AccountConsentPolicy.ValidateDataConsent(true));
+        Assert.Contains("autorização", AccountConsentPolicy.ValidateDataConsent(false));
+    }
+
+    [Fact]
     public void Jwt_roundtrip_returns_account_id()
     {
         var accountId = Guid.NewGuid();

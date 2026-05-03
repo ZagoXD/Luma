@@ -45,6 +45,12 @@ export function LoginPageTemplate() {
           setSubmitting(false);
           return;
         }
+
+        if (form.get("dataConsentAccepted") !== "on") {
+          setStatus("Confirme a autorização de coleta e tratamento dos dados para criar sua conta.");
+          setSubmitting(false);
+          return;
+        }
       }
 
       const result = mode === "login"
@@ -58,6 +64,7 @@ export function LoginPageTemplate() {
             cpf,
             phoneNumber,
             password: String(form.get("password") || ""),
+            dataConsentAccepted: true,
           });
 
       router.push(redirectTo === "/perfil" ? `/perfil/${result.user.id}` : redirectTo);
@@ -138,6 +145,16 @@ export function LoginPageTemplate() {
               Senha
               <input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required />
             </label>
+
+            {mode === "register" && (
+              <label className="account-consent">
+                <input name="dataConsentAccepted" type="checkbox" required />
+                <span>
+                  Confirmo que autorizo a coleta e o tratamento dos dados necessários para minha conta, ciclo,
+                  saúde menstrual, gravidez e uso da Luma, conforme a política de privacidade.
+                </span>
+              </label>
+            )}
 
             <button className="account-primary" type="submit" disabled={submitting}>
               {submitting ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}

@@ -122,3 +122,13 @@ public static class AccountInputNormalizer
         return (char)('0' + digit);
     }
 }
+
+public static class AccountConsentPolicy
+{
+    public const string DataConsentRequiredMessage = "Para criar sua conta, confirme a autorização de coleta e tratamento dos dados necessários para a Luma.";
+
+    public static string? ValidateDataConsent(bool accepted)
+    {
+        return accepted ? null : DataConsentRequiredMessage;
+    }
+}

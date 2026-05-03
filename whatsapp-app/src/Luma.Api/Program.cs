@@ -29,13 +29,17 @@ builder.Services.AddDbContext<LumaDbContext>(options =>
 });
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
+builder.Services.Configure<ElevenLabsOptions>(builder.Configuration.GetSection("ElevenLabs"));
 builder.Services.Configure<StripeBillingOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.AddHttpClient<OpenAiResponsesClient>();
 builder.Services.AddHttpClient<IBabyImageService, BabyImageService>();
+builder.Services.AddHttpClient<ISpeechToTextService, ElevenLabsSpeechToTextService>();
+builder.Services.AddHttpClient<ITwilioMediaDownloader, TwilioMediaDownloader>();
 builder.Services.AddScoped<IOnboardingDataExtractor, OpenAiOnboardingDataExtractor>();
 builder.Services.AddScoped<IConversationIntentExtractor, OpenAiConversationIntentExtractor>();
 builder.Services.AddScoped<ILumaToolAgent, OpenAiLumaToolAgent>();
 builder.Services.AddScoped<ILumaResponseGenerator, OpenAiLumaResponseGenerator>();
+builder.Services.AddScoped<IWhatsAppAudioTranscriptionService, WhatsAppAudioTranscriptionService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<RedisConnectionProvider>();
 builder.Services.AddSingleton<MessageIngressGuard>();
@@ -80,6 +84,11 @@ app.MapGet("/health", async (LumaDbContext db) =>
 
 app.MapPost("/account/register", async (AccountRegisterRequest request, LumaDbContext db) =>
 {
+    if (AccountConsentPolicy.ValidateDataConsent(request.DataConsentAccepted) is { } consentError)
+    {
+        return Results.BadRequest(new { message = consentError });
+    }
+
     var normalized = AccountInputNormalizer.NormalizeRegistration(
         request.Email,
         request.Cpf,
@@ -684,7 +693,9 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     ConversationService conversations,
     ConversationScopeDetector scopeDetector,
     MessageIngressGuard ingressGuard,
-    LumaDbContext db) =>
+    IWhatsAppAudioTranscriptionService audioTranscription,
+    LumaDbContext db,
+    IConfiguration configuration) =>
 {
     if (!request.HasFormContentType)
     {
@@ -725,6 +736,36 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     }
 
     await using var lease = decision.Lease;
+    if (string.IsNullOrWhiteSpace(body))
+    {
+        if (WhatsAppAudioTranscriptionService.HasAudioMedia(form))
+        {
+            if (!await HasActiveSubscriptionAccessAsync(db, normalizedFrom))
+            {
+                return TwilioXmlReply("Olá! Para conversar com a Luma pelo WhatsApp, é preciso ter um plano ativo vinculado a este número. Acesse sua conta no site, escolha um plano e depois me chame por aqui novamente.");
+            }
+
+            if (!await HasEssentialFeatureAccessAsync(db, normalizedFrom))
+            {
+                return TwilioXmlReply(await BuildFeatureUpgradeReplyAsync(db, configuration, normalizedFrom, "mensagens por áudio"));
+            }
+        }
+
+        var audio = await audioTranscription.TryTranscribeAsync(form, request.HttpContext.RequestAborted);
+        if (audio.Attempted && audio.Success && !string.IsNullOrWhiteSpace(audio.Text))
+        {
+            body = audio.Text;
+        }
+        else if (audio.Attempted)
+        {
+            return TwilioXmlReply("Eu recebi seu áudio, mas não consegui entender com segurança agora. Pode tentar mandar de novo ou escrever a mensagem em texto?");
+        }
+        else if (int.TryParse(form["NumMedia"].ToString(), out var mediaCount) && mediaCount > 0)
+        {
+            return TwilioXmlReply("Recebi seu arquivo. Por enquanto, consigo interpretar mensagens de texto e áudios curtos pelo WhatsApp.");
+        }
+    }
+
     var reply = await conversations.HandleIncomingMessageRichAsync(new IncomingMessage(
         Provider: "twilio",
         From: normalizedFrom,
@@ -835,6 +876,42 @@ static IResult TwilioEmptyReply()
 {
     var twiml = new XDocument(new XElement("Response"));
     return Results.Text(twiml.ToString(SaveOptions.DisableFormatting), "application/xml", Encoding.UTF8);
+}
+
+static async Task<bool> HasEssentialFeatureAccessAsync(LumaDbContext db, string phone)
+{
+    var now = DateTimeOffset.UtcNow;
+    return await db.AccountSubscriptions.AnyAsync(subscription =>
+        subscription.PhoneNumber == phone
+        && subscription.PlanCode == "essencial"
+        && subscription.CurrentPeriodEndsAt >= now
+        && (subscription.Status == LumaSubscriptionStatuses.Active || subscription.Status == LumaSubscriptionStatuses.Canceled));
+}
+
+static async Task<bool> HasActiveSubscriptionAccessAsync(LumaDbContext db, string phone)
+{
+    var now = DateTimeOffset.UtcNow;
+    return await db.AccountSubscriptions.AnyAsync(subscription =>
+        subscription.PhoneNumber == phone
+        && subscription.CurrentPeriodEndsAt >= now
+        && (subscription.Status == LumaSubscriptionStatuses.Active || subscription.Status == LumaSubscriptionStatuses.Canceled));
+}
+
+static async Task<string> BuildFeatureUpgradeReplyAsync(LumaDbContext db, IConfiguration configuration, string phone, string feature)
+{
+    var account = await db.AccountUsers
+        .AsNoTracking()
+        .FirstOrDefaultAsync(item => item.PhoneNumber == phone);
+
+    var lumaUser = await db.Users
+        .AsNoTracking()
+        .FirstOrDefaultAsync(user => user.PhoneNumber == phone);
+
+    var baseUrl = (configuration.GetValue<string>("Luma:WebBaseUrl") ?? "http://localhost:3000").TrimEnd('/');
+    var profilePath = account is null ? "/perfil" : $"/perfil/{account.Id}";
+    var prefix = string.IsNullOrWhiteSpace(lumaUser?.DisplayName) ? string.Empty : $"{lumaUser.DisplayName}, ";
+
+    return $"{prefix}seu plano atual não oferece {feature}. Você pode atualizar para o Essencial quando quiser no seu painel: {baseUrl}{profilePath}";
 }
 
 static async Task EnsureRuntimeSchemaAsync(LumaDbContext db)
@@ -1378,7 +1455,7 @@ static string? NormalizePlan(string plan)
 }
 
 public sealed record DevIncomingMessage(string From, string Body);
-public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber);
+public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber, bool DataConsentAccepted);
 public sealed record AccountLoginRequest(string Email, string Password);
 public sealed record CheckoutCreateSubscriptionRequest(string PlanCode);
 public sealed record CheckoutConfirmSubscriptionRequest(string PlanCode, string StripeSubscriptionId, string? CardholderName, string? BillingCpf);

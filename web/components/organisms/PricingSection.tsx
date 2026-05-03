@@ -2,10 +2,10 @@ import { PlanCard } from "@/components/molecules/PlanCard";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
 
 const baseFeatures = [
-  { enabled: true, label: "Registro de menstruação por mensagem" },
-  { enabled: true, label: "Registro de sintomas e fluxo" },
+  { enabled: true, label: "Mensagens de texto pelo WhatsApp" },
+  { enabled: true, label: "Registro de menstruação, sintomas e fluxo" },
   { enabled: true, label: "Previsão da próxima menstruação" },
-  { enabled: true, label: "Histórico do ciclo" },
+  { enabled: true, label: "Histórico e calendário visual do ciclo" },
 ];
 
 export function PricingSection() {
@@ -36,8 +36,9 @@ export function PricingSection() {
             description="Tudo que você precisa para registrar seu ciclo de forma simples e sem esforço."
             features={[
               ...baseFeatures,
-              { enabled: false, label: "Lembretes automáticos" },
-              { enabled: false, label: "Lembrete de anticoncepcional" },
+              { enabled: false, label: "Mensagens por áudio" },
+              { enabled: false, label: "Imagens educativas do bebê" },
+              { enabled: false, label: "Notificações e lembretes automáticos" },
             ]}
             cta="Quero esse plano"
             ctaClass="basic-btn"
@@ -58,11 +59,13 @@ export function PricingSection() {
                 <span className="plan-period">/mês</span>
               </>
             }
-            description="Tudo do plano Básico, mais acompanhamento completo para ciclo menstrual e gravidez."
+            description="Tudo do plano Básico, mais recursos inteligentes para uma rotina com menos esforço."
             features={[
               ...baseFeatures,
-              { enabled: true, label: "Acompanhamento de gravidez" },
-              { enabled: true, label: "Respostas com mais contexto" },
+              { enabled: true, label: "Mensagens por áudio" },
+              { enabled: true, label: "Imagens educativas do bebê" },
+              { enabled: true, label: "Notificações e lembretes automáticos" },
+              { enabled: true, label: "Acompanhamento de gravidez com mais contexto" },
             ]}
             cta="Quero esse plano"
             ctaClass="full-btn"

@@ -189,7 +189,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
 
   const subscription = profile?.subscription;
   const plan = subscription ? plans[subscription.planCode] : null;
-  const hasEssentialPlan = subscription?.planCode === "essencial" && subscription.status === "active";
+  const hasEssentialPlan = subscription?.planCode === "essencial" && (subscription.status === "active" || subscription.status === "canceled");
   const nextPlanCode: PlanCode | null = subscription?.planCode === "basico"
     ? "essencial"
     : subscription?.planCode === "essencial"
@@ -223,11 +223,11 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
           </button>
         </div>
 
-        <div className="account-heading profile-heading">
-          <span className="account-kicker">Meu perfil</span>
-          <h1>{profile?.user.fullName}</h1>
-          <p>Configurações de conta, assinatura, WhatsApp e lembretes da Luma.</p>
-        </div>
+          <div className="account-heading profile-heading">
+            <span className="account-kicker">Meu perfil</span>
+            <h1>{profile?.user.fullName}</h1>
+            <p>Gerencie sua conta, assinatura, WhatsApp, calendário e recursos da Luma.</p>
+          </div>
 
         <div className="profile-grid">
           <section className="account-panel profile-card">
@@ -326,7 +326,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
 
           <section className="account-panel profile-card">
             <h2><MessageCircle size={20} /> WhatsApp</h2>
-            <p>A Luma só responde números com plano ativo ou cancelado ainda dentro do período pago.</p>
+              <p>A Luma responde ao número cadastrado quando existe plano ativo ou cancelado ainda dentro do período pago.</p>
             <a className="luma-whatsapp-link" href={lumaWhatsAppLink} target="_blank" rel="noreferrer">
               <MessageCircle size={18} />
               <span>
@@ -338,7 +338,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
           </section>
 
           <section className="account-panel profile-card notification-card">
-            <h2><Bell size={20} /> Notificações</h2>
+            <h2><Bell size={20} /> Recursos Essenciais</h2>
             {hasEssentialPlan && notificationsAvailable ? (
               <>
                 <label className="notification-toggle">
@@ -378,9 +378,10 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
                   {savingNotifications ? "Salvando..." : "Salvar notificações"}
                 </button>
                 {notificationStatus && <p className="account-status info">{notificationStatus}</p>}
+                <p className="profile-note">Seu plano também libera mensagens por áudio e imagens educativas do bebê pelo WhatsApp.</p>
               </>
             ) : (
-              <p>As notificações automáticas ficam disponíveis no plano Essencial depois da primeira conversa com a Luma no WhatsApp.</p>
+              <p>Notificações automáticas, mensagens por áudio e imagens educativas ficam disponíveis no plano Essencial depois da primeira conversa com a Luma no WhatsApp.</p>
             )}
           </section>
         </div>

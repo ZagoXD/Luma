@@ -95,7 +95,20 @@ public sealed class ConversationService(
             subscription.PhoneNumber == phone
             && subscription.PlanCode == "essencial"
             && subscription.CurrentPeriodEndsAt >= now
-            && subscription.Status == SubscriptionStatuses.Active);
+            && (subscription.Status == SubscriptionStatuses.Active || subscription.Status == SubscriptionStatuses.Canceled));
+    }
+
+    private async Task<string> BuildEssentialFeatureUpgradeReplyAsync(LumaUser user, string feature)
+    {
+        var account = await db.AccountUsers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.PhoneNumber == user.PhoneNumber);
+
+        var baseUrl = (configuration.GetValue<string>("Luma:WebBaseUrl") ?? "http://localhost:3000").TrimEnd('/');
+        var profilePath = account is null ? "/perfil" : $"/perfil/{account.Id}";
+        var prefix = string.IsNullOrWhiteSpace(user.DisplayName) ? string.Empty : $"{user.DisplayName}, ";
+
+        return $"{prefix}seu plano atual não oferece {feature}. Você pode atualizar para o Essencial quando quiser no seu painel: {baseUrl}{profilePath}";
     }
 
     private async Task<string> BuildFinalReplyAsync(LumaUser user, string rawBody, string backendReply)
@@ -132,6 +145,16 @@ public sealed class ConversationService(
 
         if (user.OnboardingStep == OnboardingSteps.Completed)
         {
+            if (IsPregnancyDueDateQuestion(body))
+            {
+                return await BuildPregnancyDueDateReplyAsync(user.Id);
+            }
+
+            if (IsPregnancyWeeksQuestion(body))
+            {
+                return await BuildPregnancyWeeksReplyAsync(user.Id, Today());
+            }
+
             if (IsBabyDevelopmentImageQuestion(body))
             {
                 return await BuildBabyDevelopmentImageReplyAsync(user, ParseGestationalWeeks(body), Today());
@@ -390,7 +413,7 @@ public sealed class ConversationService(
 
         if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
         {
-            return "Os lembretes automáticos fazem parte do plano Essencial. Se você quiser, pode alterar seu plano na área de perfil do site.";
+            return await BuildEssentialFeatureUpgradeReplyAsync(user, "notificações automáticas");
         }
 
         var preference = await db.NotificationPreferences.AsNoTracking().FirstOrDefaultAsync(item => item.UserId == user.Id);
@@ -411,7 +434,7 @@ public sealed class ConversationService(
 
         if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
         {
-            return "Eu consigo configurar lembretes automáticos no plano Essencial. Pelo seu cadastro atual, esse recurso ainda não está liberado.";
+            return await BuildEssentialFeatureUpgradeReplyAsync(user, "notificações automáticas");
         }
 
         var preference = await db.NotificationPreferences.FirstOrDefaultAsync(item => item.UserId == user.Id);
@@ -2000,6 +2023,11 @@ public sealed class ConversationService(
             return "Consigo gerar imagens educativas para estimativas entre 4 e 42 semanas de gravidez.";
         }
 
+        if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
+        {
+            return await BuildEssentialFeatureUpgradeReplyAsync(user, "geração de imagens");
+        }
+
         if (babyImageJobs is not null)
         {
             babyImageJobs.Enqueue(new BabyImageJob(user.Id, user.PhoneNumber, info.Week, DateTimeOffset.UtcNow));
@@ -2378,6 +2406,10 @@ public sealed class ConversationService(
     private static bool IsPregnancyDueDateQuestion(string body)
     {
         return body.Contains("data provavel do parto", StringComparison.Ordinal)
+            || body.Contains("previsao para o meu parto", StringComparison.Ordinal)
+            || body.Contains("previsao do parto", StringComparison.Ordinal)
+            || body.Contains("previsao para o parto", StringComparison.Ordinal)
+            || body.Contains("previsao de parto", StringComparison.Ordinal)
             || body.Contains("dpp", StringComparison.Ordinal)
             || body.Contains("quando nasce", StringComparison.Ordinal)
             || body.Contains("quando e o parto", StringComparison.Ordinal);
@@ -2618,10 +2650,11 @@ public sealed class ConversationService(
     private static bool IsSubscriptionRestrictionReply(string reply)
     {
         var normalized = MessageText.Normalize(reply);
-        return normalized.Contains("plano essencial", StringComparison.Ordinal)
-            && (normalized.Contains("lembrete", StringComparison.Ordinal)
-                || normalized.Contains("notificac", StringComparison.Ordinal)
-                || normalized.Contains("recurso ainda nao esta liberado", StringComparison.Ordinal));
+        return normalized.Contains("plano atual nao oferece", StringComparison.Ordinal)
+            || (normalized.Contains("plano essencial", StringComparison.Ordinal)
+              && (normalized.Contains("lembrete", StringComparison.Ordinal)
+                  || normalized.Contains("notificac", StringComparison.Ordinal)
+                  || normalized.Contains("recurso ainda nao esta liberado", StringComparison.Ordinal)));
     }
 
     private static bool IsRequiredBackendPrompt(LumaUser user, string reply)

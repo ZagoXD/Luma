@@ -230,6 +230,30 @@ nav .nav-cta:focus {
   box-shadow: 0 0 0 4px oklch(72% 0.22 295 / 0.14);
 }
 
+.account-form .account-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.account-form .account-consent input {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 0.1rem;
+  padding: 0;
+  accent-color: var(--plum-soft);
+  flex: 0 0 auto;
+}
+
 .form-row,
 .checkout-grid,
 .profile-grid {

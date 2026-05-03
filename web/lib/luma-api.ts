@@ -91,7 +91,8 @@ export const plans: Record<PlanCode, { name: string; price: string; benefits: st
     benefits: [
       "Liberação da Luma no WhatsApp",
       "Registro de menstruação, sintomas, humor e relação sexual",
-      "Histórico básico do ciclo",
+      "Histórico e calendário visual do ciclo",
+      "Previsões estimadas de menstruação",
     ],
   },
   essencial: {
@@ -99,8 +100,9 @@ export const plans: Record<PlanCode, { name: string; price: string; benefits: st
     price: "R$ 9,90/mês",
     benefits: [
       "Tudo do plano Básico",
-      "Acompanhamento menstrual e de gravidez",
-      "Respostas mais completas com contexto do seu histórico",
+      "Mensagens por áudio no WhatsApp",
+      "Notificações automáticas e lembretes",
+      "Imagens educativas do bebê e outros recursos visuais",
     ],
   },
 };
@@ -115,6 +117,7 @@ export async function registerAccount(input: {
   fullName: string;
   password: string;
   phoneNumber: string;
+  dataConsentAccepted: boolean;
 }) {
   return appRequest<{ user: AccountUser }>("/api/auth/register", {
     method: "POST",
