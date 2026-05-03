@@ -1,10 +1,10 @@
 # Roadmap da Luma
 
-Última atualização: 30/04/2026.
+Última atualização: 03/05/2026.
 
 ## Estado Atual
 
-A Luma está próxima da V1 operacional. O MVP de WhatsApp, cadastro, ciclo menstrual, gravidez, web, Stripe, Redis e notificações estruturais foi implementado.
+A Luma está na reta final da V1 operacional. O MVP de WhatsApp, cadastro, ciclo menstrual, gravidez, web, Stripe, Redis, notificações estruturais, áudio, imagem educativa, calendário e criptografia de dados reais foi implementado.
 
 Status resumido:
 
@@ -16,6 +16,7 @@ Status resumido:
 - Etapa 5: implementada como primeira versão SaaS.
 - Etapa 5.1: concluída.
 - Etapa 6: parcialmente concluída.
+- Etapa 7: concluída como primeira camada de privacidade em repouso.
 
 ## Etapa 1 - App Inicial e Cadastro
 
@@ -137,6 +138,8 @@ Implementado:
 - Bloqueio defensivo de grupo.
 - Worker de notificações estruturado.
 - Preferências de notificação.
+- Transcrição de áudio via ElevenLabs para plano Essencial.
+- Bloqueio de áudio, imagens e notificações para plano Básico.
 
 Pendente:
 
@@ -145,6 +148,24 @@ Pendente:
 - Testar mensagens proativas reais fora da janela de 24h.
 - Melhorar painel administrativo.
 - Adicionar monitoramento de erros/custos.
+
+## Etapa 7 - Privacidade e Criptografia de Dados Reais
+
+Status: concluída como primeira camada operacional.
+
+Implementado:
+
+- Criptografia de campos sensíveis com AES-GCM.
+- Hashes HMAC para busca por e-mail, CPF e telefone.
+- Backfill automático no startup da API para dados já existentes.
+- Busca por `EmailHash`, `CpfHash` e `PhoneHash` nos fluxos principais.
+- Criptografia de e-mail, CPF, nome, telefone, nome de exibição, telefone de assinatura, metadados de eventos, payloads pendentes, corpo de mensagens quando salvo, método contraceptivo e conversas bloqueadas.
+- Variáveis `Privacy__EncryptionEnabled`, `Privacy__EncryptionKey`, `Privacy__LookupPepper` e `Privacy__ActiveKeyId`.
+
+Observação:
+
+- Datas operacionais continuam em colunas próprias para manter calendário, notificações e cálculos funcionando.
+- Uma próxima evolução pode criptografar datas exatas usando índices cegos por mês/dia.
 
 ## Meta para V1.0.0
 
@@ -160,6 +181,7 @@ Para considerar a V1.0.0 pronta para piloto:
 8. Logs e alertas mínimos configurados.
 9. Política de privacidade e termos publicados.
 10. Testes principais passando no CI.
+11. Chaves de privacidade configuradas e guardadas com segurança no ambiente de produção.
 
 ## Pós-V1
 
@@ -173,3 +195,4 @@ Possíveis etapas para V2:
 - Lembretes avançados por tipo de contraceptivo.
 - Suporte a reembolso/gestão financeira mais completa.
 - Melhorias de LGPD, auditoria e exclusão de conta.
+- Criptografia de datas exatas com índices cegos.

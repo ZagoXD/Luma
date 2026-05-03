@@ -1,6 +1,6 @@
 # Proposta e Status da Migração para OpenAI
 
-Última atualização: 30/04/2026.
+Última atualização: 03/05/2026.
 
 ## Decisão
 
@@ -16,6 +16,8 @@ Implementado:
 - Geração de resposta final humanizada pela IA.
 - Backend autoritativo validando todas as ações.
 - RAG interno simples via `LumaKnowledgeBase`.
+- OpenAI Images para imagem educativa do bebê.
+- Bloqueios autoritativos por plano antes de executar áudio, imagem ou notificações.
 
 ## Arquitetura Conversacional
 
@@ -27,6 +29,7 @@ Mensagem da usuária
   -> base RAG relevante
   -> OpenAI sugere uma ação
   -> backend valida
+  -> backend verifica plano e privacidade
   -> backend executa leitura/escrita autorizada
   -> OpenAI escreve resposta final quando permitido
   -> WhatsApp
@@ -53,6 +56,7 @@ A IA não pode:
 - burlar validações de plano;
 - conversar em grupo;
 - executar ações fora das tools permitidas.
+- descriptografar dados por conta própria.
 
 ## Tools Atuais
 
@@ -77,6 +81,9 @@ A IA não pode:
 - `get_notification_preferences`
 - `update_notification_preferences`
 - `disable_notification_preferences`
+- `get_baby_development`
+- `generate_baby_size_image`
+- `get_cycle_calendar`
 - `search_luma_knowledge_base`
 - `medical_guardrail`
 - `out_of_scope`
@@ -90,6 +97,7 @@ OpenAI__Model=gpt-5.4-mini
 OpenAI__TimeoutSeconds=12
 OpenAI__MaxOutputTokens=700
 OpenAI__ReasoningEffort=none
+OpenAI__ImageModel=gpt-image-1
 ```
 
 ## Próximas Melhorias

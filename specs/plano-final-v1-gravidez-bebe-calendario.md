@@ -1,6 +1,6 @@
 # Plano Final da V1 - Gravidez, Desenvolvimento do Bebê e Calendário
 
-Última atualização: 02/05/2026.
+Última atualização: 03/05/2026.
 
 Este documento descreve a etapa final funcional da Luma antes da V1.0.0. A etapa foi implementada com TDD e cobre validação do fluxo de gravidez, respostas sobre desenvolvimento do bebê, geração opcional de imagem educativa com OpenAI + Cloudflare R2 e calendário visual mensal na web.
 
@@ -12,6 +12,7 @@ Implementado:
 - Base `BabyDevelopmentKnowledgeBase` com estimativas seguras de 4 a 42 semanas.
 - Tool `get_baby_development`.
 - Tool `generate_baby_size_image` com geração OpenAI Images e upload para Cloudflare R2 quando as credenciais estiverem configuradas.
+- Bloqueio de geração de imagem para plano Básico.
 - Fallback textual quando a geração de imagem ou o R2 não estiverem configurados.
 - Serviço `CycleCalendarService`.
 - Endpoint autenticado `GET /account/calendar?month=YYYY-MM`.
@@ -23,7 +24,7 @@ Implementado:
 
 Validação executada:
 
-- `dotnet test whatsapp-app/Luma.sln`: 102 testes passando.
+- `dotnet test whatsapp-app/Luma.sln`: 123 testes passando.
 - `npm run lint`: passando.
 - `npm run build`: passando.
 - `docker compose --env-file .env -f docker-compose.yml config --quiet`: passando.
@@ -88,6 +89,8 @@ Imagem educativa:
 - A API salva a imagem no Cloudflare R2.
 - A resposta pelo WhatsApp pode incluir mídia via TwiML `<Media>`.
 - Se algo falhar, a Luma responde por texto.
+- Recurso disponível apenas no plano Essencial.
+- Usuárias do plano Básico recebem orientação para atualizar o plano no painel.
 
 Cloudflare R2 configurado:
 
@@ -194,6 +197,7 @@ A V1.0.0 fica pronta quando:
 - gravidez estiver validada;
 - desenvolvimento do bebê por semana estiver disponível;
 - imagem educativa do bebê estiver configurada com R2 em ambiente desejado;
+- plano Essencial liberar imagem e plano Básico bloquear imagem corretamente;
 - calendário visual estiver disponível na web;
 - pedidos de calendário pelo WhatsApp retornarem link direto;
 - rate limit, Redis e bloqueio de grupos estiverem ativos;

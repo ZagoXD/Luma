@@ -1,6 +1,6 @@
 # Tutorial Stripe da Luma
 
-Última atualização: 30/04/2026.
+Última atualização: 03/05/2026.
 
 ## Objetivo
 
@@ -10,6 +10,11 @@ Configurar pagamentos recorrentes da Luma com Stripe Billing e Stripe Elements, 
 
 - Luma Básico: R$ 5,90/mês.
 - Luma Essencial: R$ 9,90/mês.
+
+Diferenciais atuais:
+
+- Básico: conversa por texto, registros, histórico, calendário e previsões.
+- Essencial: áudio, notificações automáticas, imagens educativas do bebê e recursos visuais.
 
 ## O Que Já Está Implementado
 
@@ -24,6 +29,7 @@ Configurar pagamentos recorrentes da Luma com Stripe Billing e Stripe Elements, 
 - Troca de cartão.
 - Salvamento do cartão como método padrão da assinatura.
 - Sincronização local de assinatura com `account_subscriptions`.
+- Bloqueio de áudio, notificações e imagens para plano Básico.
 
 ## Criar Produtos e Preços no Stripe
 
@@ -121,6 +127,7 @@ Fluxo:
 5. Verificar perfil.
 6. Verificar no Stripe se a assinatura está ativa.
 7. Enviar mensagem para a Luma no WhatsApp pelo celular cadastrado.
+8. Testar recurso premium, como áudio ou imagem educativa, apenas com plano Essencial.
 
 ## Cancelamento
 

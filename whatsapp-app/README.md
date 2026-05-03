@@ -2,6 +2,8 @@
 
 Este diretório contém a API da Luma, os testes de backend e o Docker Compose usado no desenvolvimento local.
 
+Status atual: a API cobre WhatsApp, cadastro, ciclo menstrual, gravidez, calendário, assinaturas, Stripe, Redis, áudio por ElevenLabs, imagens educativas por OpenAI + R2, notificações estruturais e criptografia de dados reais da usuária.
+
 ## Serviços Locais
 
 O `docker-compose.yml` sobe:
@@ -51,10 +53,25 @@ API_HOST_PORT=5050
 WEB_HOST_PORT=3000
 LUMA_REQUIRE_ACTIVE_SUBSCRIPTION=true
 OPENAI_API_KEY=
+OPENAI_IMAGE_MODEL=gpt-image-1
+ELEVENLABS_API_KEY=
+PRIVACY_ENCRYPTION_ENABLED=true
+PRIVACY_ENCRYPTION_KEY=
+PRIVACY_LOOKUP_PEPPER=
+PRIVACY_ACTIVE_KEY_ID=local-dev
 STRIPE_SECRET_KEY=
 STRIPE_BASIC_PRICE_ID=
 STRIPE_ESSENTIAL_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+R2_ACCOUNT_ID=
+R2_BUCKET_NAME=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_ENDPOINT=
+R2_PUBLIC_BASE_URL=
 NOTIFICATIONS_WORKER_ENABLED=false
 ```
 
@@ -63,6 +80,16 @@ NOTIFICATIONS_WORKER_ENABLED=false
 ```powershell
 dotnet test Luma.sln
 ```
+
+Status atual: 123 testes de backend passando.
+
+## Privacidade
+
+Dados reais sensíveis são criptografados em repouso com AES-GCM. Buscas por e-mail, CPF e telefone usam hashes HMAC, sem consultar o valor real em claro.
+
+Campos protegidos incluem e-mail, CPF, nome, telefone, nome de exibição no WhatsApp, telefone de assinatura, metadados de eventos, payloads pendentes, corpo de mensagens quando salvo, método contraceptivo e conversas bloqueadas.
+
+Datas operacionais continuam em colunas próprias para preservar calendário, notificações e cálculos.
 
 ## Webhook Twilio
 
@@ -114,6 +141,23 @@ Invoke-RestMethod -Method Post http://localhost:5050/dev/notifications/run
 ```
 
 Sem templates configurados, envios reais não devem ser esperados.
+
+## Recursos por Plano
+
+Plano Básico:
+
+- conversa por texto;
+- registros menstruais, sintomas, humor e relação sexual;
+- histórico, calendário e previsões.
+
+Plano Essencial:
+
+- tudo do Básico;
+- áudio no WhatsApp;
+- notificações automáticas;
+- imagens educativas do bebê e recursos visuais.
+
+Áudio, imagens e notificações são bloqueados pelo backend para usuárias do plano Básico, com resposta orientando upgrade no painel.
 
 ## Comandos Úteis
 

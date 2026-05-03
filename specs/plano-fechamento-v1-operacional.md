@@ -1,6 +1,6 @@
 # Luma - Plano de Fechamento Operacional da V1
 
-Última atualização: 30/04/2026.
+Última atualização: 03/05/2026.
 
 Este documento descreve os três fluxos finais da V1 operacional da Luma:
 
@@ -8,7 +8,7 @@ Este documento descreve os três fluxos finais da V1 operacional da Luma:
 2. Bloqueio defensivo de conversas em grupo.
 3. Notificações automáticas do plano Essencial.
 
-Status atual: a estrutura de backend, web, banco e Docker foi implementada. Para notificações reais fora da janela de 24h ainda falta cadastrar e aprovar os templates no Twilio/Meta e configurar os SIDs nas variáveis de ambiente.
+Status atual: a estrutura de backend, web, banco, Docker, Redis, áudio, bloqueios por plano e criptografia de dados reais foi implementada. Para notificações reais fora da janela de 24h ainda falta cadastrar e aprovar os templates no Twilio/Meta e configurar os SIDs nas variáveis de ambiente.
 
 ## Item 1 - Rate Limit e Anti-Spam com Redis
 
@@ -118,6 +118,7 @@ Implementado:
   - `get_notification_preferences`
   - `update_notification_preferences`
   - `disable_notification_preferences`
+- Bloqueio para plano Básico com link de upgrade no perfil.
 
 Regras:
 
@@ -174,6 +175,8 @@ Olá, {{1}}. Como você está se sentindo hoje? Se quiser, pode me contar sobre 
 3. Copiar os SIDs dos templates para as variáveis `Twilio__Template*`.
 4. Configurar credenciais reais da Twilio.
 5. Ativar `Notifications__WorkerEnabled=true` somente quando o envio real estiver pronto.
+6. Configurar as variáveis de privacidade no ambiente de produção.
+7. Configurar a chave da ElevenLabs no ambiente de produção.
 
 ## Validação Atual
 
@@ -195,3 +198,5 @@ Status:
 - Redis respondendo `PONG`.
 - Tabelas novas criadas no Postgres local.
 - Endpoint `/dev/notifications/run` respondendo.
+- Criptografia de dados reais validada no banco local.
+- 123 testes de backend passando.

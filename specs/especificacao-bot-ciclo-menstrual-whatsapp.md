@@ -1,6 +1,6 @@
 # Especificação do Bot Luma para WhatsApp
 
-Última atualização: 30/04/2026.
+Última atualização: 03/05/2026.
 
 ## Objetivo
 
@@ -11,6 +11,7 @@ A Luma é uma assistente de WhatsApp para apoio ao acompanhamento de ciclo menst
 - Conversa natural em PT-BR, com tom humano, cuidadoso e acolhedor.
 - Backend autoritativo: a IA interpreta intenções, mas não grava dados diretamente.
 - Dados sensíveis tratados com consentimento, mínimo necessário e sem salvar corpo das mensagens por padrão.
+- Dados reais da usuária protegidos em repouso com criptografia e hashes de busca.
 - Guardrails fixos para temas médicos, LGPD, privacidade, menores de idade e conversas fora de escopo.
 - Usuárias só podem conversar pelo WhatsApp se tiverem plano ativo ou cancelado ainda dentro do período pago.
 
@@ -24,6 +25,7 @@ WhatsApp/Twilio
   -> Rate limit/cooldown por telefone
   -> Lock de processamento por telefone
   -> Validação de assinatura
+  -> Transcrição de áudio via ElevenLabs quando permitido pelo plano
   -> ConversationService
   -> Agente OpenAI escolhe uma tool
   -> Backend valida e executa
@@ -156,6 +158,12 @@ Implementado:
 - Troca de cartão.
 - Perfil web com dados de conta, plano, dados menstruais e número da Luma.
 
+Regras de plano:
+
+- Plano Básico libera conversa por texto, registros, histórico, calendário e previsões.
+- Plano Essencial libera áudio, notificações automáticas, imagens educativas do bebê e outros recursos visuais.
+- Se uma usuária do Básico pedir áudio, notificações ou imagens, o backend bloqueia e envia link do painel para upgrade.
+
 ## Notificações do Plano Essencial
 
 Implementado no backend e na web:
@@ -179,6 +187,35 @@ Status atual:
 - Worker deve permanecer desativado até os templates Twilio/Meta serem criados e aprovados.
 - Variável recomendada por enquanto: `Notifications__WorkerEnabled=false`.
 
+## Áudio no WhatsApp
+
+Implementado:
+
+- Download de áudio recebido pela Twilio.
+- Transcrição via ElevenLabs.
+- Envio do texto transcrito para o mesmo fluxo conversacional da Luma.
+- Bloqueio autoritativo para plano Básico.
+
+Regras:
+
+- Áudio é recurso do plano Essencial.
+- Se a usuária do Básico enviar áudio, a Luma responde informando que o plano atual não oferece esse serviço e envia link do perfil.
+- Se a transcrição falhar, a Luma pede para reenviar o áudio ou escrever a mensagem.
+
+## Imagens Educativas
+
+Implementado:
+
+- Imagens educativas do bebê via OpenAI Images.
+- Upload para Cloudflare R2.
+- Envio por Twilio usando TwiML com `<Media>`.
+- Bloqueio autoritativo para plano Básico.
+
+Regras:
+
+- Imagem é recurso do plano Essencial.
+- As imagens são educativas, sem diagnóstico, sem texto clínico e sem substituir ultrassom ou pré-natal.
+
 ## Segurança e Limites
 
 Implementado:
@@ -190,6 +227,19 @@ Implementado:
 - Deduplicação de webhooks.
 - Corpo de mensagens não é persistido por padrão.
 - Guardrails médicos fixos.
+- Criptografia AES-GCM de dados reais sensíveis em repouso.
+- Hashes HMAC para busca por e-mail, CPF e telefone.
+
+Dados criptografados:
+
+- e-mail, CPF, nome e telefone da conta;
+- telefone e nome de exibição da usuária no WhatsApp;
+- telefone de assinatura;
+- metadados de eventos;
+- payloads de intenções pendentes;
+- corpo de mensagens, caso o armazenamento seja habilitado;
+- método contraceptivo;
+- dados de conversas bloqueadas.
 
 ## Fora de Escopo
 

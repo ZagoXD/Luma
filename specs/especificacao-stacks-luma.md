@@ -1,6 +1,6 @@
 # Especificação de Stacks da Luma
 
-Última atualização: 30/04/2026.
+Última atualização: 03/05/2026.
 
 ## Visão Geral
 
@@ -11,8 +11,10 @@ A Luma é composta por:
 - PostgreSQL.
 - Redis.
 - OpenAI API.
+- ElevenLabs Speech to Text.
 - Twilio WhatsApp.
 - Stripe Billing.
+- Cloudflare R2.
 - Docker para desenvolvimento local.
 - Render como ambiente atual de teste/deploy.
 
@@ -36,6 +38,9 @@ Responsabilidades:
 - Webhooks Stripe.
 - Rate limit e locks com Redis.
 - Worker de notificações.
+- Transcrição de áudio.
+- Geração de imagens educativas.
+- Criptografia de dados reais da usuária em repouso.
 
 ## Frontend Web
 
@@ -61,6 +66,7 @@ Responsabilidades:
 - Troca de cartão.
 - Configuração de notificações.
 - Link para WhatsApp da Luma.
+- Calendário visual mensal.
 
 ## Banco de Dados
 
@@ -90,6 +96,9 @@ Observação:
 
 - O projeto ainda usa criação/atualização runtime de schema pela API.
 - Em produção madura, o recomendado é migrar para migrations formais do EF Core.
+- Dados reais sensíveis são criptografados com AES-GCM.
+- Buscas por e-mail, CPF e telefone usam hashes HMAC.
+- Datas operacionais seguem em claro por enquanto para preservar cálculos, calendário e notificações.
 
 ## Redis
 
@@ -144,6 +153,44 @@ Histórico:
 - Ollama foi usado como possibilidade inicial, mas foi removido do projeto.
 - A Luma agora usa OpenAI em desenvolvimento e produção para manter comportamento consistente.
 
+## Áudio
+
+Stack atual:
+
+- ElevenLabs Speech to Text.
+- Download de mídia da Twilio usando credenciais da conta.
+- Recurso disponível apenas no plano Essencial.
+
+Variáveis:
+
+```env
+ElevenLabs__ApiKey=
+ElevenLabs__BaseUrl=https://api.elevenlabs.io/v1
+ElevenLabs__SpeechToTextModel=scribe_v2
+ElevenLabs__LanguageCode=pt
+ElevenLabs__TimeoutSeconds=30
+ElevenLabs__MaxAudioBytes=10485760
+```
+
+## Privacidade
+
+Stack atual:
+
+- AES-GCM para criptografia de campos.
+- HMAC-SHA256 para índices de busca.
+- Backfill automático no startup.
+
+Variáveis:
+
+```env
+Privacy__EncryptionEnabled=true
+Privacy__EncryptionKey=
+Privacy__LookupPepper=
+Privacy__ActiveKeyId=prod-2026-01
+```
+
+Campos protegidos incluem e-mail, CPF, nome, telefone, nome de exibição, telefone de assinatura, metadados de eventos, payloads pendentes, corpo de mensagens quando salvo, método contraceptivo e conversas bloqueadas.
+
 ## WhatsApp
 
 Provedor:
@@ -174,6 +221,11 @@ Planos:
 
 - Básico: R$ 5,90/mês.
 - Essencial: R$ 9,90/mês.
+
+Diferenciais:
+
+- Básico: conversa por texto, registros, histórico, calendário e previsões.
+- Essencial: áudio, notificações automáticas, imagens educativas e recursos visuais.
 
 Funcionalidades:
 
@@ -226,5 +278,5 @@ npm run build
 
 Status atual:
 
-- 95 testes de backend passando.
+- 123 testes de backend passando.
 - Build e lint da web passando.
