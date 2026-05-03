@@ -18,9 +18,6 @@ export function WaitlistSection() {
             Crie sua conta e libere
             <br />a <em style={{ color: "var(--lavender)" }}>Luma</em> no WhatsApp.
           </h2>
-          <p className="section-lead" style={{ textAlign: "center", margin: "0 auto 2rem" }}>
-            A lista de espera saiu do caminho. Agora o MVP usa pré-cadastro, checkout simulado e plano ativo para autorizar a conversa.
-          </p>
         </div>
 
         <div className="launch-actions fade-up" style={{ transitionDelay: "0.1s" }}>

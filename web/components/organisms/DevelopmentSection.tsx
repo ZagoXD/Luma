@@ -24,8 +24,8 @@ export function DevelopmentSection() {
             <span>em construção</span>
           </div>
         </div>
-        <ButtonLink variant="primary" href="#lista">
-          Quero entrar na lista de espera
+        <ButtonLink variant="primary" href="#precos">
+          Quero meu plano
         </ButtonLink>
       </div>
     </section>

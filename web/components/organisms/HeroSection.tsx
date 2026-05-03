@@ -17,8 +17,8 @@ export function HeroSection() {
           Chega de abrir aplicativo que você esquece de usar. Com a Luma, você usa direto pelo WhatsApp: é só mandar uma mensagem e ela organiza tudo.
         </p>
         <div className="hero-actions">
-          <ButtonLink variant="primary" href="#lista">
-            Entrar na lista de espera
+          <ButtonLink variant="primary" href="#precos">
+            Adquira seu plano
           </ButtonLink>
           <ButtonLink variant="ghost" href="#como">
             Ver como funciona
