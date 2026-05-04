@@ -1,4 +1,4 @@
-import { ChatMessage, PhoneFrame } from "@/components/molecules/PhoneFrame";
+import { AudioChatMessage, ChatMessage, PhoneFrame } from "@/components/molecules/PhoneFrame";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
 import { MessageSquareText, BarChart3, BellDot } from "lucide-react";
 
@@ -65,11 +65,11 @@ export function SolutionSection() {
                 }
               />
               <div className="convo-divider">— mais tarde —</div>
-              <ChatMessage type="user" time="18:10" text="quando é minha próxima menstruação?" />
+              <AudioChatMessage time="18:10" duration="0:09" />
               <ChatMessage
                 type="bot"
                 time="18:10"
-                text="Pela sua média atual, ela está prevista para perto de 22/05. Mas pode variar um pouco — cada ciclo tem seu ritmo 🌿"
+                text="Entendi seu áudio. Pela sua média atual, a próxima menstruação está prevista para perto de 22/05."
               />
             </PhoneFrame>
           </div>

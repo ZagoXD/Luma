@@ -1,5 +1,6 @@
 import { LandingPageBehavior } from "@/components/behaviors/LandingPageBehavior";
 import { BenefitsSection } from "@/components/organisms/BenefitsSection";
+import { CalendarPreviewSection } from "@/components/organisms/CalendarPreviewSection";
 import { DevelopmentSection } from "@/components/organisms/DevelopmentSection";
 import { Footer } from "@/components/organisms/Footer";
 import { HeroSection } from "@/components/organisms/HeroSection";
@@ -21,6 +22,7 @@ export function LandingPageTemplate() {
         <HeroSection />
         <ProblemSection />
         <SolutionSection />
+        <CalendarPreviewSection />
         <RegisterSection />
         <HowItWorksSection />
         <BenefitsSection />
