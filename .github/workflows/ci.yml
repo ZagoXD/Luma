@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: whatsapp-app
+
+    env:
+      ASPNETCORE_ENVIRONMENT: Testing
+      Luma__JwtSigningKey: luma-ci-jwt-signing-key-with-enough-length-for-tests
+      Luma__RequireActiveSubscription: "false"
+      Luma__StoreMessageBodies: "false"
+      OpenAI__ApiKey: ci-placeholder
+      OpenAI__Model: gpt-5.4-mini
+      OpenAI__ImageModel: gpt-image-1
+      Privacy__EncryptionEnabled: "true"
+      Privacy__EncryptionKey: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+      Privacy__LookupPepper: HyAdHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA=
+      Privacy__ActiveKeyId: ci
+      Stripe__SecretKey: sk_test_ci_placeholder
+      Stripe__BasicPriceId: price_ci_basic
+      Stripe__EssentialPriceId: price_ci_essential
+      Twilio__AccountSid: AC00000000000000000000000000000000
+      Twilio__AuthToken: ci-placeholder
+      Twilio__WhatsAppFrom: whatsapp:+14155238886
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore backend
+        run: dotnet restore Luma.sln
+
+      - name: Test backend
+        run: dotnet test Luma.sln --configuration Release --no-restore
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    env:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:5050
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: "+14155238886"
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      LUMA_API_BASE_URL: http://localhost:5050
+      LUMA_COOKIE_SECURE: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        run: npm run build
