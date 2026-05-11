@@ -48,7 +48,7 @@ const defaultNotificationPreference: NotificationPreference = {
 
 export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   const router = useRouter();
-  const lumaWhatsAppNumber = process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+14155238886";
+  const lumaWhatsAppNumber = process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+16204008668";
   const lumaWhatsAppLink = buildWhatsAppLink(lumaWhatsAppNumber);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>(defaultNotificationPreference);

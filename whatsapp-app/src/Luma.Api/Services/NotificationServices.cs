@@ -297,24 +297,30 @@ public sealed class NotificationProcessor(
             var expected = userPreference.LastPeriodStartDate.Value.AddDays(userPreference.AverageCycleLength);
             if (expected == today.AddDays(1))
             {
-                count += await TrySendAsync(user, subscription.Id, NotificationTypes.PeriodExpectedTomorrow, today, now, cancellationToken);
+                count += await TrySendAsync(preference, subscription.Id, NotificationTypes.PeriodExpectedTomorrow, today, now, cancellationToken);
             }
             else if (expected == today)
             {
-                count += await TrySendAsync(user, subscription.Id, NotificationTypes.PeriodExpectedToday, today, now, cancellationToken);
+                count += await TrySendAsync(preference, subscription.Id, NotificationTypes.PeriodExpectedToday, today, now, cancellationToken);
             }
         }
 
         if (preference.ContraceptiveReminderEnabled && userPreference?.ContraceptiveType == "pill")
         {
-            count += await TrySendAsync(user, subscription.Id, NotificationTypes.ContraceptiveDaily, today, now, cancellationToken);
+            count += await TrySendAsync(preference, subscription.Id, NotificationTypes.ContraceptiveDaily, today, now, cancellationToken);
+        }
+
+        if (preference.SymptomCheckinEnabled)
+        {
+            count += await TrySendAsync(preference, subscription.Id, NotificationTypes.SymptomCheckin, today, now, cancellationToken);
         }
 
         return count;
     }
 
-    private async Task<int> TrySendAsync(LumaUser user, Guid subscriptionId, string type, DateOnly date, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<int> TrySendAsync(NotificationPreference preference, Guid subscriptionId, string type, DateOnly date, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        var user = preference.User!;
         var lockKey = $"luma:notification-lock:{user.Id}:{type}:{date:yyyyMMdd}";
         var connection = await redis.GetConnectionAsync();
         if (connection is not null)
@@ -343,7 +349,7 @@ public sealed class NotificationProcessor(
         db.NotificationDeliveries.Add(delivery);
         await db.SaveChangesAsync(cancellationToken);
 
-        var result = await sender.SendTemplateAsync(user.PhoneNumber, type, BuildVariables(user, type), cancellationToken);
+        var result = await sender.SendTemplateAsync(user.PhoneNumber, type, BuildVariables(preference, type), cancellationToken);
         delivery.Status = result.Success ? NotificationDeliveryStatuses.Sent : NotificationDeliveryStatuses.Failed;
         delivery.SentAt = result.Success ? now : null;
         delivery.ProviderMessageId = result.ProviderMessageId;
@@ -354,11 +360,12 @@ public sealed class NotificationProcessor(
         return 1;
     }
 
-    private static Dictionary<string, string> BuildVariables(LumaUser user, string type)
+    private static Dictionary<string, string> BuildVariables(NotificationPreference preference, string type)
     {
+        var user = preference.User!;
         var name = string.IsNullOrWhiteSpace(user.DisplayName) ? "por aqui" : user.DisplayName;
         return type == NotificationTypes.ContraceptiveDaily
-            ? new Dictionary<string, string> { ["1"] = name, ["2"] = "seu horário combinado" }
+            ? new Dictionary<string, string> { ["1"] = name, ["2"] = preference.ReminderTime.ToString("HH:mm") }
             : new Dictionary<string, string> { ["1"] = name };
     }
 

@@ -301,7 +301,7 @@ Stripe__SecretKey=
 Stripe__WebhookSecret=
 Twilio__AccountSid=
 Twilio__AuthToken=
-Twilio__WhatsAppFrom=whatsapp:+14155238886
+Twilio__WhatsAppFrom=whatsapp:+16204008668
 ```
 
 Web:
@@ -311,7 +311,7 @@ LUMA_API_BASE_URL=https://sua-api
 NEXT_PUBLIC_API_BASE_URL=https://sua-api
 NEXT_PUBLIC_BASE_URL=https://sua-web
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER=+14155238886
+NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER=+16204008668
 LUMA_COOKIE_SECURE=true
 ```
 

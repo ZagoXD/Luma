@@ -8,7 +8,7 @@ Este documento descreve os três fluxos finais da V1 operacional da Luma:
 2. Bloqueio defensivo de conversas em grupo.
 3. Notificações automáticas do plano Essencial.
 
-Status atual: a estrutura de backend, web, banco, Docker, Redis, áudio, bloqueios por plano e criptografia de dados reais foi implementada. Para notificações reais fora da janela de 24h ainda falta cadastrar e aprovar os templates no Twilio/Meta e configurar os SIDs nas variáveis de ambiente.
+Status atual: a estrutura de backend, web, banco, Docker, Redis, áudio, bloqueios por plano e criptografia de dados reais foi implementada. O sender oficial da Luma está configurado na Twilio e os templates de notificação já estão elegíveis para WhatsApp business initiated e WhatsApp user initiated.
 
 ## Item 1 - Rate Limit e Anti-Spam com Redis
 
@@ -133,36 +133,38 @@ Variáveis:
 ```env
 Twilio__AccountSid=
 Twilio__AuthToken=
-Twilio__WhatsAppFrom=whatsapp:+14155238886
-Twilio__TemplatePeriodTomorrow=
-Twilio__TemplatePeriodToday=
-Twilio__TemplateContraceptiveDaily=
-Twilio__TemplateSymptomCheckin=
+Twilio__WhatsAppFrom=whatsapp:+16204008668
+Twilio__TemplatePeriodTomorrow=HX4b51b08ea4f3c17dcd443c1e3071995b
+Twilio__TemplatePeriodToday=HX39b4b60a687825f5bb3665ca2fcb3907
+Twilio__TemplateContraceptiveDaily=HXa23267cf19348a4fa39f958164125141
+Twilio__TemplateSymptomCheckin=HX459958fb7dfe7243b0eb43064e77021e
 Notifications__WorkerEnabled=false
 Notifications__WorkerIntervalSeconds=60
 ```
 
-Templates sugeridos:
+Templates ativos:
 
-`luma_period_tomorrow`
+Observação: as versões `ptbr_v2`/`ptbr_v3` foram criadas para corrigir encoding de acentuação nos templates anteriores. Enquanto elas estiverem pendentes de elegibilidade WhatsApp, mantenha `Notifications__WorkerEnabled=false`. Depois que aparecerem como elegíveis para WhatsApp business initiated, altere para `true`.
+
+`luma_period_tomorrow_ptbr_v2`
 
 ```txt
 Olá, {{1}}. Sua menstruação está prevista para amanhã. Se quiser, posso te ajudar a acompanhar sintomas, fluxo ou humor por aqui.
 ```
 
-`luma_period_today`
+`luma_period_today_ptbr_v2`
 
 ```txt
 Olá, {{1}}. Sua menstruação está prevista para hoje. Se ela começar, pode me responder "menstruei hoje" que eu registro para você.
 ```
 
-`luma_contraceptive_daily`
+`luma_contraceptive_daily_ptbr_v3`
 
 ```txt
-Olá, {{1}}. Passando para lembrar do seu anticoncepcional de hoje, como combinado para {{2}}.
+Olá, {{1}}. Passando para lembrar do seu anticoncepcional de hoje, como combinado para {{2}}. Se já tomou, pode seguir tranquila.
 ```
 
-`luma_symptom_checkin`
+`luma_symptom_checkin_ptbr_v2`
 
 ```txt
 Olá, {{1}}. Como você está se sentindo hoje? Se quiser, pode me contar sobre cólica, fluxo, humor ou outros sintomas.
@@ -170,13 +172,11 @@ Olá, {{1}}. Como você está se sentindo hoje? Se quiser, pode me contar sobre 
 
 ## O Que Falta Manualmente
 
-1. Criar os templates no Twilio/Meta.
-2. Aguardar aprovação.
-3. Copiar os SIDs dos templates para as variáveis `Twilio__Template*`.
-4. Configurar credenciais reais da Twilio.
-5. Ativar `Notifications__WorkerEnabled=true` somente quando o envio real estiver pronto.
-6. Configurar as variáveis de privacidade no ambiente de produção.
-7. Configurar a chave da ElevenLabs no ambiente de produção.
+1. Manter os SIDs acima configurados no Render/API.
+2. Alterar `Notifications__WorkerEnabled=true` no ambiente em que as notificações devem rodar depois que os templates novos estiverem elegíveis.
+3. Configurar as variáveis de privacidade no ambiente de produção.
+4. Configurar a chave da ElevenLabs no ambiente de produção.
+5. Configurar monitoramento/logs para falhas de envio da Twilio.
 
 ## Validação Atual
 
