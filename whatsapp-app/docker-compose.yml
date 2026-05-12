@@ -58,6 +58,7 @@ services:
       Twilio__AccountSid: ${TWILIO_ACCOUNT_SID:-}
       Twilio__AuthToken: ${TWILIO_AUTH_TOKEN:-}
       Twilio__WhatsAppFrom: ${TWILIO_WHATSAPP_FROM:-whatsapp:+16204008668}
+      Twilio__TypingIndicatorsEnabled: ${TWILIO_TYPING_INDICATORS_ENABLED:-true}
       Twilio__TemplatePeriodTomorrow: ${TWILIO_TEMPLATE_PERIOD_TOMORROW:-}
       Twilio__TemplatePeriodToday: ${TWILIO_TEMPLATE_PERIOD_TODAY:-}
       Twilio__TemplateContraceptiveDaily: ${TWILIO_TEMPLATE_CONTRACEPTIVE_DAILY:-}

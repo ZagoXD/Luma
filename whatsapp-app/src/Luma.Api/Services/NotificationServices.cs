@@ -12,6 +12,7 @@ public sealed class TwilioOptions
     public string AccountSid { get; set; } = string.Empty;
     public string AuthToken { get; set; } = string.Empty;
     public string WhatsAppFrom { get; set; } = string.Empty;
+    public bool TypingIndicatorsEnabled { get; set; } = true;
     public string TemplatePeriodTomorrow { get; set; } = string.Empty;
     public string TemplatePeriodToday { get; set; } = string.Empty;
     public string TemplateContraceptiveDaily { get; set; } = string.Empty;
@@ -141,6 +142,11 @@ public interface IWhatsAppMediaSender
     Task<NotificationSendResult> SendMediaAsync(string to, string body, string mediaUrl, CancellationToken cancellationToken = default);
 }
 
+public interface IWhatsAppTypingIndicatorSender
+{
+    Task<bool> TrySendAsync(string messageSid, CancellationToken cancellationToken = default);
+}
+
 public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppNotificationSender> logger) : IWhatsAppNotificationSender
 {
     private readonly TwilioOptions _options = new()
@@ -250,6 +256,61 @@ public sealed class TwilioWhatsAppMediaSender(HttpClient http, IConfiguration co
             : null;
 
         return new NotificationSendResult(true, sid, null);
+    }
+}
+
+public sealed class TwilioWhatsAppTypingIndicatorSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppTypingIndicatorSender> logger) : IWhatsAppTypingIndicatorSender
+{
+    private readonly TwilioOptions _options = new()
+    {
+        AccountSid = configuration.GetValue<string>("Twilio:AccountSid") ?? string.Empty,
+        AuthToken = configuration.GetValue<string>("Twilio:AuthToken") ?? string.Empty,
+        TypingIndicatorsEnabled = configuration.GetValue("Twilio:TypingIndicatorsEnabled", true)
+    };
+
+    public async Task<bool> TrySendAsync(string messageSid, CancellationToken cancellationToken = default)
+    {
+        if (!_options.TypingIndicatorsEnabled
+            || string.IsNullOrWhiteSpace(messageSid)
+            || !IsSupportedMessageSid(messageSid)
+            || string.IsNullOrWhiteSpace(_options.AccountSid)
+            || string.IsNullOrWhiteSpace(_options.AuthToken))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://messaging.twilio.com/v2/Indicators/Typing.json");
+            var auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.AccountSid}:{_options.AuthToken}"));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", auth);
+            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["messageId"] = messageSid,
+                ["channel"] = "whatsapp"
+            });
+
+            using var response = await http.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            logger.LogInformation("Twilio typing indicator skipped for {MessageSid}. Status {StatusCode}: {Response}", messageSid, (int)response.StatusCode, content.Length > 256 ? content[..256] : content);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogInformation(ex, "Twilio typing indicator failed for {MessageSid}. Continuing without typing indicator.", messageSid);
+            return false;
+        }
+    }
+
+    private static bool IsSupportedMessageSid(string messageSid)
+    {
+        return messageSid.StartsWith("SM", StringComparison.OrdinalIgnoreCase)
+            || messageSid.StartsWith("MM", StringComparison.OrdinalIgnoreCase);
     }
 }
 

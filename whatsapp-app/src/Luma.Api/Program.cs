@@ -47,6 +47,7 @@ builder.Services.AddSingleton<MessageIngressGuard>();
 builder.Services.AddSingleton<ConversationScopeDetector>();
 builder.Services.AddHttpClient<IWhatsAppNotificationSender, TwilioWhatsAppNotificationSender>();
 builder.Services.AddHttpClient<IWhatsAppMediaSender, TwilioWhatsAppMediaSender>();
+builder.Services.AddHttpClient<IWhatsAppTypingIndicatorSender, TwilioWhatsAppTypingIndicatorSender>();
 builder.Services.AddSingleton<BabyImageJobQueue>();
 builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
 builder.Services.AddScoped<NotificationPreferenceService>();
@@ -703,6 +704,7 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     ConversationScopeDetector scopeDetector,
     MessageIngressGuard ingressGuard,
     IWhatsAppAudioTranscriptionService audioTranscription,
+    IWhatsAppTypingIndicatorSender typingIndicators,
     LumaDbContext db,
     IConfiguration configuration) =>
 {
@@ -745,6 +747,8 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     }
 
     await using var lease = decision.Lease;
+    _ = typingIndicators.TrySendAsync(messageSid, CancellationToken.None);
+
     if (string.IsNullOrWhiteSpace(body))
     {
         if (WhatsAppAudioTranscriptionService.HasAudioMedia(form))
