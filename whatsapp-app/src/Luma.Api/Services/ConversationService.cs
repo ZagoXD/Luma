@@ -146,6 +146,12 @@ public sealed class ConversationService(
             return await ContinueOnboardingAsync(user, body, rawBody);
         }
 
+        if (user.OnboardingStep != OnboardingSteps.Completed
+            && IsLikelyRequiredOnboardingAnswer(user.OnboardingStep, body, rawBody))
+        {
+            return await ContinueOnboardingAsync(user, body, rawBody);
+        }
+
         if (user.OnboardingStep == OnboardingSteps.Completed)
         {
             if (IsPregnancyDueDateQuestion(body))
@@ -171,6 +177,17 @@ public sealed class ConversationService(
             if (IsCalendarQuestion(body))
             {
                 return await BuildCycleCalendarLinkReplyAsync(user, ParseCalendarMonth(body, Today()), Today());
+            }
+
+            if (IsFertileWindowQuestion(body))
+            {
+                return BuildFertileWindowReply(user, Today());
+            }
+
+            var notificationReply = await TryHandleNotificationPreferencesFromNaturalMessageAsync(user, body, rawBody);
+            if (notificationReply is not null)
+            {
+                return notificationReply;
             }
         }
 
@@ -425,7 +442,95 @@ public sealed class ConversationService(
             return "Você ainda não tem lembretes automáticos ativos. Posso configurar avisos de previsão menstrual e, se fizer sentido para seu método contraceptivo, lembrete de anticoncepcional.";
         }
 
-        return $"Seus lembretes estão assim: previsão menstrual {(preference.PeriodReminderEnabled ? "ativa" : "desativada")}, anticoncepcional {(preference.ContraceptiveReminderEnabled ? "ativo" : "desativado")} e check-in {(preference.SymptomCheckinEnabled ? "ativo" : "desativado")}. Horário preferido: {preference.ReminderTime:HH\\:mm}.";
+        return $"Seus lembretes estão assim: previsão menstrual {(preference.PeriodReminderEnabled ? "ativa" : "desativada")} às {preference.PeriodReminderTime:HH\\:mm}, anticoncepcional {(preference.ContraceptiveReminderEnabled ? "ativo" : "desativado")} às {preference.ContraceptiveReminderTime:HH\\:mm} e check-in {(preference.SymptomCheckinEnabled ? "ativo" : "desativado")} às {preference.SymptomCheckinTime:HH\\:mm}.";
+    }
+
+    private async Task<string?> TryHandleNotificationPreferencesFromNaturalMessageAsync(LumaUser user, string body, string rawBody)
+    {
+        if (!LooksLikeNotificationPreferenceCommand(body))
+        {
+            return null;
+        }
+
+        if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
+        {
+            return await BuildEssentialFeatureUpgradeReplyAsync(user, "notificações automáticas");
+        }
+
+        var wantsPeriodReminder = MentionsPeriodReminder(body);
+        var wantsContraceptiveReminder = MentionsContraceptiveReminder(body);
+        var wantsSymptomCheckin = MentionsSymptomCheckinReminder(body);
+        var disables = body.Contains("desativ", StringComparison.Ordinal)
+            || body.Contains("remover", StringComparison.Ordinal)
+            || body.Contains("cancelar", StringComparison.Ordinal);
+
+        if (!wantsPeriodReminder && !wantsContraceptiveReminder && !wantsSymptomCheckin)
+        {
+            return null;
+        }
+
+        var preference = await db.NotificationPreferences.FirstOrDefaultAsync(item => item.UserId == user.Id);
+        if (preference is null)
+        {
+            preference = new NotificationPreference { UserId = user.Id };
+            db.NotificationPreferences.Add(preference);
+        }
+
+        if (wantsContraceptiveReminder)
+        {
+            var userPreference = EnsurePreference(user);
+            if (MentionsPill(body) || userPreference.ContraceptiveType is null or "none" or "prefer_not_say")
+            {
+                userPreference.ContraceptiveType = "pill";
+                userPreference.UsesHormonalContraceptive = true;
+                userPreference.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            if (userPreference.ContraceptiveType != "pill")
+            {
+                preference.ContraceptiveReminderEnabled = false;
+                preference.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync();
+                return "Posso te ajudar com lembretes, sim. Por enquanto, o lembrete diário de anticoncepcional fica disponível para pílula. Posso manter os avisos de previsão menstrual, se você quiser.";
+            }
+
+            preference.ContraceptiveReminderEnabled = !disables;
+        }
+
+        if (wantsPeriodReminder)
+        {
+            preference.PeriodReminderEnabled = !disables;
+        }
+
+        if (wantsSymptomCheckin)
+        {
+            preference.SymptomCheckinEnabled = !disables;
+        }
+
+        if (NotificationPreferenceService.TryParseReminderTime(rawBody, out var reminderTime)
+            || NotificationPreferenceService.TryParseReminderTime(body, out reminderTime))
+        {
+            preference.ReminderTime = reminderTime;
+            if (wantsPeriodReminder)
+            {
+                preference.PeriodReminderTime = reminderTime;
+            }
+
+            if (wantsContraceptiveReminder)
+            {
+                preference.ContraceptiveReminderTime = reminderTime;
+            }
+
+            if (wantsSymptomCheckin)
+            {
+                preference.SymptomCheckinTime = reminderTime;
+            }
+        }
+
+        preference.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        return $"Pronto, deixei seus lembretes atualizados: previsão menstrual {(preference.PeriodReminderEnabled ? $"ativa às {preference.PeriodReminderTime:HH\\:mm}" : "desativada")}, lembrete da pílula {(preference.ContraceptiveReminderEnabled ? $"ativo às {preference.ContraceptiveReminderTime:HH\\:mm}" : "desativado")} e check-in {(preference.SymptomCheckinEnabled ? $"ativo às {preference.SymptomCheckinTime:HH\\:mm}" : "desativado")}.";
     }
 
     private async Task<string> ExecuteUpdateNotificationPreferencesToolAsync(LumaUser user, LumaToolCall tool)
@@ -478,6 +583,20 @@ public sealed class ConversationService(
             }
 
             preference.ReminderTime = reminderTime;
+            if (tool.PeriodReminderEnabled == true)
+            {
+                preference.PeriodReminderTime = reminderTime;
+            }
+
+            if (tool.ContraceptiveReminderEnabled == true)
+            {
+                preference.ContraceptiveReminderTime = reminderTime;
+            }
+
+            if (tool.SymptomCheckinEnabled == true)
+            {
+                preference.SymptomCheckinTime = reminderTime;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(tool.TimeZone))
@@ -488,7 +607,7 @@ public sealed class ConversationService(
         preference.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        return $"Pronto, deixei seus lembretes salvos para {preference.ReminderTime:HH\\:mm}. Você pode pedir para mudar ou desativar quando quiser.";
+        return $"Pronto, deixei seus lembretes salvos. Previsão menstrual: {preference.PeriodReminderTime:HH\\:mm}; pílula: {preference.ContraceptiveReminderTime:HH\\:mm}; check-in: {preference.SymptomCheckinTime:HH\\:mm}. Você pode pedir para mudar ou desativar quando quiser.";
     }
 
     private async Task<string> ExecuteDisableNotificationPreferencesToolAsync(LumaUser user)
@@ -1713,8 +1832,11 @@ public sealed class ConversationService(
         var intro = CountCapturedFields(captured) >= 2
             ? $"{name}pronto. Obrigada por ja me passar tudo isso; seu cadastro inicial ficou completo."
             : $"{name}pronto. Seu cadastro inicial ficou completo.";
+        var contraceptiveNote = EnsurePreference(user).ContraceptiveType == "pill"
+            ? "\n\nComo você usa pílula, se seu plano permitir, também posso configurar lembrete diário do anticoncepcional e avisos de previsão menstrual."
+            : "\n\nSe seu plano permitir, também posso configurar avisos de previsão menstrual e outros lembretes pelo WhatsApp.";
 
-        return $"{intro}\n\nA partir de agora, pode falar comigo de um jeito bem natural. Por exemplo:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo intenso\"\n\"to com colica forte\"\n\"hoje estou irritada\"\n\"tive relacao dia 20\"\n\"quando e minha proxima menstruacao?\"\n\nEu vou te ajudar a organizar seus registros, sempre como estimativa e sem substituir orientacao medica.";
+        return $"{intro}\n\nA partir de agora, seu cadastro está ativo e você já pode falar comigo de um jeito bem natural. Por exemplo:\n\n\"menstruei hoje\"\n\"acabou ontem\"\n\"fluxo intenso\"\n\"tô com cólica forte\"\n\"hoje estou irritada\"\n\"tive relação dia 20\"\n\"quando é minha próxima menstruação?\"{contraceptiveNote}\n\nEu vou te ajudar a organizar seus registros, sempre como estimativa e sem substituir orientação médica.";
     }
 
     private static string PendingIntentCapturedMessage(LumaUser user, PendingIntent pending, DateOnly today)
@@ -1795,6 +1917,27 @@ public sealed class ConversationService(
 
         var expected = preference.LastPeriodStartDate.Value.AddDays(preference.AverageCycleLength);
         return $"Pela sua media atual, sua proxima menstruacao esta prevista para perto de {FormatDate(expected)}. Essa e uma estimativa, não uma certeza.";
+    }
+
+    private static string BuildFertileWindowReply(LumaUser user, DateOnly today)
+    {
+        var preference = EnsurePreference(user);
+        if (preference.LastPeriodStartDate is null)
+        {
+            return "Ainda não tenho a data da sua última menstruação para estimar janela fértil e ovulação. Você pode me dizer algo como \"menstruei dia 10/04\".";
+        }
+
+        var nextPeriod = preference.LastPeriodStartDate.Value.AddDays(preference.AverageCycleLength);
+        while (nextPeriod < today)
+        {
+            nextPeriod = nextPeriod.AddDays(preference.AverageCycleLength);
+        }
+
+        var ovulation = nextPeriod.AddDays(-14);
+        var fertileStart = ovulation.AddDays(-5);
+        var fertileEnd = ovulation;
+
+        return $"Pela sua média atual, sua próxima janela fértil estimada vai de {FormatDate(fertileStart)} a {FormatDate(fertileEnd)}, com ovulação estimada perto de {FormatDate(ovulation)}. Isso é uma estimativa baseada no seu ciclo e não confirma fertilidade.";
     }
 
     private static string BuildLastPeriodReply(LumaUser user)
@@ -2115,6 +2258,35 @@ public sealed class ConversationService(
             || body.Contains("18+", StringComparison.Ordinal);
     }
 
+    private static bool IsLikelyRequiredOnboardingAnswer(string step, string body, string rawBody)
+    {
+        return step switch
+        {
+            OnboardingSteps.AwaitingConsent => IsAffirmative(body) || IsNegative(body),
+            OnboardingSteps.AwaitingDisplayName => TryExtractDisplayName(body, rawBody) is not null || LooksLikeStandaloneName(rawBody),
+            OnboardingSteps.AwaitingAgeConfirmation => IsAffirmative(body) || IsNegative(body) || HasExplicitAgeEvidence(body),
+            OnboardingSteps.AwaitingLastPeriodStart => DateParser.IsUnknown(body)
+                || DateParser.ParseFlexibleDate(rawBody, DateOnly.FromDateTime(DateTime.UtcNow)) is not null
+                || DateParser.ParseDaysAgo(rawBody) is not null,
+            OnboardingSteps.AwaitingAverageCycleLength => MessageText.ExtractFirstInteger(body) is >= 21 and <= 45 || DateParser.IsUnknown(body),
+            OnboardingSteps.AwaitingAveragePeriodLength => MessageText.ExtractFirstInteger(body) is >= 2 and <= 10,
+            OnboardingSteps.AwaitingContraceptiveMethod => ParseContraceptiveType(body) is not null,
+            _ => false
+        };
+    }
+
+    private static bool LooksLikeStandaloneName(string rawBody)
+    {
+        var trimmed = rawBody.Trim();
+        if (trimmed.Length is < 2 or > 60)
+        {
+            return false;
+        }
+
+        var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length <= 2 && words.All(word => word.All(ch => char.IsLetter(ch) || ch is '\'' or '-'));
+    }
+
     private static bool ShouldUseAiForOnboarding(string rawBody)
     {
         return rawBody.Any(char.IsLetter) && rawBody.Trim().Length >= 8;
@@ -2316,6 +2488,53 @@ public sealed class ConversationService(
     {
         return body.Contains("proxima", StringComparison.Ordinal)
             || body.Contains("quando", StringComparison.Ordinal) && body.Contains("menstru", StringComparison.Ordinal);
+    }
+
+    private static bool IsFertileWindowQuestion(string body)
+    {
+        return body.Contains("janela fertil", StringComparison.Ordinal)
+            || body.Contains("periodo fertil", StringComparison.Ordinal)
+            || body.Contains("ovulacao", StringComparison.Ordinal)
+            || body.Contains("ovular", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeNotificationPreferenceCommand(string body)
+    {
+        return (body.Contains("lembrete", StringComparison.Ordinal)
+                || body.Contains("aviso", StringComparison.Ordinal)
+                || body.Contains("notific", StringComparison.Ordinal))
+            && (MentionsPeriodReminder(body)
+                || MentionsContraceptiveReminder(body)
+                || MentionsSymptomCheckinReminder(body));
+    }
+
+    private static bool MentionsPeriodReminder(string body)
+    {
+        return body.Contains("previsao menstrual", StringComparison.Ordinal)
+            || body.Contains("menstruacao", StringComparison.Ordinal)
+            || body.Contains("menstrual", StringComparison.Ordinal)
+            || body.Contains("menstrua", StringComparison.Ordinal);
+    }
+
+    private static bool MentionsContraceptiveReminder(string body)
+    {
+        return body.Contains("anticoncepcional", StringComparison.Ordinal)
+            || body.Contains("pilula", StringComparison.Ordinal)
+            || body.Contains("remedio", StringComparison.Ordinal)
+            || body.Contains("contraceptivo", StringComparison.Ordinal);
+    }
+
+    private static bool MentionsPill(string body)
+    {
+        return body.Contains("pilula", StringComparison.Ordinal)
+            || body.Contains("anticoncepcional", StringComparison.Ordinal);
+    }
+
+    private static bool MentionsSymptomCheckinReminder(string body)
+    {
+        return body.Contains("sintoma", StringComparison.Ordinal)
+            || body.Contains("check-in", StringComparison.Ordinal)
+            || body.Contains("checkin", StringComparison.Ordinal);
     }
 
     private static bool IsLastPeriodQuestion(string body)

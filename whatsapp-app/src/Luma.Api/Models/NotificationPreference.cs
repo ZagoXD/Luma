@@ -8,6 +8,9 @@ public sealed class NotificationPreference
     public bool ContraceptiveReminderEnabled { get; set; }
     public bool SymptomCheckinEnabled { get; set; }
     public TimeOnly ReminderTime { get; set; } = new(9, 0);
+    public TimeOnly PeriodReminderTime { get; set; } = new(9, 0);
+    public TimeOnly ContraceptiveReminderTime { get; set; } = new(9, 0);
+    public TimeOnly SymptomCheckinTime { get; set; } = new(9, 0);
     public string TimeZone { get; set; } = "America/Sao_Paulo";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

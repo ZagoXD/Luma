@@ -25,7 +25,10 @@ public sealed class NotificationProcessorTests
         {
             UserId = user.Id,
             ContraceptiveReminderEnabled = true,
-            ReminderTime = new TimeOnly(20, 15),
+            ReminderTime = new TimeOnly(9, 0),
+            PeriodReminderTime = new TimeOnly(8, 0),
+            ContraceptiveReminderTime = new TimeOnly(20, 15),
+            SymptomCheckinTime = new TimeOnly(21, 0),
             TimeZone = "America/Sao_Paulo",
             User = user
         });
@@ -52,6 +55,7 @@ public sealed class NotificationProcessorTests
             UserId = user.Id,
             SymptomCheckinEnabled = true,
             ReminderTime = new TimeOnly(9, 0),
+            SymptomCheckinTime = new TimeOnly(9, 0),
             TimeZone = "America/Sao_Paulo",
             User = user
         });
@@ -63,6 +67,66 @@ public sealed class NotificationProcessorTests
         var message = Assert.Single(sender.Messages);
         Assert.Equal(NotificationTypes.SymptomCheckin, message.TemplateKey);
         Assert.Equal("Julia", message.Variables["1"]);
+    }
+
+    [Fact]
+    public async Task RunDueNotificationsAsync_SendsWithinReminderToleranceWindow()
+    {
+        await using var db = CreateDbContext();
+        var sender = new CapturingNotificationSender();
+        var now = new DateTimeOffset(2026, 5, 10, 22, 43, 0, TimeSpan.Zero);
+        var user = await CreateEssentialUserAsync(db, "+5516992330311", "Nay", now);
+        db.UserPreferences.Add(new UserPreference
+        {
+            UserId = user.Id,
+            ContraceptiveType = "pill"
+        });
+        db.NotificationPreferences.Add(new NotificationPreference
+        {
+            UserId = user.Id,
+            ContraceptiveReminderEnabled = true,
+            ReminderTime = new TimeOnly(9, 0),
+            ContraceptiveReminderTime = new TimeOnly(19, 41),
+            TimeZone = "America/Sao_Paulo",
+            User = user
+        });
+        await db.SaveChangesAsync();
+
+        var processed = await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+
+        Assert.Equal(1, processed);
+        Assert.Single(sender.Messages);
+    }
+
+    [Fact]
+    public async Task RunDueNotificationsAsync_UsesIndependentReminderTimes()
+    {
+        await using var db = CreateDbContext();
+        var sender = new CapturingNotificationSender();
+        var now = new DateTimeOffset(2026, 5, 10, 12, 0, 0, TimeSpan.Zero);
+        var user = await CreateEssentialUserAsync(db, "+5516992330312", "Marina", now);
+        db.UserPreferences.Add(new UserPreference
+        {
+            UserId = user.Id,
+            ContraceptiveType = "pill"
+        });
+        db.NotificationPreferences.Add(new NotificationPreference
+        {
+            UserId = user.Id,
+            ContraceptiveReminderEnabled = true,
+            SymptomCheckinEnabled = true,
+            ContraceptiveReminderTime = new TimeOnly(7, 0),
+            SymptomCheckinTime = new TimeOnly(9, 0),
+            TimeZone = "America/Sao_Paulo",
+            User = user
+        });
+        await db.SaveChangesAsync();
+
+        var processed = await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+
+        Assert.Equal(1, processed);
+        var message = Assert.Single(sender.Messages);
+        Assert.Equal(NotificationTypes.SymptomCheckin, message.TemplateKey);
     }
 
     private static LumaDbContext CreateDbContext()

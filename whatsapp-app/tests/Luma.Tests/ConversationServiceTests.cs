@@ -218,6 +218,7 @@ public sealed class ConversationServiceTests
         var preference = await db.NotificationPreferences.SingleAsync(item => item.UserId == user.Id);
         Assert.True(preference.PeriodReminderEnabled);
         Assert.Equal(new TimeOnly(21, 15), preference.ReminderTime);
+        Assert.Equal(new TimeOnly(21, 15), preference.PeriodReminderTime);
         Assert.Contains("21:15", reply);
     }
 
@@ -246,6 +247,7 @@ public sealed class ConversationServiceTests
         var preference = await db.NotificationPreferences.SingleAsync(item => item.UserId == user.Id);
         Assert.True(preference.ContraceptiveReminderEnabled);
         Assert.Equal(new TimeOnly(6, 45), preference.ReminderTime);
+        Assert.Equal(new TimeOnly(6, 45), preference.ContraceptiveReminderTime);
         Assert.Contains("06:45", reply);
     }
 
@@ -301,7 +303,10 @@ public sealed class ConversationServiceTests
             PeriodReminderEnabled = true,
             ContraceptiveReminderEnabled = true,
             SymptomCheckinEnabled = false,
-            ReminderTime = new TimeOnly(8, 30)
+            ReminderTime = new TimeOnly(8, 30),
+            PeriodReminderTime = new TimeOnly(8, 0),
+            ContraceptiveReminderTime = new TimeOnly(7, 0),
+            SymptomCheckinTime = new TimeOnly(21, 0)
         });
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
@@ -311,7 +316,49 @@ public sealed class ConversationServiceTests
         var normalized = MessageText.Normalize(reply);
         Assert.Contains("previsao menstrual ativa", normalized);
         Assert.Contains("anticoncepcional ativo", normalized);
-        Assert.Contains("08:30", reply);
+        Assert.Contains("08:00", reply);
+        Assert.Contains("07:00", reply);
+    }
+
+    [Fact]
+    public async Task Natural_notification_request_updates_period_and_pill_reminders_without_agent_loop()
+    {
+        await using var db = CreateDbContext();
+        var phone = "+5516992000084";
+        var agent = new FakeToolAgent(_ => null);
+        var service = await CreateCompletedUserServiceAsync(db, phone, toolAgent: agent);
+        await MarkUserContraceptiveAsync(db, phone, "pill");
+        await AddAccountWithSubscriptionAsync(db, phone, SubscriptionStatuses.Active, DateTimeOffset.UtcNow.AddDays(30));
+        agent.Requests.Clear();
+
+        var reply = await SendAsync(service, phone, "Quero manter os avisos de previsão menstrual, o anticoncepcional é pílula sim. O horario é 7h da manhã");
+
+        var user = await db.Users.SingleAsync(user => user.PhoneNumber == phone);
+        var preference = await db.NotificationPreferences.SingleAsync(item => item.UserId == user.Id);
+        Assert.True(preference.PeriodReminderEnabled);
+        Assert.True(preference.ContraceptiveReminderEnabled);
+        Assert.Equal(new TimeOnly(7, 0), preference.ReminderTime);
+        Assert.Equal(new TimeOnly(7, 0), preference.PeriodReminderTime);
+        Assert.Equal(new TimeOnly(7, 0), preference.ContraceptiveReminderTime);
+        Assert.Contains("previsao menstrual ativa", MessageText.Normalize(reply));
+        Assert.Contains("pilula ativo", MessageText.Normalize(reply));
+        Assert.Contains("07:00", reply);
+        Assert.Empty(agent.Requests);
+    }
+
+    [Fact]
+    public async Task Completed_user_can_ask_next_fertile_window_and_ovulation()
+    {
+        await using var db = CreateDbContext();
+        var service = await CreateCompletedUserServiceAsync(db, "+5516992000085");
+
+        var reply = await SendAsync(service, "+5516992000085", "Qual é minha próxima janela fértil e ovulação?");
+
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("janela fertil", normalized);
+        Assert.Contains("ovulacao", normalized);
+        Assert.Contains("04/05", reply);
+        Assert.Contains("09/05", reply);
     }
 
     [Fact]
@@ -521,6 +568,52 @@ public sealed class ConversationServiceTests
         Assert.Equal(usesHormonal, user.Preference!.UsesHormonalContraceptive);
         Assert.Equal(expectedType, user.Preference.ContraceptiveType);
         Assert.Contains("cadastro inicial ficou completo", MessageText.Normalize(reply));
+    }
+
+    [Theory]
+    [InlineData("1", false, "none")]
+    [InlineData("2", true, "pill")]
+    [InlineData("9", false, "prefer_not_say")]
+    public async Task Onboarding_accepts_numeric_contraceptive_options(string answer, bool usesHormonal, string expectedType)
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db, new FakeExtractor(_ => null));
+
+        var phone = $"+55169920{Random.Shared.Next(10000, 99999)}";
+        await CompleteBasicOnboardingUntilContraceptiveAsync(service, phone);
+        var reply = await SendAsync(service, phone, answer);
+
+        var user = await db.Users.Include(user => user.Preference).SingleAsync(user => user.PhoneNumber == phone);
+        Assert.Equal(OnboardingSteps.Completed, user.OnboardingStep);
+        Assert.Equal(usesHormonal, user.Preference!.UsesHormonalContraceptive);
+        Assert.Equal(expectedType, user.Preference.ContraceptiveType);
+        var normalized = MessageText.Normalize(reply);
+        Assert.Contains("cadastro inicial", normalized);
+        Assert.Contains("completo", normalized);
+        Assert.Contains("pode falar comigo", normalized);
+    }
+
+    [Fact]
+    public async Task Onboarding_numeric_contraceptive_answer_bypasses_agent()
+    {
+        await using var db = CreateDbContext();
+        var agent = new FakeToolAgent(_ => new LumaToolCall
+        {
+            ToolName = "search_luma_knowledge_base",
+            Confidence = 0.99
+        });
+        var service = CreateService(db, new FakeExtractor(_ => null), toolAgent: agent);
+
+        var phone = "+5516992000086";
+        await CompleteBasicOnboardingUntilContraceptiveAsync(service, phone);
+        agent.Requests.Clear();
+        var reply = await SendAsync(service, phone, "1");
+
+        var user = await db.Users.Include(user => user.Preference).SingleAsync(user => user.PhoneNumber == phone);
+        Assert.Equal(OnboardingSteps.Completed, user.OnboardingStep);
+        Assert.Equal("none", user.Preference!.ContraceptiveType);
+        Assert.Contains("cadastro inicial", MessageText.Normalize(reply));
+        Assert.Empty(agent.Requests);
     }
 
     [Fact]

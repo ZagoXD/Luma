@@ -43,6 +43,9 @@ const defaultNotificationPreference: NotificationPreference = {
   contraceptiveReminderEnabled: false,
   symptomCheckinEnabled: false,
   reminderTime: "09:00",
+  periodReminderTime: "09:00",
+  contraceptiveReminderTime: "09:00",
+  symptomCheckinTime: "09:00",
   timeZone: "America/Sao_Paulo",
 };
 
@@ -341,38 +344,60 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
             <h2><Bell size={20} /> Recursos Essenciais</h2>
             {hasEssentialPlan && notificationsAvailable ? (
               <>
-                <label className="notification-toggle">
-                  <input
-                    type="checkbox"
-                    checked={notificationPreference.periodReminderEnabled}
-                    onChange={(event) => setNotificationPreference((current) => ({ ...current, periodReminderEnabled: event.target.checked }))}
-                  />
-                  Avisos de previsão menstrual
-                </label>
-                <label className="notification-toggle">
-                  <input
-                    type="checkbox"
-                    checked={notificationPreference.contraceptiveReminderEnabled}
-                    onChange={(event) => setNotificationPreference((current) => ({ ...current, contraceptiveReminderEnabled: event.target.checked }))}
-                  />
-                  Lembrete de anticoncepcional
-                </label>
-                <label className="notification-toggle">
-                  <input
-                    type="checkbox"
-                    checked={notificationPreference.symptomCheckinEnabled}
-                    onChange={(event) => setNotificationPreference((current) => ({ ...current, symptomCheckinEnabled: event.target.checked }))}
-                  />
-                  Check-in de sintomas
-                </label>
-                <label className="notification-time">
-                  Horário preferido
-                  <input
-                    type="time"
-                    value={notificationPreference.reminderTime}
-                    onChange={(event) => setNotificationPreference((current) => ({ ...current, reminderTime: event.target.value }))}
-                  />
-                </label>
+                <div className="notification-setting">
+                  <label className="notification-toggle">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreference.periodReminderEnabled}
+                      onChange={(event) => setNotificationPreference((current) => ({ ...current, periodReminderEnabled: event.target.checked }))}
+                    />
+                    Avisos de previsão menstrual
+                  </label>
+                  <label className="notification-time">
+                    Horário
+                    <input
+                      type="time"
+                      value={notificationPreference.periodReminderTime}
+                      onChange={(event) => setNotificationPreference((current) => ({ ...current, periodReminderTime: event.target.value, reminderTime: event.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="notification-setting">
+                  <label className="notification-toggle">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreference.contraceptiveReminderEnabled}
+                      onChange={(event) => setNotificationPreference((current) => ({ ...current, contraceptiveReminderEnabled: event.target.checked }))}
+                    />
+                    Lembrete de anticoncepcional
+                  </label>
+                  <label className="notification-time">
+                    Horário
+                    <input
+                      type="time"
+                      value={notificationPreference.contraceptiveReminderTime}
+                      onChange={(event) => setNotificationPreference((current) => ({ ...current, contraceptiveReminderTime: event.target.value, reminderTime: event.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="notification-setting">
+                  <label className="notification-toggle">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreference.symptomCheckinEnabled}
+                      onChange={(event) => setNotificationPreference((current) => ({ ...current, symptomCheckinEnabled: event.target.checked }))}
+                    />
+                    Check-in de sintomas
+                  </label>
+                  <label className="notification-time">
+                    Horário
+                    <input
+                      type="time"
+                      value={notificationPreference.symptomCheckinTime}
+                      onChange={(event) => setNotificationPreference((current) => ({ ...current, symptomCheckinTime: event.target.value, reminderTime: event.target.value }))}
+                    />
+                  </label>
+                </div>
                 <button className="account-primary" type="button" onClick={handleSaveNotifications} disabled={savingNotifications}>
                   <Save size={16} />
                   {savingNotifications ? "Salvando..." : "Salvar notificações"}

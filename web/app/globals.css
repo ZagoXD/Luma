@@ -510,17 +510,24 @@ nav .nav-cta:focus {
   grid-column: 1 / -1;
 }
 
-.notification-toggle,
-.notification-time {
+.notification-setting {
   border: 1.5px solid var(--border);
   border-radius: 8px;
   background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.notification-toggle,
+.notification-time {
   color: var(--text-dark);
   display: flex;
   align-items: center;
   gap: 0.75rem;
   min-height: 48px;
-  padding: 0.75rem 0.9rem;
   font-weight: 800;
 }
 
@@ -534,6 +541,7 @@ nav .nav-cta:focus {
 .notification-time {
   justify-content: space-between;
   flex-wrap: wrap;
+  min-width: 170px;
 }
 
 .notification-time input {
@@ -544,6 +552,17 @@ nav .nav-cta:focus {
   font: inherit;
   font-weight: 800;
   padding: 0 0.75rem;
+}
+
+@media (max-width: 760px) {
+  .notification-setting {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-time {
+    justify-content: flex-start;
+    min-width: 0;
+  }
 }
 
 .profile-plan-actions {

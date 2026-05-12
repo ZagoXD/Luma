@@ -30,6 +30,9 @@ public sealed record NotificationPreferenceUpdate(
     bool? ContraceptiveReminderEnabled,
     bool? SymptomCheckinEnabled,
     string? ReminderTime,
+    string? PeriodReminderTime,
+    string? ContraceptiveReminderTime,
+    string? SymptomCheckinTime,
     string? TimeZone);
 
 public sealed record NotificationSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage);
@@ -63,6 +66,24 @@ public sealed class NotificationPreferenceService(LumaDbContext db)
         if (!string.IsNullOrWhiteSpace(update.ReminderTime) && TryParseReminderTime(update.ReminderTime, out var reminderTime))
         {
             preference.ReminderTime = reminderTime;
+            preference.PeriodReminderTime = reminderTime;
+            preference.ContraceptiveReminderTime = reminderTime;
+            preference.SymptomCheckinTime = reminderTime;
+        }
+
+        if (!string.IsNullOrWhiteSpace(update.PeriodReminderTime) && TryParseReminderTime(update.PeriodReminderTime, out var periodReminderTime))
+        {
+            preference.PeriodReminderTime = periodReminderTime;
+        }
+
+        if (!string.IsNullOrWhiteSpace(update.ContraceptiveReminderTime) && TryParseReminderTime(update.ContraceptiveReminderTime, out var contraceptiveReminderTime))
+        {
+            preference.ContraceptiveReminderTime = contraceptiveReminderTime;
+        }
+
+        if (!string.IsNullOrWhiteSpace(update.SymptomCheckinTime) && TryParseReminderTime(update.SymptomCheckinTime, out var symptomCheckinTime))
+        {
+            preference.SymptomCheckinTime = symptomCheckinTime;
         }
 
         if (!string.IsNullOrWhiteSpace(update.TimeZone))
@@ -250,7 +271,7 @@ public sealed class NotificationProcessor(
         var processed = 0;
         foreach (var preference in preferences)
         {
-            if (preference.User is null || !IsDueNow(preference, now))
+            if (preference.User is null)
             {
                 continue;
             }
@@ -292,7 +313,9 @@ public sealed class NotificationProcessor(
         var today = DateOnly.FromDateTime(now.Date);
         var userPreference = await db.UserPreferences.FirstOrDefaultAsync(item => item.UserId == user.Id, cancellationToken);
 
-        if (preference.PeriodReminderEnabled && userPreference?.LastPeriodStartDate is not null)
+        if (preference.PeriodReminderEnabled
+            && IsDueNow(preference, preference.PeriodReminderTime, now)
+            && userPreference?.LastPeriodStartDate is not null)
         {
             var expected = userPreference.LastPeriodStartDate.Value.AddDays(userPreference.AverageCycleLength);
             if (expected == today.AddDays(1))
@@ -305,12 +328,14 @@ public sealed class NotificationProcessor(
             }
         }
 
-        if (preference.ContraceptiveReminderEnabled && userPreference?.ContraceptiveType == "pill")
+        if (preference.ContraceptiveReminderEnabled
+            && IsDueNow(preference, preference.ContraceptiveReminderTime, now)
+            && userPreference?.ContraceptiveType == "pill")
         {
             count += await TrySendAsync(preference, subscription.Id, NotificationTypes.ContraceptiveDaily, today, now, cancellationToken);
         }
 
-        if (preference.SymptomCheckinEnabled)
+        if (preference.SymptomCheckinEnabled && IsDueNow(preference, preference.SymptomCheckinTime, now))
         {
             count += await TrySendAsync(preference, subscription.Id, NotificationTypes.SymptomCheckin, today, now, cancellationToken);
         }
@@ -365,12 +390,13 @@ public sealed class NotificationProcessor(
         var user = preference.User!;
         var name = string.IsNullOrWhiteSpace(user.DisplayName) ? "por aqui" : user.DisplayName;
         return type == NotificationTypes.ContraceptiveDaily
-            ? new Dictionary<string, string> { ["1"] = name, ["2"] = preference.ReminderTime.ToString("HH:mm") }
+            ? new Dictionary<string, string> { ["1"] = name, ["2"] = preference.ContraceptiveReminderTime.ToString("HH:mm") }
             : new Dictionary<string, string> { ["1"] = name };
     }
 
-    private static bool IsDueNow(NotificationPreference preference, DateTimeOffset utcNow)
+    private static bool IsDueNow(NotificationPreference preference, TimeOnly reminderTime, DateTimeOffset utcNow)
     {
+        const int dueWindowMinutes = 5;
         TimeZoneInfo timeZone;
         try
         {
@@ -382,7 +408,16 @@ public sealed class NotificationProcessor(
         }
 
         var localNow = TimeZoneInfo.ConvertTime(utcNow, timeZone);
-        return localNow.Hour == preference.ReminderTime.Hour && localNow.Minute == preference.ReminderTime.Minute;
+        var scheduledToday = new DateTimeOffset(
+            localNow.Year,
+            localNow.Month,
+            localNow.Day,
+            reminderTime.Hour,
+            reminderTime.Minute,
+            0,
+            localNow.Offset);
+
+        return localNow >= scheduledToday && localNow < scheduledToday.AddMinutes(dueWindowMinutes);
     }
 }
 

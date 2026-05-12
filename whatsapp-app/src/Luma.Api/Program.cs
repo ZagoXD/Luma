@@ -266,8 +266,10 @@ app.MapPost("/account/notifications/preferences", async (
         return Results.Forbid();
     }
 
-    if (!string.IsNullOrWhiteSpace(update.ReminderTime)
-        && !NotificationPreferenceService.TryParseReminderTime(update.ReminderTime, out _))
+    if (!IsValidNotificationTime(update.ReminderTime)
+        || !IsValidNotificationTime(update.PeriodReminderTime)
+        || !IsValidNotificationTime(update.ContraceptiveReminderTime)
+        || !IsValidNotificationTime(update.SymptomCheckinTime))
     {
         return Results.BadRequest(new { message = "Horário inválido. Use algo como 08:30 ou 20h." });
     }
@@ -1004,6 +1006,9 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
     "ContraceptiveReminderEnabled" boolean NOT NULL,
     "SymptomCheckinEnabled" boolean NOT NULL,
     "ReminderTime" time without time zone NOT NULL,
+    "PeriodReminderTime" time without time zone NOT NULL DEFAULT TIME '09:00',
+    "ContraceptiveReminderTime" time without time zone NOT NULL DEFAULT TIME '09:00',
+    "SymptomCheckinTime" time without time zone NOT NULL DEFAULT TIME '09:00',
     "TimeZone" character varying(64) NOT NULL,
     "CreatedAt" timestamp with time zone NOT NULL,
     "UpdatedAt" timestamp with time zone NOT NULL
@@ -1035,6 +1040,12 @@ CREATE TABLE IF NOT EXISTS blocked_conversations (
 );
 CREATE INDEX IF NOT EXISTS "IX_blocked_conversations_Provider_CreatedAt" ON blocked_conversations ("Provider", "CreatedAt");
 ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "StripeCustomerId" character varying(128);
+ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS "PeriodReminderTime" time without time zone NOT NULL DEFAULT TIME '09:00';
+ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS "ContraceptiveReminderTime" time without time zone NOT NULL DEFAULT TIME '09:00';
+ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS "SymptomCheckinTime" time without time zone NOT NULL DEFAULT TIME '09:00';
+UPDATE notification_preferences SET "PeriodReminderTime" = "ReminderTime" WHERE "PeriodReminderTime" = TIME '09:00' AND "ReminderTime" <> TIME '09:00';
+UPDATE notification_preferences SET "ContraceptiveReminderTime" = "ReminderTime" WHERE "ContraceptiveReminderTime" = TIME '09:00' AND "ReminderTime" <> TIME '09:00';
+UPDATE notification_preferences SET "SymptomCheckinTime" = "ReminderTime" WHERE "SymptomCheckinTime" = TIME '09:00' AND "ReminderTime" <> TIME '09:00';
 ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "EmailHash" character varying(128) NOT NULL DEFAULT '';
 ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "CpfHash" character varying(128) NOT NULL DEFAULT '';
 ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "PhoneHash" character varying(128) NOT NULL DEFAULT '';
@@ -1533,8 +1544,17 @@ static object BuildNotificationPreferenceResponse(NotificationPreference? prefer
         contraceptiveReminderEnabled = preference?.ContraceptiveReminderEnabled ?? false,
         symptomCheckinEnabled = preference?.SymptomCheckinEnabled ?? false,
         reminderTime = preference?.ReminderTime.ToString("HH:mm") ?? "09:00",
+        periodReminderTime = preference?.PeriodReminderTime.ToString("HH:mm") ?? "09:00",
+        contraceptiveReminderTime = preference?.ContraceptiveReminderTime.ToString("HH:mm") ?? "09:00",
+        symptomCheckinTime = preference?.SymptomCheckinTime.ToString("HH:mm") ?? "09:00",
         timeZone = preference?.TimeZone ?? "America/Sao_Paulo"
     };
+}
+
+static bool IsValidNotificationTime(string? value)
+{
+    return string.IsNullOrWhiteSpace(value)
+        || NotificationPreferenceService.TryParseReminderTime(value, out _);
 }
 
 static string? NormalizePlan(string plan)

@@ -53,6 +53,9 @@ export type NotificationPreference = {
   contraceptiveReminderEnabled: boolean;
   symptomCheckinEnabled: boolean;
   reminderTime: string;
+  periodReminderTime: string;
+  contraceptiveReminderTime: string;
+  symptomCheckinTime: string;
   timeZone: string;
 };
 
