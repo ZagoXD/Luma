@@ -1,4 +1,5 @@
 export type PlanCode = "basico" | "essencial";
+export type BillingInterval = "monthly" | "annual";
 
 export type AccountUser = {
   id: string;
@@ -6,6 +7,7 @@ export type AccountUser = {
   cpf: string;
   fullName: string;
   phoneNumber: string;
+  phoneVerifiedAt?: string | null;
   createdAt: string;
 };
 
@@ -13,11 +15,26 @@ export type AccountSubscription = {
   id: string;
   planCode: PlanCode;
   planName: string;
+  billingInterval: BillingInterval;
+  billingLabel: string;
   status: "active" | "canceled" | "pending";
   stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
   startsAt: string;
   currentPeriodEndsAt: string;
   canceledAt?: string | null;
+};
+
+export type BillingTransaction = {
+  id: string;
+  number?: string | null;
+  status: string;
+  currency: string;
+  amountPaid: number;
+  amountDue: number;
+  hostedInvoiceUrl?: string | null;
+  invoicePdf?: string | null;
+  created: string;
 };
 
 export type StripeSubscriptionIntent = {
@@ -87,10 +104,18 @@ export type CycleCalendar = {
   days: CalendarDay[];
 };
 
-export const plans: Record<PlanCode, { name: string; price: string; benefits: string[] }> = {
+export const plans: Record<PlanCode, {
+  name: string;
+  monthlyPrice: string;
+  annualPrice: string;
+  annualEquivalent: string;
+  benefits: string[];
+}> = {
   basico: {
     name: "Básico",
-    price: "R$ 5,90/mês",
+    monthlyPrice: "R$ 11,00/mês",
+    annualPrice: "R$ 70,80/ano",
+    annualEquivalent: "equivale a R$ 5,90/mês",
     benefits: [
       "Liberação da Luma no WhatsApp",
       "Registro de menstruação, sintomas, humor e relação sexual",
@@ -100,7 +125,9 @@ export const plans: Record<PlanCode, { name: string; price: string; benefits: st
   },
   essencial: {
     name: "Essencial",
-    price: "R$ 9,90/mês",
+    monthlyPrice: "R$ 20,00/mês",
+    annualPrice: "R$ 118,80/ano",
+    annualEquivalent: "equivale a R$ 9,90/mês",
     benefits: [
       "Tudo do plano Básico",
       "Mensagens por áudio no WhatsApp",
@@ -114,6 +141,19 @@ export function getPlanCode(value: string | null | undefined): PlanCode {
   return value === "basico" || value === "essencial" ? value : "essencial";
 }
 
+export function getBillingInterval(value: string | null | undefined): BillingInterval {
+  return value === "monthly" || value === "mensal" ? "monthly" : "annual";
+}
+
+export function getPlanPrice(planCode: PlanCode, billingInterval: BillingInterval) {
+  const plan = plans[planCode];
+  return billingInterval === "annual" ? plan.annualPrice : plan.monthlyPrice;
+}
+
+export function getBillingIntervalLabel(billingInterval: BillingInterval) {
+  return billingInterval === "annual" ? "Anual" : "Mensal";
+}
+
 export async function registerAccount(input: {
   email: string;
   cpf: string;
@@ -122,7 +162,32 @@ export async function registerAccount(input: {
   phoneNumber: string;
   dataConsentAccepted: boolean;
 }) {
-  return appRequest<{ user: AccountUser }>("/api/auth/register", {
+  return appRequest<{ user: AccountUser; phoneVerificationRequired?: boolean; phoneVerificationMessage?: string }>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function resendPhoneVerificationCode() {
+  return appRequest<{ message: string }>("/api/account/phone-verification/send", { method: "POST" });
+}
+
+export async function confirmPhoneVerificationCode(input: { code: string }) {
+  return appRequest<{ message: string; user: AccountUser }>("/api/account/phone-verification/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function requestPhoneChange(input: { phoneNumber: string }) {
+  return appRequest<{ message: string }>("/api/account/phone-change/request", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function confirmPhoneChange(input: { phoneNumber: string; code: string }) {
+  return appRequest<{ message: string; user: AccountUser }>("/api/account/phone-change/confirm", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -158,7 +223,7 @@ export async function getAccountCalendar(month: string) {
   return appRequest<CycleCalendar>(`/api/account/calendar?month=${encodeURIComponent(month)}`);
 }
 
-export async function createStripeSubscription(input: { planCode: PlanCode }) {
+export async function createStripeSubscription(input: { planCode: PlanCode; billingInterval: BillingInterval }) {
   return appRequest<StripeSubscriptionIntent>("/api/checkout/create-subscription", {
     method: "POST",
     body: JSON.stringify(input),
@@ -167,6 +232,7 @@ export async function createStripeSubscription(input: { planCode: PlanCode }) {
 
 export async function confirmStripeSubscription(input: {
   planCode: PlanCode;
+  billingInterval: BillingInterval;
   stripeSubscriptionId: string;
   cardholderName?: string;
   billingCpf?: string;
@@ -189,7 +255,7 @@ export async function resumeSubscription() {
   });
 }
 
-export async function changeSubscriptionPlan(input: { planCode: PlanCode }) {
+export async function changeSubscriptionPlan(input: { planCode: PlanCode; billingInterval?: BillingInterval }) {
   return appRequest<{ subscription: AccountSubscription }>("/api/account/subscription/change-plan", {
     method: "POST",
     body: JSON.stringify(input),
@@ -211,6 +277,10 @@ export async function confirmPaymentMethod(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function getBillingTransactions() {
+  return appRequest<{ transactions: BillingTransaction[] }>("/api/account/billing/transactions");
 }
 
 async function appRequest<T>(path: string, init: RequestInit = {}) {

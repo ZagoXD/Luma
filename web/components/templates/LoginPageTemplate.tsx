@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, LogIn, UserPlus } from "lucide-react";
-import { loginAccount, registerAccount } from "@/lib/luma-api";
+import { confirmPhoneVerificationCode, loginAccount, registerAccount, resendPhoneVerificationCode, type AccountUser } from "@/lib/luma-api";
 import { formatBrazilPhone, formatCpf, isValidBrazilPhone, isValidCpf } from "@/lib/account-format";
 
 type Mode = "login" | "register";
@@ -20,6 +20,8 @@ export function LoginPageTemplate() {
   const [submitting, setSubmitting] = useState(false);
   const [cpf, setCpf] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [pendingVerificationUser, setPendingVerificationUser] = useState<AccountUser | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
 
   const title = useMemo(
     () => (mode === "login" ? "Entrar na sua conta" : "Criar sua conta"),
@@ -53,12 +55,16 @@ export function LoginPageTemplate() {
         }
       }
 
-      const result = mode === "login"
-        ? await loginAccount({
-            email: String(form.get("email") || ""),
-            password: String(form.get("password") || ""),
-          })
-        : await registerAccount({
+      if (mode === "login") {
+        const result = await loginAccount({
+          email: String(form.get("email") || ""),
+          password: String(form.get("password") || ""),
+        });
+        router.push(redirectTo === "/perfil" ? `/perfil/${result.user.id}` : redirectTo);
+        return;
+      }
+
+      const result = await registerAccount({
             fullName: String(form.get("fullName") || ""),
             email: String(form.get("email") || ""),
             cpf,
@@ -67,12 +73,90 @@ export function LoginPageTemplate() {
             dataConsentAccepted: true,
           });
 
+      if (!result.user.phoneVerifiedAt) {
+        setPendingVerificationUser(result.user);
+        setStatus(result.phoneVerificationMessage || "Enviamos um código para o WhatsApp informado.");
+        return;
+      }
+
       router.push(redirectTo === "/perfil" ? `/perfil/${result.user.id}` : redirectTo);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Não consegui autenticar agora.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleConfirmVerification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pendingVerificationUser) return;
+
+    setStatus("");
+    setSubmitting(true);
+    try {
+      const result = await confirmPhoneVerificationCode({ code: verificationCode });
+      router.push(redirectTo === "/perfil" ? `/perfil/${result.user.id}` : redirectTo);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui confirmar o código agora.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setStatus("");
+    setSubmitting(true);
+    try {
+      const result = await resendPhoneVerificationCode();
+      setStatus(result.message);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui reenviar o código agora.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (pendingVerificationUser) {
+    return (
+      <main className="account-page">
+        <section className="account-shell account-shell-narrow">
+          <Link href="/" className="account-back">
+            <ArrowLeft size={18} />
+            Voltar
+          </Link>
+
+          <div className="account-panel">
+            <div className="account-heading">
+              <span className="account-kicker">Confirmação</span>
+              <h1>Confirme seu WhatsApp</h1>
+              <p>Enviamos um código para {pendingVerificationUser.phoneNumber}. Digite o código para concluir seu cadastro.</p>
+            </div>
+
+            <form className="account-form" onSubmit={handleConfirmVerification}>
+              <label>
+                Código recebido
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="000000"
+                  maxLength={6}
+                  required
+                />
+              </label>
+              <button className="account-primary" type="submit" disabled={submitting || verificationCode.length !== 6}>
+                {submitting ? "Confirmando..." : "Confirmar cadastro"}
+              </button>
+              <button className="account-secondary billing-button" type="button" onClick={handleResendVerification} disabled={submitting}>
+                Reenviar código
+              </button>
+              {status && <p className="account-status info">{status}</p>}
+            </form>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (

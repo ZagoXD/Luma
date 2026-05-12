@@ -17,6 +17,7 @@ public sealed class TwilioOptions
     public string TemplatePeriodToday { get; set; } = string.Empty;
     public string TemplateContraceptiveDaily { get; set; } = string.Empty;
     public string TemplateSymptomCheckin { get; set; } = string.Empty;
+    public string TemplateAccountVerification { get; set; } = string.Empty;
 }
 
 public sealed class NotificationOptions
@@ -137,6 +138,11 @@ public interface IWhatsAppNotificationSender
     Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default);
 }
 
+public interface IWhatsAppTextSender
+{
+    Task<NotificationSendResult> SendTextAsync(string to, string body, CancellationToken cancellationToken = default);
+}
+
 public interface IWhatsAppMediaSender
 {
     Task<NotificationSendResult> SendMediaAsync(string to, string body, string mediaUrl, CancellationToken cancellationToken = default);
@@ -209,6 +215,81 @@ public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfigura
             NotificationTypes.SymptomCheckin => _options.TemplateSymptomCheckin,
             _ => string.Empty
         };
+    }
+}
+
+public sealed class TwilioWhatsAppTextSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppTextSender> logger) : IWhatsAppTextSender
+{
+    private readonly TwilioOptions _options = new()
+    {
+        AccountSid = configuration.GetValue<string>("Twilio:AccountSid") ?? string.Empty,
+        AuthToken = configuration.GetValue<string>("Twilio:AuthToken") ?? string.Empty,
+        WhatsAppFrom = configuration.GetValue<string>("Twilio:WhatsAppFrom") ?? string.Empty,
+        TemplateAccountVerification = configuration.GetValue<string>("Twilio:TemplateAccountVerification") ?? string.Empty
+    };
+
+    public async Task<NotificationSendResult> SendTextAsync(string to, string body, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_options.AccountSid)
+            || string.IsNullOrWhiteSpace(_options.AuthToken)
+            || string.IsNullOrWhiteSpace(_options.WhatsAppFrom))
+        {
+            logger.LogInformation("Twilio WhatsApp text skipped because credentials are not configured.");
+            return new NotificationSendResult(false, null, "twilio_not_configured");
+        }
+
+        var url = $"https://api.twilio.com/2010-04-01/Accounts/{_options.AccountSid}/Messages.json";
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        var auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.AccountSid}:{_options.AuthToken}"));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", auth);
+        var form = new Dictionary<string, string>
+        {
+            ["From"] = _options.WhatsAppFrom,
+            ["To"] = to.StartsWith("whatsapp:", StringComparison.OrdinalIgnoreCase) ? to : $"whatsapp:{to}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(_options.TemplateAccountVerification)
+            && TryExtractVerificationCode(body, out var code))
+        {
+            form["ContentSid"] = _options.TemplateAccountVerification;
+            form["ContentVariables"] = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["1"] = code
+            });
+        }
+        else
+        {
+            form["Body"] = body;
+        }
+
+        request.Content = new FormUrlEncodedContent(form);
+
+        var response = await http.SendAsync(request, cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new NotificationSendResult(false, null, content.Length > 512 ? content[..512] : content);
+        }
+
+        using var document = JsonDocument.Parse(content);
+        var sid = document.RootElement.TryGetProperty("sid", out var sidProperty)
+            ? sidProperty.GetString()
+            : null;
+
+        return new NotificationSendResult(true, sid, null);
+    }
+
+    private static bool TryExtractVerificationCode(string body, out string code)
+    {
+        var digits = AccountInputNormalizer.OnlyDigits(body);
+        if (digits.Length >= 6)
+        {
+            code = digits[..6];
+            return true;
+        }
+
+        code = string.Empty;
+        return false;
     }
 }
 

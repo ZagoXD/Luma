@@ -13,6 +13,8 @@ type PlanCardProps = {
   cta: string;
   ctaClass: string;
   note: string;
+  secondaryCta?: string;
+  secondaryNote?: string;
   featured?: boolean;
   delay: string;
   planValue: string;
@@ -28,6 +30,8 @@ export function PlanCard({
   cta,
   ctaClass,
   note,
+  secondaryCta,
+  secondaryNote,
   featured,
   delay,
   planValue,
@@ -51,10 +55,16 @@ export function PlanCard({
           </li>
         ))}
       </ul>
-      <button className={`plan-cta ${ctaClass}`} onClick={() => router.push(`/checkout/${planValue}`)}>
+      <button className={`plan-cta ${ctaClass}`} onClick={() => router.push(`/checkout/${planValue}?billing=annual`)}>
         {cta}
       </button>
+      {secondaryCta && (
+        <button className="plan-cta secondary-plan-cta" onClick={() => router.push(`/checkout/${planValue}?billing=monthly`)}>
+          {secondaryCta}
+        </button>
+      )}
       <p className="plan-note">{note}</p>
+      {secondaryNote && <p className="plan-note secondary-note">{secondaryNote}</p>}
     </div>
   );
 }

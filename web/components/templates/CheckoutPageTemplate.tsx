@@ -6,13 +6,21 @@ import { ArrowLeft, BadgeCheck } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
 import { StripeCheckoutForm } from "@/components/organisms/StripeCheckoutForm";
-import { createStripeSubscription, plans, type PlanCode } from "@/lib/luma-api";
+import {
+  createStripeSubscription,
+  getBillingIntervalLabel,
+  getPlanPrice,
+  plans,
+  type BillingInterval,
+  type PlanCode,
+} from "@/lib/luma-api";
 
 type CheckoutPageTemplateProps = {
   planCode: PlanCode;
+  billingInterval: BillingInterval;
 };
 
-export function CheckoutPageTemplate({ planCode }: CheckoutPageTemplateProps) {
+export function CheckoutPageTemplate({ planCode, billingInterval }: CheckoutPageTemplateProps) {
   const [status, setStatus] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -29,7 +37,7 @@ export function CheckoutPageTemplate({ planCode }: CheckoutPageTemplateProps) {
   useEffect(() => {
     let ignore = false;
 
-    createStripeSubscription({ planCode })
+    createStripeSubscription({ planCode, billingInterval })
       .then((result) => {
         if (ignore) return;
         setPublishableKey(result.publishableKey);
@@ -47,7 +55,7 @@ export function CheckoutPageTemplate({ planCode }: CheckoutPageTemplateProps) {
     return () => {
       ignore = true;
     };
-  }, [planCode]);
+  }, [planCode, billingInterval]);
 
   const options: StripeElementsOptions | undefined = clientSecret
     ? {
@@ -75,7 +83,11 @@ export function CheckoutPageTemplate({ planCode }: CheckoutPageTemplateProps) {
           <aside className="account-panel plan-summary">
             <span className="account-kicker">Checkout seguro</span>
             <h1>{plan.name}</h1>
-            <p className="checkout-price">{plan.price}</p>
+            <p className="checkout-price">{getPlanPrice(planCode, billingInterval)}</p>
+            <p className="profile-note">
+              Cobrança {getBillingIntervalLabel(billingInterval).toLowerCase()}.
+              {billingInterval === "annual" ? ` ${plan.annualEquivalent}.` : " Você pode cancelar a renovação quando quiser."}
+            </p>
             <ul className="checkout-benefits">
               {plan.benefits.map((benefit) => (
                 <li key={benefit}>
@@ -108,6 +120,7 @@ export function CheckoutPageTemplate({ planCode }: CheckoutPageTemplateProps) {
                   <Elements stripe={stripePromise} options={options}>
                     <StripeCheckoutForm
                       planCode={planCode}
+                      billingInterval={billingInterval}
                       stripeSubscriptionId={stripeSubscriptionId}
                       onSuccess={() => setSuccess(true)}
                     />

@@ -460,6 +460,58 @@ nav .nav-cta:focus {
   gap: 0.8rem;
 }
 
+.phone-change-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.phone-change-panel label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 900;
+}
+
+.phone-change-panel input {
+  min-height: 44px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0 0.85rem;
+  font: inherit;
+}
+
+.transaction-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.transaction-item {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.transaction-item span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.transaction-item small {
+  color: var(--text-light);
+}
+
+.transaction-item a {
+  color: var(--plum-soft);
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .luma-whatsapp-link {
   min-height: 58px;
   border: 1.5px solid oklch(82% 0.12 150);
@@ -1540,6 +1592,24 @@ nav .nav-cta:focus {
       display: flex; align-items: baseline; gap: 0.25rem;
       margin-bottom: 0.35rem;
     }
+    .plan-price-stack {
+      display: grid;
+      gap: 0.25rem;
+    }
+    .plan-price-line {
+      font-family: var(--ff-display);
+      font-size: 1.65rem;
+      font-weight: 800;
+      color: var(--text-dark);
+      line-height: 1.1;
+    }
+    .plan-card.featured .plan-price-line { color: #fff; }
+    .plan-monthly-line {
+      font-size: 0.82rem;
+      color: var(--text-mid);
+      font-weight: 700;
+    }
+    .plan-card.featured .plan-monthly-line { color: oklch(78% 0.04 295); }
     .plan-currency { font-size: 0.95rem; font-weight: 600; color: var(--text-mid); margin-top: 0.25rem; }
     .plan-amount {
       font-family: var(--ff-display);
@@ -1592,8 +1662,19 @@ nav .nav-cta:focus {
     .plan-cta.free-btn  { background: var(--lavender-lt); color: var(--plum-soft); }
     .plan-cta.basic-btn { background: var(--cream-dk); color: var(--text-dark); border: 1.5px solid var(--border); }
     .plan-cta.full-btn  { background: var(--lavender); color: var(--plum-deep); }
+    .plan-cta.secondary-plan-cta {
+      margin-top: 0.65rem;
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-dark);
+    }
+    .plan-card.featured .plan-cta.secondary-plan-cta {
+      border-color: oklch(100% 0 0 / 0.22);
+      color: #fff;
+    }
     .plan-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 18px oklch(0% 0 0 / 0.1); }
     .plan-note { font-size: 0.72rem; color: var(--text-light); text-align: center; margin-top: 0.6rem; }
+    .plan-note.secondary-note { margin-top: 0.25rem; }
     .plan-card.featured .plan-note { color: oklch(55% 0.05 295); }
 
     .profile-calendar-link {

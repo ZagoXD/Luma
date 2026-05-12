@@ -22,6 +22,7 @@ import {
   cancelSubscription,
   changeSubscriptionPlan,
   createPaymentMethodSetupIntent,
+  getBillingTransactions,
   getAccountProfile,
   getNotificationPreferences,
   logoutAccount,
@@ -29,10 +30,15 @@ import {
   resumeSubscription,
   updateNotificationPreferences,
   type AccountProfile,
+  type BillingInterval,
+  type BillingTransaction,
   type NotificationPreference,
   type PlanCode,
+  getPlanPrice,
+  requestPhoneChange,
+  confirmPhoneChange,
 } from "@/lib/luma-api";
-import { formatBrazilPhoneDisplay } from "@/lib/account-format";
+import { formatBrazilPhone, formatBrazilPhoneDisplay, isValidBrazilPhone } from "@/lib/account-format";
 
 type ProfilePageTemplateProps = {
   accountId: string;
@@ -51,9 +57,10 @@ const defaultNotificationPreference: NotificationPreference = {
 
 export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   const router = useRouter();
-  const lumaWhatsAppNumber = process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+16204008668";
+  const lumaWhatsAppNumber = process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+14155238886";
   const lumaWhatsAppLink = buildWhatsAppLink(lumaWhatsAppNumber);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
   const [notificationPreference, setNotificationPreference] = useState<NotificationPreference>(defaultNotificationPreference);
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [status, setStatus] = useState("");
@@ -65,6 +72,10 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   const [setupClientSecret, setSetupClientSecret] = useState("");
   const [setupIntentId, setSetupIntentId] = useState("");
   const [setupPublishableKey, setSetupPublishableKey] = useState("");
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [newPhoneNumber, setNewPhoneNumber] = useState("");
+  const [phoneChangeCode, setPhoneChangeCode] = useState("");
+  const [phoneChangeWaitingCode, setPhoneChangeWaitingCode] = useState(false);
   const stripePromise = useMemo(
     () => setupPublishableKey ? loadStripe(setupPublishableKey) : null,
     [setupPublishableKey],
@@ -84,6 +95,9 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
         }
 
         setProfile(nextProfile);
+        const billingHistory = await getBillingTransactions();
+        if (!active) return;
+        setTransactions(billingHistory.transactions);
         const preferences = await getNotificationPreferences();
         if (!active) return;
 
@@ -132,11 +146,12 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
     }
   }
 
-  async function handleChangePlan(planCode: PlanCode) {
+  async function handleChangePlan(planCode: PlanCode, billingInterval?: BillingInterval) {
     setStatus("");
-    setBillingAction(`plan-${planCode}`);
+    const actionKey = `plan-${planCode}-${billingInterval || "same"}`;
+    setBillingAction(actionKey);
     try {
-      const result = await changeSubscriptionPlan({ planCode });
+      const result = await changeSubscriptionPlan({ planCode, billingInterval });
       setProfile((current) => current && { ...current, subscription: result.subscription });
       setStatus(`Plano alterado para ${plans[planCode].name}. A Stripe calculará ajustes proporcionais quando aplicável.`);
     } catch (error) {
@@ -178,6 +193,43 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
   async function handleLogout() {
     await logoutAccount();
     router.push("/");
+  }
+
+  async function handleRequestPhoneChange() {
+    setStatus("");
+    if (!isValidBrazilPhone(newPhoneNumber)) {
+      setStatus("Informe um celular válido com DDD.");
+      return;
+    }
+
+    setBillingAction("phone-request");
+    try {
+      const result = await requestPhoneChange({ phoneNumber: newPhoneNumber });
+      setPhoneChangeWaitingCode(true);
+      setStatus(result.message);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui enviar o código agora.");
+    } finally {
+      setBillingAction("");
+    }
+  }
+
+  async function handleConfirmPhoneChange() {
+    setStatus("");
+    setBillingAction("phone-confirm");
+    try {
+      const result = await confirmPhoneChange({ phoneNumber: newPhoneNumber, code: phoneChangeCode });
+      setProfile((current) => current && { ...current, user: result.user });
+      setEditingPhone(false);
+      setPhoneChangeWaitingCode(false);
+      setNewPhoneNumber("");
+      setPhoneChangeCode("");
+      setStatus(result.message);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Não consegui confirmar o novo celular agora.");
+    } finally {
+      setBillingAction("");
+    }
   }
 
   if (loading) {
@@ -237,18 +289,64 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
             <h2><User size={20} /> Conta</h2>
             <dl className="profile-list">
               <div><dt>E-mail</dt><dd>{profile?.user.email}</dd></div>
-              <div><dt>Celular</dt><dd>{profile?.user.phoneNumber ? formatBrazilPhoneDisplay(profile.user.phoneNumber) : ""}</dd></div>
+              <div>
+                <dt>Celular</dt>
+                <dd>
+                  {profile?.user.phoneNumber ? formatBrazilPhoneDisplay(profile.user.phoneNumber) : ""}
+                  {profile?.user.phoneVerifiedAt ? " confirmado" : " pendente"}
+                </dd>
+              </div>
               <div><dt>CPF</dt><dd>{profile?.user.cpf}</dd></div>
             </dl>
+            {editingPhone ? (
+              <div className="phone-change-panel">
+                <label>
+                  Novo celular
+                  <input
+                    inputMode="tel"
+                    value={newPhoneNumber}
+                    onChange={(event) => setNewPhoneNumber(formatBrazilPhone(event.target.value))}
+                    placeholder="(16) 99999-9999"
+                    maxLength={15}
+                  />
+                </label>
+                {phoneChangeWaitingCode && (
+                  <label>
+                    Código recebido
+                    <input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={phoneChangeCode}
+                      onChange={(event) => setPhoneChangeCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="000000"
+                      maxLength={6}
+                    />
+                  </label>
+                )}
+                <div className="billing-actions">
+                  <button className="account-primary" type="button" onClick={phoneChangeWaitingCode ? handleConfirmPhoneChange : handleRequestPhoneChange} disabled={billingAction.startsWith("phone-")}>
+                    {phoneChangeWaitingCode ? "Confirmar novo número" : "Enviar código"}
+                  </button>
+                  <button className="account-secondary billing-button" type="button" onClick={() => setEditingPhone(false)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button className="account-secondary billing-button" type="button" onClick={() => setEditingPhone(true)}>
+                Editar número
+              </button>
+            )}
           </section>
 
           <section className="account-panel profile-card">
             <h2><CreditCard size={20} /> Plano</h2>
             {subscription && plan ? (
               <>
-                <p className="plan-pill">{plan.name} - {plan.price}</p>
+                <p className="plan-pill">{plan.name} - {getPlanPrice(subscription.planCode, subscription.billingInterval)}</p>
                 <dl className="profile-list">
                   <div><dt>Status</dt><dd>{formatSubscriptionStatus(subscription.status)}</dd></div>
+                  <div><dt>Cobrança</dt><dd>{subscription.billingLabel}</dd></div>
                   <div><dt>Acesso até</dt><dd>{formatDate(subscription.currentPeriodEndsAt)}</dd></div>
                 </dl>
                 <div className="billing-actions">
@@ -266,13 +364,22 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
                     <button
                       className="account-secondary billing-button"
                       type="button"
-                      onClick={() => handleChangePlan(nextPlanCode)}
-                      disabled={billingAction === `plan-${nextPlanCode}`}
+                      onClick={() => handleChangePlan(nextPlanCode, subscription.billingInterval)}
+                      disabled={billingAction === `plan-${nextPlanCode}-${subscription.billingInterval}`}
                     >
                       <Repeat2 size={16} />
-                      {billingAction === `plan-${nextPlanCode}` ? "Trocando..." : `Trocar para ${plans[nextPlanCode].name}`}
+                      {billingAction === `plan-${nextPlanCode}-${subscription.billingInterval}` ? "Trocando..." : `Trocar para ${plans[nextPlanCode].name}`}
                     </button>
                   )}
+                  <button
+                    className="account-secondary billing-button"
+                    type="button"
+                    onClick={() => handleChangePlan(subscription.planCode, subscription.billingInterval === "annual" ? "monthly" : "annual")}
+                    disabled={billingAction.startsWith(`plan-${subscription.planCode}-`)}
+                  >
+                    <Repeat2 size={16} />
+                    {subscription.billingInterval === "annual" ? "Trocar para mensal" : "Trocar para anual"}
+                  </button>
                   <button className="account-secondary billing-button" type="button" onClick={handleStartPaymentMethodUpdate} disabled={billingAction === "card"}>
                     <CreditCard size={16} />
                     {billingAction === "card" ? "Abrindo..." : "Trocar cartão"}
@@ -300,9 +407,30 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
                 <p>Você ainda não tem um plano ativo. Escolha um plano para liberar a Luma no WhatsApp.</p>
                 <div className="profile-plan-actions">
                   <Link className="account-primary as-link" href="/checkout/basico">Básico</Link>
-                  <Link className="account-primary as-link" href="/checkout/essencial">Essencial</Link>
+                  <Link className="account-primary as-link" href="/checkout/essencial?billing=annual">Essencial anual</Link>
                 </div>
               </>
+            )}
+          </section>
+
+          <section className="account-panel profile-card">
+            <h2><CreditCard size={20} /> Histórico de transações</h2>
+            {transactions.length > 0 ? (
+              <div className="transaction-list">
+                {transactions.map((transaction) => (
+                  <div className="transaction-item" key={transaction.id}>
+                    <span>
+                      <strong>{formatMoney(transaction.amountPaid, transaction.currency)}</strong>
+                      <small>{formatDate(transaction.created)} - {formatInvoiceStatus(transaction.status)}</small>
+                    </span>
+                    {transaction.hostedInvoiceUrl && (
+                      <a href={transaction.hostedInvoiceUrl} target="_blank" rel="noreferrer">Ver fatura</a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Quando houver cobranças confirmadas pela Stripe, elas aparecerão aqui.</p>
             )}
           </section>
 
@@ -438,6 +566,25 @@ function formatSubscriptionStatus(status: "active" | "canceled" | "pending") {
   };
 
   return labels[status];
+}
+
+function formatInvoiceStatus(status: string) {
+  const labels: Record<string, string> = {
+    paid: "Pago",
+    open: "Aberto",
+    draft: "Rascunho",
+    void: "Cancelado",
+    uncollectible: "Não cobrado",
+  };
+
+  return labels[status] || status;
+}
+
+function formatMoney(amountInCents: number, currency: string) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: currency || "BRL",
+  }).format(amountInCents / 100);
 }
 
 function formatContraceptive(value?: string | null) {

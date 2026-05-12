@@ -3,16 +3,17 @@
 import { FormEvent, useState } from "react";
 import { PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { CreditCard } from "lucide-react";
-import { confirmStripeSubscription, type PlanCode } from "@/lib/luma-api";
+import { confirmStripeSubscription, type BillingInterval, type PlanCode } from "@/lib/luma-api";
 import { formatCpf, isValidCpf } from "@/lib/account-format";
 
 type StripeCheckoutFormProps = {
   planCode: PlanCode;
+  billingInterval: BillingInterval;
   stripeSubscriptionId: string;
   onSuccess: () => void;
 };
 
-export function StripeCheckoutForm({ planCode, stripeSubscriptionId, onSuccess }: StripeCheckoutFormProps) {
+export function StripeCheckoutForm({ planCode, billingInterval, stripeSubscriptionId, onSuccess }: StripeCheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [status, setStatus] = useState("");
@@ -57,7 +58,7 @@ export function StripeCheckoutForm({ planCode, stripeSubscriptionId, onSuccess }
     }
 
     try {
-      await confirmStripeSubscription({ planCode, stripeSubscriptionId, cardholderName, billingCpf });
+      await confirmStripeSubscription({ planCode, billingInterval, stripeSubscriptionId, cardholderName, billingCpf });
       onSuccess();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Pagamento confirmado, mas não consegui ativar o plano localmente.");

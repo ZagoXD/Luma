@@ -17,6 +17,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
     public DbSet<AccountUser> AccountUsers => Set<AccountUser>();
     public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
+    public DbSet<AccountPhoneVerificationCode> AccountPhoneVerificationCodes => Set<AccountPhoneVerificationCode>();
     public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
@@ -164,6 +165,21 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<AccountPhoneVerificationCode>(entity =>
+        {
+            entity.ToTable("account_phone_verification_codes");
+            entity.HasKey(code => code.Id);
+            entity.HasIndex(code => new { code.AccountUserId, code.PhoneHash, code.Purpose, code.ExpiresAt });
+            entity.Property(code => code.PhoneNumber).HasConversion(accountPhoneConverter).HasMaxLength(1024).IsRequired();
+            entity.Property(code => code.PhoneHash).HasMaxLength(128).IsRequired();
+            entity.Property(code => code.Purpose).HasMaxLength(32).IsRequired();
+            entity.Property(code => code.CodeHash).HasMaxLength(128).IsRequired();
+            entity.HasOne(code => code.AccountUser)
+                .WithMany(user => user.PhoneVerificationCodes)
+                .HasForeignKey(code => code.AccountUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<AccountSubscription>(entity =>
         {
             entity.ToTable("account_subscriptions");
@@ -172,8 +188,10 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(subscription => subscription.PhoneNumber).HasConversion(accountPhoneConverter).HasMaxLength(1024).IsRequired();
             entity.Property(subscription => subscription.PhoneHash).HasMaxLength(128).IsRequired();
             entity.Property(subscription => subscription.PlanCode).HasMaxLength(32).IsRequired();
+            entity.Property(subscription => subscription.BillingInterval).HasMaxLength(32).IsRequired();
             entity.Property(subscription => subscription.Status).HasMaxLength(32).IsRequired();
             entity.Property(subscription => subscription.StripeSubscriptionId).HasMaxLength(128);
+            entity.Property(subscription => subscription.StripePriceId).HasMaxLength(128);
             entity.HasOne(subscription => subscription.AccountUser)
                 .WithMany(user => user.Subscriptions)
                 .HasForeignKey(subscription => subscription.AccountUserId)
@@ -241,6 +259,14 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
         }
 
         foreach (var entry in ChangeTracker.Entries<AccountSubscription>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.PhoneHash = PrivacyRuntime.LookupHash(entry.Entity.PhoneNumber, "account.phone");
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AccountPhoneVerificationCode>())
         {
             if (entry.State is EntityState.Added or EntityState.Modified)
             {

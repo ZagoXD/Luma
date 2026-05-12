@@ -57,16 +57,21 @@ services:
       Notifications__WorkerIntervalSeconds: ${NOTIFICATIONS_WORKER_INTERVAL_SECONDS:-60}
       Twilio__AccountSid: ${TWILIO_ACCOUNT_SID:-}
       Twilio__AuthToken: ${TWILIO_AUTH_TOKEN:-}
-      Twilio__WhatsAppFrom: ${TWILIO_WHATSAPP_FROM:-whatsapp:+16204008668}
+      Twilio__WhatsAppFrom: ${TWILIO_WHATSAPP_FROM:-whatsapp:+14155238886}
       Twilio__TypingIndicatorsEnabled: ${TWILIO_TYPING_INDICATORS_ENABLED:-true}
       Twilio__TemplatePeriodTomorrow: ${TWILIO_TEMPLATE_PERIOD_TOMORROW:-}
       Twilio__TemplatePeriodToday: ${TWILIO_TEMPLATE_PERIOD_TODAY:-}
       Twilio__TemplateContraceptiveDaily: ${TWILIO_TEMPLATE_CONTRACEPTIVE_DAILY:-}
       Twilio__TemplateSymptomCheckin: ${TWILIO_TEMPLATE_SYMPTOM_CHECKIN:-}
+      Twilio__TemplateAccountVerification: ${TWILIO_TEMPLATE_ACCOUNT_VERIFICATION:-}
       Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
       Stripe__PublishableKey: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
       Stripe__BasicPriceId: ${STRIPE_BASIC_PRICE_ID:-}
       Stripe__EssentialPriceId: ${STRIPE_ESSENTIAL_PRICE_ID:-}
+      Stripe__BasicMonthlyPriceId: ${STRIPE_BASIC_MONTHLY_PRICE_ID:-}
+      Stripe__BasicAnnualPriceId: ${STRIPE_BASIC_ANNUAL_PRICE_ID:-}
+      Stripe__EssentialMonthlyPriceId: ${STRIPE_ESSENTIAL_MONTHLY_PRICE_ID:-}
+      Stripe__EssentialAnnualPriceId: ${STRIPE_ESSENTIAL_ANNUAL_PRICE_ID:-}
       Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
@@ -99,7 +104,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5050}
-        NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+16204008668}
+        NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+14155238886}
     container_name: luma-web
     depends_on:
       api:
@@ -107,7 +112,7 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5050}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
-      NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+16204008668}
+      NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+14155238886}
       LUMA_API_BASE_URL: ${LUMA_API_BASE_URL:-http://api:8080}
       LUMA_COOKIE_SECURE: ${LUMA_COOKIE_SECURE:-false}
     ports:

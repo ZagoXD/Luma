@@ -15,7 +15,7 @@ export function PricingSection() {
         <SectionHeading
           tag="Planos"
           title="Simples e transparente"
-          lead="Escolha o plano que faz mais sentido para a sua rotina."
+          lead="Assine mensalmente ou economize no plano anual. O acesso continua ativo até o fim do período já pago."
           centered
         />
         <div className="plans-grid">
@@ -25,13 +25,11 @@ export function PricingSection() {
             name="Básico"
             planValue="basico"
             price={
-              <>
-                <span className="plan-currency">R$</span>
-                <span className="plan-amount">
-                  5<span style={{ fontSize: "1.4rem" }}>,90</span>
-                </span>
-                <span className="plan-period">/mês</span>
-              </>
+              <div className="plan-price-stack">
+                <span className="plan-price-line">Anual: R$ 70,80</span>
+                <span className="plan-period">equivale a R$ 5,90/mês</span>
+                <span className="plan-monthly-line">Mensal: R$ 11,00/mês</span>
+              </div>
             }
             description="Tudo que você precisa para registrar seu ciclo de forma simples e sem esforço."
             features={[
@@ -40,9 +38,11 @@ export function PricingSection() {
               { enabled: false, label: "Imagens educativas do bebê" },
               { enabled: false, label: "Notificações e lembretes automáticos" },
             ]}
-            cta="Quero esse plano"
+            cta="Assinar anual"
+            secondaryCta="Assinar mensal"
             ctaClass="basic-btn"
-            note="Libera o bot no WhatsApp."
+            note="Anual cobrado à vista. Cancelamento mantém acesso até o fim do período pago."
+            secondaryNote="Plano mensal renova a cada mês."
             delay="0.15s"
           />
           <PlanCard
@@ -51,13 +51,11 @@ export function PricingSection() {
             name="Essencial"
             planValue="essencial"
             price={
-              <>
-                <span className="plan-currency">R$</span>
-                <span className="plan-amount">
-                  9<span style={{ fontSize: "1.4rem" }}>,90</span>
-                </span>
-                <span className="plan-period">/mês</span>
-              </>
+              <div className="plan-price-stack">
+                <span className="plan-price-line">Anual: R$ 118,80</span>
+                <span className="plan-period">equivale a R$ 9,90/mês</span>
+                <span className="plan-monthly-line">Mensal: R$ 20,00/mês</span>
+              </div>
             }
             description="Tudo do plano Básico, mais recursos inteligentes para uma rotina com menos esforço."
             features={[
@@ -67,9 +65,11 @@ export function PricingSection() {
               { enabled: true, label: "Notificações e lembretes automáticos" },
               { enabled: true, label: "Acompanhamento de gravidez com mais contexto" },
             ]}
-            cta="Quero esse plano"
+            cta="Assinar anual"
+            secondaryCta="Assinar mensal"
             ctaClass="full-btn"
-            note="Libera o bot no WhatsApp."
+            note="Anual cobrado à vista. Cancelamento mantém acesso até o fim do período pago."
+            secondaryNote="Plano mensal renova a cada mês."
             featured
             delay="0.25s"
           />

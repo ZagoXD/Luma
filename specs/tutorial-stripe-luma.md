@@ -1,62 +1,84 @@
 # Tutorial Stripe da Luma
 
-Última atualização: 03/05/2026.
+Última atualização: 12/05/2026.
 
 ## Objetivo
 
-Configurar pagamentos recorrentes da Luma com Stripe Billing e Stripe Elements, começando pelo modo de testes.
+Configurar pagamentos recorrentes da Luma com Stripe Billing e Stripe Elements, mantendo quatro preços oficiais:
 
-## Planos
+- Luma Básico mensal: R$ 11,00/mês.
+- Luma Básico anual: R$ 70,80/ano, equivalente a R$ 5,90/mês.
+- Luma Essencial mensal: R$ 20,00/mês.
+- Luma Essencial anual: R$ 118,80/ano, equivalente a R$ 9,90/mês.
 
-- Luma Básico: R$ 5,90/mês.
-- Luma Essencial: R$ 9,90/mês.
+Produto e preço são separados no Stripe: o produto representa `Luma Básico` ou `Luma Essencial`; cada ciclo de cobrança usa um `Price` diferente.
 
-Diferenciais atuais:
+## Regra de Negócio
 
-- Básico: conversa por texto, registros, histórico, calendário e previsões.
-- Essencial: áudio, notificações automáticas, imagens educativas do bebê e recursos visuais.
+- Mensal: cobrança recorrente mensal, cancelamento agenda fim da renovação e mantém acesso até o fim do mês já pago.
+- Anual: cobrança recorrente anual à vista, cancelamento agenda fim da renovação e mantém acesso até o fim do ano já pago.
+- Estorno não é automático pelo painel da usuária. Deve ser tratado por suporte/Stripe Dashboard para evitar devoluções indevidas em dados sensíveis.
+- Troca de plano/ciclo usa proration da Stripe (`create_prorations`), deixando a Stripe calcular créditos ou cobranças proporcionais.
 
-## O Que Já Está Implementado
+## O Que Está Implementado
 
-- Checkout integrado na aplicação.
-- Stripe Elements embutido na página.
-- Criação de assinatura.
+- Checkout integrado com Stripe Elements dentro da aplicação.
+- Criação de assinatura por plano e ciclo de cobrança.
 - Confirmação de pagamento.
 - Webhook Stripe.
 - Cancelamento ao fim do período.
 - Retomada da assinatura.
 - Troca de plano.
-- Troca de cartão.
-- Salvamento do cartão como método padrão da assinatura.
-- Sincronização local de assinatura com `account_subscriptions`.
+- Troca de ciclo mensal/anual.
+- Troca de cartão com `SetupIntent`.
+- Cartão salvo como método padrão para próximas faturas.
+- Histórico de transações no perfil via invoices da Stripe.
+- Sincronização local com `account_subscriptions`, incluindo `BillingInterval` e `StripePriceId`.
 - Bloqueio de áudio, notificações e imagens para plano Básico.
+
+## IDs de Teste Atuais
+
+```env
+STRIPE_BASIC_MONTHLY_PRICE_ID=price_1TWM0ALtNZgJJBvbNhv6PcpG
+STRIPE_BASIC_ANNUAL_PRICE_ID=price_1TWM0BLtNZgJJBvbPCGxtjAx
+STRIPE_ESSENTIAL_MONTHLY_PRICE_ID=price_1TWM0CLtNZgJJBvb650xzjlt
+STRIPE_ESSENTIAL_ANNUAL_PRICE_ID=price_1TWM0DLtNZgJJBvbiMoDfF1k
+```
+
+As variáveis antigas `STRIPE_BASIC_PRICE_ID` e `STRIPE_ESSENTIAL_PRICE_ID` continuam como fallback legado, mas a aplicação nova usa prioritariamente os quatro IDs acima.
 
 ## Criar Produtos e Preços no Stripe
 
-No Dashboard da Stripe em modo de teste:
+No Dashboard da Stripe:
 
 1. Acesse **Product catalog**.
-2. Clique em **Add product**.
-3. Crie o produto `Luma Básico`.
-4. Adicione preço recorrente mensal:
-   - moeda: BRL;
-   - valor: 5,90;
-   - intervalo: mensal.
-5. Copie o `price_...`.
-6. Repita para `Luma Essencial` com R$ 9,90/mês.
+2. Crie o produto `Luma Básico`.
+3. Adicione dois preços recorrentes em BRL:
+   - R$ 11,00, mensal;
+   - R$ 70,80, anual.
+4. Crie o produto `Luma Essencial`.
+5. Adicione dois preços recorrentes em BRL:
+   - R$ 20,00, mensal;
+   - R$ 118,80, anual.
+6. Copie os quatro `price_...`.
+7. Configure as variáveis da API.
 
-Variáveis da API:
+No Render/API:
 
 ```env
-Stripe__BasicPriceId=price_do_basico
-Stripe__EssentialPriceId=price_do_essencial
+Stripe__BasicMonthlyPriceId=price_live_ou_test_basico_mensal
+Stripe__BasicAnnualPriceId=price_live_ou_test_basico_anual
+Stripe__EssentialMonthlyPriceId=price_live_ou_test_essencial_mensal
+Stripe__EssentialAnnualPriceId=price_live_ou_test_essencial_anual
 ```
 
-No Docker local, via `.env`:
+No Docker local:
 
 ```env
-STRIPE_BASIC_PRICE_ID=price_do_basico
-STRIPE_ESSENTIAL_PRICE_ID=price_do_essencial
+STRIPE_BASIC_MONTHLY_PRICE_ID=price_do_basico_mensal
+STRIPE_BASIC_ANNUAL_PRICE_ID=price_do_basico_anual
+STRIPE_ESSENTIAL_MONTHLY_PRICE_ID=price_do_essencial_mensal
+STRIPE_ESSENTIAL_ANNUAL_PRICE_ID=price_do_essencial_anual
 ```
 
 ## Chaves
@@ -68,12 +90,14 @@ Stripe__SecretKey=sk_test_...
 Stripe__PublishableKey=pk_test_...
 ```
 
-No Docker local:
+Produção:
 
 ```env
-STRIPE_SECRET_KEY=sk_test_...
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+Stripe__SecretKey=sk_live_...
+Stripe__PublishableKey=pk_live_...
 ```
+
+Observação: a tentativa de criar Products/Prices em live via Stripe CLI falhou porque a chave live disponível no CLI era restrita (`rk_live...`) e não tinha permissão para criar catálogo. Para finalizar produção, use uma `sk_live` com permissão de Billing/Product catalog ou crie manualmente pelo Dashboard.
 
 ## Webhook
 
@@ -97,12 +121,6 @@ Variável:
 Stripe__WebhookSecret=whsec_...
 ```
 
-No Docker local:
-
-```env
-STRIPE_WEBHOOK_SECRET=whsec_...
-```
-
 ## Testar Pagamento
 
 Use cartão de teste:
@@ -121,53 +139,10 @@ Dados:
 Fluxo:
 
 1. Criar conta na web.
-2. Escolher plano.
+2. Escolher plano anual ou mensal.
 3. Preencher Stripe Elements.
 4. Confirmar pagamento.
-5. Verificar perfil.
+5. Verificar plano e histórico de transações no perfil.
 6. Verificar no Stripe se a assinatura está ativa.
 7. Enviar mensagem para a Luma no WhatsApp pelo celular cadastrado.
 8. Testar recurso premium, como áudio ou imagem educativa, apenas com plano Essencial.
-
-## Cancelamento
-
-O cancelamento usa `CancelAtPeriodEnd=true`.
-
-Comportamento esperado:
-
-- Na Luma, o status fica como cancelado.
-- O acesso continua até `CurrentPeriodEndsAt`.
-- A usuária pode retomar antes do fim do período.
-
-## Troca de Plano
-
-A troca usa atualização de item da assinatura no Stripe com proration.
-
-Comportamento:
-
-- Básico pode migrar para Essencial.
-- Essencial pode migrar para Básico.
-- A Stripe calcula ajustes proporcionais quando aplicável.
-
-## Troca de Cartão
-
-Implementado com `SetupIntent`.
-
-Fluxo:
-
-1. Usuária abre perfil.
-2. Clica em trocar cartão.
-3. Preenche Stripe Elements.
-4. Stripe salva método de pagamento.
-5. API define o cartão como padrão para próximas faturas.
-
-## Produção
-
-Para produção:
-
-1. Criar produtos e preços novamente no modo produção.
-2. Trocar `sk_test` por `sk_live`.
-3. Trocar `pk_test` por `pk_live`.
-4. Criar webhook de produção.
-5. Configurar `Stripe__WebhookSecret` de produção.
-6. Testar com compra real de baixo valor antes de abrir para usuárias.
