@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Luma.Api.Data;
 using Luma.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -13,23 +12,9 @@ public static class AccountPhoneVerificationPurposes
 
 public sealed record AccountPhoneVerificationResult(bool Success, string Message);
 
-public interface IVerificationCodeGenerator
-{
-    string CreateCode();
-}
-
-public sealed class VerificationCodeGenerator : IVerificationCodeGenerator
-{
-    public string CreateCode()
-    {
-        return RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-    }
-}
-
 public sealed class AccountPhoneVerificationService(
     LumaDbContext db,
-    IWhatsAppTextSender sender,
-    IVerificationCodeGenerator codeGenerator,
+    ITwilioVerifyClient verifyClient,
     ILogger<AccountPhoneVerificationService> logger)
 {
     private static readonly TimeSpan CodeTtl = TimeSpan.FromMinutes(10);
@@ -115,7 +100,6 @@ public sealed class AccountPhoneVerificationService(
     private async Task<AccountPhoneVerificationResult> CreateAndSendCodeAsync(AccountUser account, string phoneNumber, string purpose, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        var code = codeGenerator.CreateCode();
         var phoneHash = PrivacyRuntime.LookupHash(phoneNumber, "account.phone");
 
         var activeCodes = await db.AccountPhoneVerificationCodes
@@ -136,15 +120,14 @@ public sealed class AccountPhoneVerificationService(
             AccountUserId = account.Id,
             PhoneNumber = phoneNumber,
             Purpose = purpose,
-            CodeHash = AccountSecurity.HashToken(code),
+            CodeHash = "twilio_verify",
             ExpiresAt = now.Add(CodeTtl),
             CreatedAt = now
         });
 
         await db.SaveChangesAsync(cancellationToken);
 
-        var message = $"Seu código de confirmação da Luma é {code}. Ele expira em 10 minutos. Se você não pediu esse código, pode ignorar esta mensagem.";
-        var sendResult = await sender.SendTextAsync(phoneNumber, message, cancellationToken);
+        var sendResult = await verifyClient.SendVerificationAsync(phoneNumber, cancellationToken);
         if (!sendResult.Success)
         {
             logger.LogWarning("Could not send account phone verification code to {Phone}. Error: {Error}", PhoneNumber.Mask(phoneNumber), sendResult.ErrorMessage);
@@ -182,9 +165,8 @@ public sealed class AccountPhoneVerificationService(
             return new AccountPhoneVerificationResult(false, "Muitas tentativas incorretas. Solicite um novo código.");
         }
 
-        if (!CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(verificationCode.CodeHash),
-                Convert.FromHexString(AccountSecurity.HashToken(normalizedCode))))
+        var check = await verifyClient.CheckVerificationAsync(phoneNumber, normalizedCode, cancellationToken);
+        if (!check.Approved)
         {
             verificationCode.Attempts += 1;
             await db.SaveChangesAsync(cancellationToken);

@@ -12,19 +12,18 @@ public sealed class AccountPhoneVerificationServiceTests
     public async Task SendCurrentPhoneCodeAsync_CreatesCodeAndSendsWhatsAppMessage()
     {
         await using var db = CreateDbContext();
-        var sender = new CapturingTextSender();
+        var verify = new CapturingVerifyClient();
         var account = CreateAccount("+5516992330309");
         db.AccountUsers.Add(account);
         await db.SaveChangesAsync();
 
-        var service = CreateService(db, sender, "123456");
+        var service = CreateService(db, verify);
 
         var result = await service.SendCurrentPhoneCodeAsync(account);
 
         Assert.True(result.Success);
         Assert.Single(db.AccountPhoneVerificationCodes);
-        Assert.Contains("123456", sender.Messages.Single().Body);
-        Assert.Equal("+5516992330309", sender.Messages.Single().To);
+        Assert.Equal("+5516992330309", verify.SentPhones.Single());
     }
 
     [Fact]
@@ -34,8 +33,10 @@ public sealed class AccountPhoneVerificationServiceTests
         var account = CreateAccount("+5516992330309");
         db.AccountUsers.Add(account);
         await db.SaveChangesAsync();
-        var service = CreateService(db, new CapturingTextSender(), "123456");
+        var verify = new CapturingVerifyClient();
+        var service = CreateService(db, verify);
         await service.SendCurrentPhoneCodeAsync(account);
+        verify.ApprovedCodes.Add("123456");
 
         var result = await service.ConfirmCurrentPhoneCodeAsync(account, "123456");
 
@@ -60,8 +61,10 @@ public sealed class AccountPhoneVerificationServiceTests
             CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30)
         });
         await db.SaveChangesAsync();
-        var service = CreateService(db, new CapturingTextSender(), "654321");
+        var verify = new CapturingVerifyClient();
+        var service = CreateService(db, verify);
         await service.SendPhoneChangeCodeAsync(account, "(16) 98830-7735");
+        verify.ApprovedCodes.Add("654321");
 
         var result = await service.ConfirmPhoneChangeCodeAsync(account, "(16) 98830-7735", "654321");
 
@@ -78,8 +81,10 @@ public sealed class AccountPhoneVerificationServiceTests
         var account = CreateAccount("+5516992330309");
         db.AccountUsers.Add(account);
         await db.SaveChangesAsync();
-        var service = CreateService(db, new CapturingTextSender(), "123456");
+        var verify = new CapturingVerifyClient();
+        var service = CreateService(db, verify);
         await service.SendCurrentPhoneCodeAsync(account);
+        verify.ApprovedCodes.Add("123456");
 
         var result = await service.ConfirmCurrentPhoneCodeAsync(account, "000000");
 
@@ -87,12 +92,11 @@ public sealed class AccountPhoneVerificationServiceTests
         Assert.Contains("Código inválido", result.Message);
     }
 
-    private static AccountPhoneVerificationService CreateService(LumaDbContext db, IWhatsAppTextSender sender, string code)
+    private static AccountPhoneVerificationService CreateService(LumaDbContext db, ITwilioVerifyClient verify)
     {
         return new AccountPhoneVerificationService(
             db,
-            sender,
-            new FixedVerificationCodeGenerator(code),
+            verify,
             NullLogger<AccountPhoneVerificationService>.Instance);
     }
 
@@ -123,19 +127,22 @@ public sealed class AccountPhoneVerificationServiceTests
         return new LumaDbContext(options);
     }
 
-    private sealed class CapturingTextSender : IWhatsAppTextSender
+    private sealed class CapturingVerifyClient : ITwilioVerifyClient
     {
-        public List<(string To, string Body)> Messages { get; } = [];
+        public List<string> SentPhones { get; } = [];
+        public HashSet<string> ApprovedCodes { get; } = [];
 
-        public Task<NotificationSendResult> SendTextAsync(string to, string body, CancellationToken cancellationToken = default)
+        public Task<TwilioVerifySendResult> SendVerificationAsync(string to, CancellationToken cancellationToken = default)
         {
-            Messages.Add((to, body));
-            return Task.FromResult(new NotificationSendResult(true, "SM_test", null));
+            SentPhones.Add(to);
+            return Task.FromResult(new TwilioVerifySendResult(true, "VE_test", "pending", null));
         }
-    }
 
-    private sealed class FixedVerificationCodeGenerator(string code) : IVerificationCodeGenerator
-    {
-        public string CreateCode() => code;
+        public Task<TwilioVerifyCheckResult> CheckVerificationAsync(string to, string code, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(ApprovedCodes.Contains(code)
+                ? new TwilioVerifyCheckResult(true, "approved", null)
+                : new TwilioVerifyCheckResult(false, "pending", null));
+        }
     }
 }

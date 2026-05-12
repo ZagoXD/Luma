@@ -134,6 +134,8 @@ Variáveis:
 Twilio__AccountSid=
 Twilio__AuthToken=
 Twilio__WhatsAppFrom=whatsapp:+16204008668
+Twilio__VerifyServiceSid=
+Twilio__VerifyChannel=whatsapp
 Twilio__TemplatePeriodTomorrow=HX4b51b08ea4f3c17dcd443c1e3071995b
 Twilio__TemplatePeriodToday=HX39b4b60a687825f5bb3665ca2fcb3907
 Twilio__TemplateContraceptiveDaily=HXa23267cf19348a4fa39f958164125141

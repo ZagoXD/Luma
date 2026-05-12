@@ -49,9 +49,9 @@ builder.Services.AddHttpClient<IWhatsAppNotificationSender, TwilioWhatsAppNotifi
 builder.Services.AddHttpClient<IWhatsAppTextSender, TwilioWhatsAppTextSender>();
 builder.Services.AddHttpClient<IWhatsAppMediaSender, TwilioWhatsAppMediaSender>();
 builder.Services.AddHttpClient<IWhatsAppTypingIndicatorSender, TwilioWhatsAppTypingIndicatorSender>();
+builder.Services.AddHttpClient<ITwilioVerifyClient, TwilioVerifyClient>();
 builder.Services.AddSingleton<BabyImageJobQueue>();
 builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
-builder.Services.AddSingleton<IVerificationCodeGenerator, VerificationCodeGenerator>();
 builder.Services.AddScoped<AccountPhoneVerificationService>();
 builder.Services.AddScoped<NotificationPreferenceService>();
 builder.Services.AddScoped<NotificationProcessor>();

@@ -39,6 +39,16 @@ public sealed record NotificationPreferenceUpdate(
 
 public sealed record NotificationSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage);
 
+public sealed record TwilioVerifySendResult(bool Success, string? VerificationSid, string? Status, string? ErrorMessage);
+
+public sealed record TwilioVerifyCheckResult(bool Approved, string? Status, string? ErrorMessage);
+
+public interface ITwilioVerifyClient
+{
+    Task<TwilioVerifySendResult> SendVerificationAsync(string to, CancellationToken cancellationToken = default);
+    Task<TwilioVerifyCheckResult> CheckVerificationAsync(string to, string code, CancellationToken cancellationToken = default);
+}
+
 public sealed class NotificationPreferenceService(LumaDbContext db)
 {
     public async Task<NotificationPreference> UpsertAsync(Guid userId, NotificationPreferenceUpdate update)
@@ -151,6 +161,96 @@ public interface IWhatsAppMediaSender
 public interface IWhatsAppTypingIndicatorSender
 {
     Task<bool> TrySendAsync(string messageSid, CancellationToken cancellationToken = default);
+}
+
+public sealed class TwilioVerifyClient(HttpClient http, IConfiguration configuration, ILogger<TwilioVerifyClient> logger) : ITwilioVerifyClient
+{
+    private readonly string _accountSid = configuration.GetValue<string>("Twilio:AccountSid") ?? string.Empty;
+    private readonly string _authToken = configuration.GetValue<string>("Twilio:AuthToken") ?? string.Empty;
+    private readonly string _serviceSid = configuration.GetValue<string>("Twilio:VerifyServiceSid") ?? string.Empty;
+    private readonly string _channel = configuration.GetValue<string>("Twilio:VerifyChannel") ?? "whatsapp";
+
+    public async Task<TwilioVerifySendResult> SendVerificationAsync(string to, CancellationToken cancellationToken = default)
+    {
+        if (!HasConfiguration())
+        {
+            logger.LogInformation("Twilio Verify skipped because credentials or service SID are not configured.");
+            return new TwilioVerifySendResult(false, null, null, "twilio_verify_not_configured");
+        }
+
+        var response = await PostFormAsync(
+            $"https://verify.twilio.com/v2/Services/{_serviceSid}/Verifications",
+            new Dictionary<string, string>
+            {
+                ["To"] = to,
+                ["Channel"] = string.IsNullOrWhiteSpace(_channel) ? "whatsapp" : _channel
+            },
+            cancellationToken);
+
+        if (!response.Success)
+        {
+            return new TwilioVerifySendResult(false, null, null, response.ErrorMessage);
+        }
+
+        using var document = JsonDocument.Parse(response.Body);
+        var sid = document.RootElement.TryGetProperty("sid", out var sidProperty) ? sidProperty.GetString() : null;
+        var status = document.RootElement.TryGetProperty("status", out var statusProperty) ? statusProperty.GetString() : null;
+        return new TwilioVerifySendResult(true, sid, status, null);
+    }
+
+    public async Task<TwilioVerifyCheckResult> CheckVerificationAsync(string to, string code, CancellationToken cancellationToken = default)
+    {
+        if (!HasConfiguration())
+        {
+            logger.LogInformation("Twilio Verify check skipped because credentials or service SID are not configured.");
+            return new TwilioVerifyCheckResult(false, null, "twilio_verify_not_configured");
+        }
+
+        var response = await PostFormAsync(
+            $"https://verify.twilio.com/v2/Services/{_serviceSid}/VerificationCheck",
+            new Dictionary<string, string>
+            {
+                ["To"] = to,
+                ["Code"] = code
+            },
+            cancellationToken);
+
+        if (!response.Success)
+        {
+            return new TwilioVerifyCheckResult(false, null, response.ErrorMessage);
+        }
+
+        using var document = JsonDocument.Parse(response.Body);
+        var status = document.RootElement.TryGetProperty("status", out var statusProperty) ? statusProperty.GetString() : null;
+        return new TwilioVerifyCheckResult(string.Equals(status, "approved", StringComparison.OrdinalIgnoreCase), status, null);
+    }
+
+    private bool HasConfiguration()
+    {
+        return !string.IsNullOrWhiteSpace(_accountSid)
+            && !string.IsNullOrWhiteSpace(_authToken)
+            && !string.IsNullOrWhiteSpace(_serviceSid);
+    }
+
+    private async Task<(bool Success, string Body, string? ErrorMessage)> PostFormAsync(
+        string url,
+        Dictionary<string, string> form,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        var auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_accountSid}:{_authToken}"));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", auth);
+        request.Content = new FormUrlEncodedContent(form);
+
+        var response = await http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            return (true, body, null);
+        }
+
+        return (false, body, body.Length > 512 ? body[..512] : body);
+    }
 }
 
 public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppNotificationSender> logger) : IWhatsAppNotificationSender

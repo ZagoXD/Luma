@@ -302,6 +302,8 @@ Stripe__WebhookSecret=
 Twilio__AccountSid=
 Twilio__AuthToken=
 Twilio__WhatsAppFrom=whatsapp:+16204008668
+Twilio__VerifyServiceSid=
+Twilio__VerifyChannel=whatsapp
 ```
 
 Web:
