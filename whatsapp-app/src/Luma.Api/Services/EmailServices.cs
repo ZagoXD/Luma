@@ -16,7 +16,11 @@ public sealed class ResendOptions
 public sealed class EmailOptions
 {
     public string From { get; set; } = "Luma <noreply@ia-luma.com.br>";
+    public string SupportTo { get; set; } = "lumasuporte.ia@gmail.com";
     public int PasswordResetExpirationMinutes { get; set; } = 30;
+    public int MaxSupportAttachments { get; set; } = 3;
+    public long MaxSupportAttachmentBytes { get; set; } = 5 * 1024 * 1024;
+    public int SupportDailyLimit { get; set; } = 5;
     public string WebBaseUrl { get; set; } = string.Empty;
 }
 
@@ -25,9 +29,13 @@ public sealed class EmailTemplateOptions
     public string Welcome { get; set; } = string.Empty;
     public string SubscriptionCreated { get; set; } = string.Empty;
     public string PasswordReset { get; set; } = string.Empty;
+    public string SupportAdmin { get; set; } = string.Empty;
+    public string SupportUserConfirmation { get; set; } = string.Empty;
 }
 
 public sealed record EmailSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage);
+
+public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
 
 public interface IEmailService
 {
@@ -44,6 +52,15 @@ public interface IEmailService
         string? userName,
         string resetUrl,
         int expiresInMinutes,
+        CancellationToken cancellationToken = default);
+
+    Task<EmailSendResult> SendSupportRequestToAdminAsync(
+        SupportRequest request,
+        IReadOnlyList<EmailAttachment> attachments,
+        CancellationToken cancellationToken = default);
+
+    Task<EmailSendResult> SendSupportRequestConfirmationToUserAsync(
+        SupportRequest request,
         CancellationToken cancellationToken = default);
 }
 
@@ -100,11 +117,36 @@ public sealed class ResendEmailService(
             cancellationToken);
     }
 
+    public Task<EmailSendResult> SendSupportRequestToAdminAsync(SupportRequest supportRequest, IReadOnlyList<EmailAttachment> attachments, CancellationToken cancellationToken = default)
+    {
+        return SendTemplateAsync(
+            _email.SupportTo,
+            _templates.SupportAdmin,
+            BuildSupportVariables(supportRequest, includeUserEmail: true),
+            cancellationToken,
+            replyTo: supportRequest.UserEmail,
+            subject: $"Nova solicitação de suporte #{supportRequest.Id}",
+            attachments: attachments);
+    }
+
+    public Task<EmailSendResult> SendSupportRequestConfirmationToUserAsync(SupportRequest supportRequest, CancellationToken cancellationToken = default)
+    {
+        return SendTemplateAsync(
+            supportRequest.UserEmail,
+            _templates.SupportUserConfirmation,
+            BuildSupportVariables(supportRequest, includeUserEmail: false),
+            cancellationToken,
+            subject: "Recebemos sua solicitação de suporte");
+    }
+
     private async Task<EmailSendResult> SendTemplateAsync(
         string to,
         string templateId,
         IReadOnlyDictionary<string, object?> variables,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? replyTo = null,
+        string? subject = null,
+        IReadOnlyList<EmailAttachment>? attachments = null)
     {
         if (string.IsNullOrWhiteSpace(_resend.ApiKey)
             || string.IsNullOrWhiteSpace(_email.From)
@@ -116,16 +158,37 @@ public sealed class ResendEmailService(
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.resend.com/emails");
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _resend.ApiKey);
-        request.Content = JsonContent.Create(new
+        var payload = new Dictionary<string, object?>
         {
-            from = _email.From,
-            to = new[] { to },
-            template = new
+            ["from"] = _email.From,
+            ["to"] = new[] { to },
+            ["template"] = new
             {
                 id = templateId,
                 variables
             }
-        });
+        };
+
+        if (!string.IsNullOrWhiteSpace(replyTo))
+        {
+            payload["reply_to"] = replyTo;
+        }
+
+        if (!string.IsNullOrWhiteSpace(subject))
+        {
+            payload["subject"] = subject;
+        }
+
+        if (attachments is { Count: > 0 })
+        {
+            payload["attachments"] = attachments.Select(attachment => new
+            {
+                filename = attachment.FileName,
+                content = Convert.ToBase64String(attachment.Content)
+            }).ToArray();
+        }
+
+        request.Content = JsonContent.Create(payload);
 
         using var response = await http.SendAsync(request, cancellationToken);
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -154,9 +217,187 @@ public sealed class ResendEmailService(
     {
         return string.IsNullOrWhiteSpace(userName) ? "tudo bem?" : userName.Trim();
     }
+
+    private static Dictionary<string, object?> BuildSupportVariables(SupportRequest request, bool includeUserEmail)
+    {
+        var variables = new Dictionary<string, object?>
+        {
+            ["USER_NAME"] = request.UserName,
+            ["SUPPORT_REQUEST_ID"] = request.Id.ToString(),
+            ["SUBJECT"] = request.Subject,
+            ["CREATED_AT"] = request.CreatedAt.ToString("dd/MM/yyyy HH:mm"),
+            ["ATTACHMENT_COUNT"] = request.AttachmentCount.ToString()
+        };
+
+        if (includeUserEmail)
+        {
+            variables["USER_EMAIL"] = request.UserEmail;
+            variables["DESCRIPTION"] = request.Description;
+        }
+
+        return variables;
+    }
 }
 
 public sealed record PasswordResetRequestResult(bool Success, string Message);
+
+public sealed record SupportAttachmentInput(string FileName, string ContentType, byte[] Content);
+
+public sealed record SupportRequestResult(bool Success, string Message, SupportRequest? Request = null);
+
+public sealed class SupportRequestService(
+    LumaDbContext db,
+    IEmailService emailService,
+    IOptions<EmailOptions> emailOptions,
+    ILogger<SupportRequestService> logger)
+{
+    private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/png",
+        "image/jpeg",
+        "application/pdf"
+    };
+
+    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".pdf"
+    };
+
+    private static readonly HashSet<string> BlockedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".js",
+        ".zip",
+        ".rar",
+        ".7z",
+        ".scr"
+    };
+
+    public async Task<SupportRequestResult> CreateAsync(
+        AccountUser account,
+        string subject,
+        string description,
+        IReadOnlyList<SupportAttachmentInput> attachments,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedSubject = subject.Trim();
+        var normalizedDescription = description.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedSubject))
+        {
+            return new SupportRequestResult(false, "Informe o assunto da solicitação.");
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedDescription))
+        {
+            return new SupportRequestResult(false, "Informe a descrição da solicitação.");
+        }
+
+        var maxAttachments = Math.Max(0, emailOptions.Value.MaxSupportAttachments);
+        if (attachments.Count > maxAttachments)
+        {
+            return new SupportRequestResult(false, $"Você pode enviar no máximo {maxAttachments} anexos.");
+        }
+
+        var maxBytes = Math.Max(1, emailOptions.Value.MaxSupportAttachmentBytes);
+        foreach (var attachment in attachments)
+        {
+            var validationError = ValidateAttachment(attachment, maxBytes);
+            if (validationError is not null)
+            {
+                return new SupportRequestResult(false, validationError);
+            }
+        }
+
+        var today = DateTimeOffset.UtcNow.AddDays(-1);
+        var dailyLimit = Math.Max(1, emailOptions.Value.SupportDailyLimit);
+        var requestCount = await db.SupportRequests.CountAsync(
+            request => request.UserId == account.Id && request.CreatedAt >= today,
+            cancellationToken);
+        if (requestCount >= dailyLimit)
+        {
+            return new SupportRequestResult(false, "Você atingiu o limite de solicitações de suporte por hoje. Tente novamente mais tarde.");
+        }
+
+        var supportRequest = new SupportRequest
+        {
+            UserId = account.Id,
+            UserName = account.FullName,
+            UserEmail = account.Email,
+            Subject = normalizedSubject,
+            Description = normalizedDescription,
+            AttachmentCount = attachments.Count,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.SupportRequests.Add(supportRequest);
+        foreach (var attachment in attachments)
+        {
+            db.SupportRequestAttachmentMetadata.Add(new SupportRequestAttachmentMetadata
+            {
+                SupportRequestId = supportRequest.Id,
+                FileName = SanitizeFileName(attachment.FileName),
+                ContentType = attachment.ContentType,
+                SizeBytes = attachment.Content.Length,
+                CreatedAt = supportRequest.CreatedAt
+            });
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        var emailAttachments = attachments
+            .Select(attachment => new EmailAttachment(SanitizeFileName(attachment.FileName), attachment.ContentType, attachment.Content))
+            .ToList();
+        var adminResult = await emailService.SendSupportRequestToAdminAsync(supportRequest, emailAttachments, cancellationToken);
+        if (!adminResult.Success)
+        {
+            logger.LogWarning("support_request_admin_email_failed for request {SupportRequestId}: {Error}", supportRequest.Id, adminResult.ErrorMessage);
+        }
+
+        var userResult = await emailService.SendSupportRequestConfirmationToUserAsync(supportRequest, cancellationToken);
+        if (!userResult.Success)
+        {
+            logger.LogWarning("support_request_user_confirmation_email_failed for request {SupportRequestId}: {Error}", supportRequest.Id, userResult.ErrorMessage);
+        }
+
+        return new SupportRequestResult(true, "Recebemos sua solicitação. Nossa equipe vai responder por e-mail assim que possível.", supportRequest);
+    }
+
+    private static string? ValidateAttachment(SupportAttachmentInput attachment, long maxBytes)
+    {
+        if (attachment.Content.LongLength > maxBytes)
+        {
+            return $"Cada anexo deve ter no máximo {FormatBytes(maxBytes)}.";
+        }
+
+        var extension = Path.GetExtension(attachment.FileName);
+        if (BlockedExtensions.Contains(extension)
+            || !AllowedExtensions.Contains(extension)
+            || !AllowedContentTypes.Contains(attachment.ContentType))
+        {
+            return "Formato de arquivo não permitido. Envie apenas PNG, JPG, JPEG ou PDF.";
+        }
+
+        return null;
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var onlyName = Path.GetFileName(fileName);
+        return string.IsNullOrWhiteSpace(onlyName) ? "anexo" : onlyName;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        return bytes % (1024 * 1024) == 0
+            ? $"{bytes / (1024 * 1024)} MB"
+            : $"{bytes} bytes";
+    }
+}
 
 public sealed class PasswordResetService(
     LumaDbContext db,

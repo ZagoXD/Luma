@@ -2,7 +2,7 @@
 
 Este diretório contém a API da Luma, os testes de backend e o Docker Compose usado no desenvolvimento local.
 
-Status atual: a API cobre WhatsApp, cadastro, ciclo menstrual, gravidez, calendário, assinaturas, Stripe, Redis, áudio por ElevenLabs, imagens educativas por OpenAI + R2, notificações estruturais e criptografia de dados reais da usuária.
+Status atual: a API cobre WhatsApp, cadastro, ciclo menstrual, gravidez, calendário, assinaturas, Stripe, Redis, áudio por ElevenLabs, imagens educativas por OpenAI + R2, notificações estruturais, e-mails transacionais por Resend, suporte por e-mail e criptografia de dados reais da usuária.
 
 ## Serviços Locais
 
@@ -66,9 +66,15 @@ STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
 EMAIL_FROM=Luma <noreply@ia-luma.com.br>
 EMAIL_PASSWORD_RESET_EXPIRATION_MINUTES=30
+EMAIL_SUPPORT_TO=lumasuporte.ia@gmail.com
+EMAIL_MAX_SUPPORT_ATTACHMENTS=3
+EMAIL_MAX_SUPPORT_ATTACHMENT_BYTES=5242880
+EMAIL_SUPPORT_DAILY_LIMIT=5
 EMAIL_TEMPLATE_WELCOME=
 EMAIL_TEMPLATE_SUBSCRIPTION_CREATED=
 EMAIL_TEMPLATE_PASSWORD_RESET=
+EMAIL_TEMPLATE_SUPPORT_ADMIN=
+EMAIL_TEMPLATE_SUPPORT_USER_CONFIRMATION=
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
@@ -89,7 +95,24 @@ NOTIFICATIONS_WORKER_ENABLED=false
 dotnet test Luma.sln
 ```
 
-Status atual: 123 testes de backend passando.
+Status atual: os testes de backend cobrem cadastro, ciclo, gravidez, assinaturas, pagamentos, e-mails, suporte, privacidade e integrações principais.
+
+## Suporte Por E-mail
+
+A rota autenticada `POST /support/requests` recebe `multipart/form-data` com:
+
+- `subject`: assunto da solicitação.
+- `description`: descrição do problema ou dúvida.
+- `files`: anexos opcionais.
+
+Limites padrão:
+
+- até 3 anexos;
+- até 5 MB por anexo;
+- formatos permitidos: PNG, JPG, JPEG e PDF;
+- arquivos executáveis e compactados são recusados.
+
+A API salva apenas metadados dos anexos no banco e envia os arquivos para `EMAIL_SUPPORT_TO` pelo Resend. A usuária recebe um e-mail separado confirmando o recebimento, sem anexos.
 
 ## Privacidade
 

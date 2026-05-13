@@ -8,6 +8,7 @@ import {
   Bell,
   CalendarDays,
   CreditCard,
+  LifeBuoy,
   LogOut,
   MessageCircle,
   RefreshCcw,
@@ -466,6 +467,15 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
               </span>
             </a>
             <p className="profile-note">Depois de ativar um plano, envie uma mensagem pelo WhatsApp cadastrado.</p>
+          </section>
+
+          <section className="account-panel profile-card">
+            <h2><LifeBuoy size={20} /> Precisa de ajuda?</h2>
+            <p>Envie uma solicitação para nossa equipe de suporte. Você pode incluir imagens ou PDFs para explicar melhor o problema.</p>
+            <Link className="account-primary as-link profile-calendar-link" href={`/perfil/${accountId}/suporte`}>
+              <LifeBuoy size={16} />
+              Abrir suporte
+            </Link>
           </section>
 
           <section className="account-panel profile-card notification-card">

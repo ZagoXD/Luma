@@ -25,6 +25,24 @@ export async function proxyToApi(path: string, init: RequestInit = {}) {
   });
 }
 
+export async function proxyFormToApi(path: string, formData: FormData, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+
+  const cookieStore = await cookies();
+  const token = cookieStore.get(sessionCookieName)?.value;
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return fetch(`${apiBaseUrl}${path}`, {
+    ...init,
+    method: init.method || "POST",
+    headers,
+    body: formData,
+    cache: "no-store",
+  });
+}
+
 export async function readJsonBody(request: Request) {
   try {
     return await request.json();

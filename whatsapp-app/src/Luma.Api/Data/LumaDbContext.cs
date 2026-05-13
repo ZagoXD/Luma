@@ -21,6 +21,8 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
+    public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
+    public DbSet<SupportRequestAttachmentMetadata> SupportRequestAttachmentMetadata => Set<SupportRequestAttachmentMetadata>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<BlockedConversation> BlockedConversations => Set<BlockedConversation>();
@@ -226,6 +228,35 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(log => log.ProviderMessageId).HasMaxLength(128);
             entity.Property(log => log.Status).HasMaxLength(32).IsRequired();
             entity.Property(log => log.Error).HasMaxLength(512);
+        });
+
+        modelBuilder.Entity<SupportRequest>(entity =>
+        {
+            entity.ToTable("support_requests");
+            entity.HasKey(request => request.Id);
+            entity.HasIndex(request => new { request.UserId, request.CreatedAt });
+            entity.Property(request => request.UserName).HasMaxLength(1024).IsRequired();
+            entity.Property(request => request.UserEmail).HasMaxLength(1024).IsRequired();
+            entity.Property(request => request.Subject).HasMaxLength(200).IsRequired();
+            entity.Property(request => request.Description).HasMaxLength(5000).IsRequired();
+            entity.Property(request => request.Status).HasMaxLength(32).IsRequired();
+            entity.HasOne(request => request.User)
+                .WithMany()
+                .HasForeignKey(request => request.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SupportRequestAttachmentMetadata>(entity =>
+        {
+            entity.ToTable("support_request_attachment_metadata");
+            entity.HasKey(attachment => attachment.Id);
+            entity.HasIndex(attachment => attachment.SupportRequestId);
+            entity.Property(attachment => attachment.FileName).HasMaxLength(255).IsRequired();
+            entity.Property(attachment => attachment.ContentType).HasMaxLength(128).IsRequired();
+            entity.HasOne(attachment => attachment.SupportRequest)
+                .WithMany(request => request.Attachments)
+                .HasForeignKey(attachment => attachment.SupportRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<NotificationPreference>(entity =>

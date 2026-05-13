@@ -124,5 +124,15 @@ public sealed class PasswordResetServiceTests
             ResetLinks.Add(resetUrl);
             return Task.FromResult(new EmailSendResult(true, "email_reset", null));
         }
+
+        public Task<EmailSendResult> SendSupportRequestToAdminAsync(SupportRequest request, IReadOnlyList<EmailAttachment> attachments, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new EmailSendResult(true, "support_admin", null));
+        }
+
+        public Task<EmailSendResult> SendSupportRequestConfirmationToUserAsync(SupportRequest request, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new EmailSendResult(true, "support_user", null));
+        }
     }
 }

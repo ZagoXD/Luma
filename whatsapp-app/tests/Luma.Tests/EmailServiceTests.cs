@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Luma.Api.Models;
 using Luma.Api.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -47,6 +48,39 @@ public sealed class EmailServiceTests
 
         Assert.False(result.Success);
         Assert.Null(handler.JsonDocument);
+    }
+
+    [Fact]
+    public async Task SendSupportRequestToAdminAsync_SendsReplyToAndAttachments()
+    {
+        var handler = new CapturingHandler("""{"id":"email_support"}""");
+        var service = new ResendEmailService(
+            new HttpClient(handler),
+            Options.Create(new ResendOptions { ApiKey = "re_test" }),
+            Options.Create(new EmailOptions { From = "Luma <noreply@ia-luma.com.br>", SupportTo = "lumasuporte.ia@gmail.com" }),
+            Options.Create(new EmailTemplateOptions { SupportAdmin = "support_request_admin_email" }),
+            NullLogger<ResendEmailService>.Instance);
+        var supportRequest = new SupportRequest
+        {
+            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            UserName = "Nayara Zago",
+            UserEmail = "nay@example.com",
+            Subject = "Ajuda",
+            Description = "Preciso de ajuda.",
+            AttachmentCount = 1,
+            CreatedAt = new DateTimeOffset(2026, 5, 13, 10, 0, 0, TimeSpan.Zero)
+        };
+
+        var result = await service.SendSupportRequestToAdminAsync(supportRequest, [
+            new EmailAttachment("erro.png", "image/png", [1, 2, 3])
+        ]);
+
+        Assert.True(result.Success);
+        Assert.Equal("lumasuporte.ia@gmail.com", handler.Json.RootElement.GetProperty("to")[0].GetString());
+        Assert.Equal("nay@example.com", handler.Json.RootElement.GetProperty("reply_to").GetString());
+        Assert.Equal("support_request_admin_email", handler.Json.RootElement.GetProperty("template").GetProperty("id").GetString());
+        Assert.Equal("AQID", handler.Json.RootElement.GetProperty("attachments")[0].GetProperty("content").GetString());
+        Assert.Equal("erro.png", handler.Json.RootElement.GetProperty("attachments")[0].GetProperty("filename").GetString());
     }
 
     private sealed class CapturingHandler(string responseBody) : HttpMessageHandler

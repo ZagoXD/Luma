@@ -297,6 +297,27 @@ export async function getBillingTransactions() {
   return appRequest<{ transactions: BillingTransaction[] }>("/api/account/billing/transactions");
 }
 
+export async function createSupportRequest(formData: FormData) {
+  const response = await fetch("/api/support/requests", {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    let message = "Não foi possível enviar sua solicitação agora. Tente novamente em instantes.";
+    try {
+      const data = (await response.json()) as { message?: string };
+      message = data.message || message;
+    } catch {
+      // Mantém a mensagem padrão.
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as { message: string; id: string };
+}
+
 async function appRequest<T>(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");

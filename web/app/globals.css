@@ -225,7 +225,8 @@ nav .nav-cta:focus {
   font-weight: 800;
 }
 
-.account-form input {
+.account-form input,
+.account-form textarea {
   min-height: 46px;
   border: 1.5px solid var(--border);
   border-radius: 8px;
@@ -235,10 +236,26 @@ nav .nav-cta:focus {
   font: inherit;
 }
 
-.account-form input:focus {
+.account-form textarea {
+  line-height: 1.5;
+  min-height: 9rem;
+  padding: 0.75rem 0.9rem;
+  resize: vertical;
+}
+
+.account-form input:focus,
+.account-form textarea:focus {
   outline: none;
   border-color: var(--lavender);
   box-shadow: 0 0 0 4px oklch(72% 0.22 295 / 0.14);
+}
+
+.support-help {
+  color: var(--text-mid);
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .account-form .account-consent {

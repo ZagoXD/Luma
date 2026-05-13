@@ -5,6 +5,7 @@ using Luma.Api.Data;
 using Luma.Api.Models;
 using Luma.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Stripe;
 using LumaSubscriptionStatuses = Luma.Api.Models.SubscriptionStatuses;
 using StripeSubscription = Stripe.Subscription;
@@ -67,6 +68,7 @@ builder.Services.AddSingleton<BabyImageJobQueue>();
 builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
 builder.Services.AddScoped<AccountPhoneVerificationService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<SupportRequestService>();
 builder.Services.AddScoped<NotificationPreferenceService>();
 builder.Services.AddScoped<NotificationProcessor>();
 builder.Services.AddScoped<CycleCalendarService>();
@@ -186,6 +188,67 @@ app.MapPost("/auth/reset-password", async (
 })
 .WithName("ResetPassword")
 .WithOpenApi();
+
+app.MapPost("/support/requests", async (
+    HttpRequest request,
+    LumaDbContext db,
+    SupportRequestService supportRequests,
+    IOptions<EmailOptions> emailOptions) =>
+{
+    var account = await GetAuthenticatedAccountAsync(request, db);
+    if (account is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { message = "Envie a solicitação usando multipart/form-data." });
+    }
+
+    var form = await request.ReadFormAsync(request.HttpContext.RequestAborted);
+    var supportEmailOptions = emailOptions.Value;
+    var maxAttachments = Math.Max(0, supportEmailOptions.MaxSupportAttachments);
+    var maxAttachmentBytes = Math.Max(1, supportEmailOptions.MaxSupportAttachmentBytes);
+    if (form.Files.Count > maxAttachments)
+    {
+        return Results.BadRequest(new { message = $"Envie no máximo {maxAttachments} anexos." });
+    }
+
+    var attachments = new List<SupportAttachmentInput>();
+    foreach (var file in form.Files)
+    {
+        if (file.Length > maxAttachmentBytes)
+        {
+            return Results.BadRequest(new { message = $"Cada anexo deve ter no máximo {FormatSupportAttachmentSize(maxAttachmentBytes)}." });
+        }
+
+        await using var stream = file.OpenReadStream();
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory, request.HttpContext.RequestAborted);
+        attachments.Add(new SupportAttachmentInput(file.FileName, file.ContentType, memory.ToArray()));
+    }
+
+    var result = await supportRequests.CreateAsync(
+        account,
+        form["subject"].ToString(),
+        form["description"].ToString(),
+        attachments,
+        request.HttpContext.RequestAborted);
+
+    return result.Success
+        ? Results.Ok(new { message = result.Message, id = result.Request?.Id })
+        : Results.BadRequest(new { message = result.Message });
+})
+.DisableAntiforgery()
+.WithName("CreateSupportRequest")
+.WithOpenApi();
+
+static string FormatSupportAttachmentSize(long bytes)
+{
+    var megabytes = bytes / 1024d / 1024d;
+    return megabytes >= 1 ? $"{megabytes:0.#} MB" : $"{bytes} bytes";
+}
 
 app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext db) =>
 {
@@ -1250,6 +1313,27 @@ CREATE TABLE IF NOT EXISTS email_logs (
     "CreatedAt" timestamp with time zone NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_email_logs_To_CreatedAt" ON email_logs ("To", "CreatedAt");
+CREATE TABLE IF NOT EXISTS support_requests (
+    "Id" uuid PRIMARY KEY,
+    "UserId" uuid NOT NULL REFERENCES account_users ("Id") ON DELETE CASCADE,
+    "UserName" character varying(1024) NOT NULL,
+    "UserEmail" character varying(1024) NOT NULL,
+    "Subject" character varying(200) NOT NULL,
+    "Description" character varying(5000) NOT NULL,
+    "AttachmentCount" integer NOT NULL,
+    "Status" character varying(32) NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "IX_support_requests_UserId_CreatedAt" ON support_requests ("UserId", "CreatedAt");
+CREATE TABLE IF NOT EXISTS support_request_attachment_metadata (
+    "Id" uuid PRIMARY KEY,
+    "SupportRequestId" uuid NOT NULL REFERENCES support_requests ("Id") ON DELETE CASCADE,
+    "FileName" character varying(255) NOT NULL,
+    "ContentType" character varying(128) NOT NULL,
+    "SizeBytes" bigint NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "IX_support_request_attachment_metadata_SupportRequestId" ON support_request_attachment_metadata ("SupportRequestId");
 CREATE TABLE IF NOT EXISTS notification_preferences (
     "Id" uuid PRIMARY KEY,
     "UserId" uuid NOT NULL REFERENCES users ("Id") ON DELETE CASCADE,
