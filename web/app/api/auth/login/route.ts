@@ -17,6 +17,10 @@ export async function POST(request: Request) {
   const data = await apiResponse.json().catch(() => ({}));
 
   if (!apiResponse.ok || !data.token) {
+    if (apiResponse.status === 401) {
+      return NextResponse.json({ message: "E-mail ou senha inválidos." }, { status: 400 });
+    }
+
     return NextResponse.json(data, { status: apiResponse.status });
   }
 

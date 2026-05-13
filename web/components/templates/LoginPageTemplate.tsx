@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, LogIn, UserPlus } from "lucide-react";
@@ -8,6 +8,10 @@ import { confirmPhoneVerificationCode, loginAccount, registerAccount, resendPhon
 import { formatBrazilPhone, formatCpf, isValidBrazilPhone, isValidCpf } from "@/lib/account-format";
 
 type Mode = "login" | "register";
+
+const phoneVerificationSentMessage = "Para finalizarmos seu cadastro, enviamos um código de confirmação por SMS para o celular informado.";
+const phoneVerificationResentMessage = "Enviamos um novo código por SMS. Confira suas mensagens e informe o código recebido.";
+const resendCooldownSeconds = 30;
 
 export function LoginPageTemplate() {
   const router = useRouter();
@@ -22,11 +26,22 @@ export function LoginPageTemplate() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [pendingVerificationUser, setPendingVerificationUser] = useState<AccountUser | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const title = useMemo(
     () => (mode === "login" ? "Entrar na sua conta" : "Criar sua conta"),
     [mode],
   );
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +90,8 @@ export function LoginPageTemplate() {
 
       if (!result.user.phoneVerifiedAt) {
         setPendingVerificationUser(result.user);
-        setStatus(result.phoneVerificationMessage || "Enviamos um código para o WhatsApp informado.");
+        setResendCooldown(resendCooldownSeconds);
+        setStatus(phoneVerificationSentMessage);
         return;
       }
 
@@ -104,11 +120,14 @@ export function LoginPageTemplate() {
   }
 
   async function handleResendVerification() {
+    if (resendCooldown > 0) return;
+
     setStatus("");
     setSubmitting(true);
     try {
-      const result = await resendPhoneVerificationCode();
-      setStatus(result.message);
+      await resendPhoneVerificationCode();
+      setResendCooldown(resendCooldownSeconds);
+      setStatus(phoneVerificationResentMessage);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Não consegui reenviar o código agora.");
     } finally {
@@ -128,8 +147,8 @@ export function LoginPageTemplate() {
           <div className="account-panel">
             <div className="account-heading">
               <span className="account-kicker">Confirmação</span>
-              <h1>Confirme seu WhatsApp</h1>
-              <p>Enviamos um código para {pendingVerificationUser.phoneNumber}. Digite o código para concluir seu cadastro.</p>
+              <h1>Confirme seu celular</h1>
+              <p>Para finalizarmos seu cadastro, enviamos um código por SMS para {pendingVerificationUser.phoneNumber}. Digite o código recebido abaixo.</p>
             </div>
 
             <form className="account-form" onSubmit={handleConfirmVerification}>
@@ -148,8 +167,8 @@ export function LoginPageTemplate() {
               <button className="account-primary" type="submit" disabled={submitting || verificationCode.length !== 6}>
                 {submitting ? "Confirmando..." : "Confirmar cadastro"}
               </button>
-              <button className="account-secondary billing-button" type="button" onClick={handleResendVerification} disabled={submitting}>
-                Reenviar código
+              <button className="account-secondary billing-button" type="button" onClick={handleResendVerification} disabled={submitting || resendCooldown > 0}>
+                {resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : "Reenviar código"}
               </button>
               {status && <p className="account-status info">{status}</p>}
             </form>

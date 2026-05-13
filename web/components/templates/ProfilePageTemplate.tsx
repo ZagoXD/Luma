@@ -245,6 +245,7 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
 
   const subscription = profile?.subscription;
   const plan = subscription ? plans[subscription.planCode] : null;
+  const hasContractedPlan = subscription?.status === "active" || subscription?.status === "canceled";
   const hasEssentialPlan = subscription?.planCode === "essencial" && (subscription.status === "active" || subscription.status === "canceled");
   const nextPlanCode: PlanCode | null = subscription?.planCode === "basico"
     ? "essencial"
@@ -456,18 +457,20 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
             )}
           </section>
 
-          <section className="account-panel profile-card">
-            <h2><MessageCircle size={20} /> WhatsApp</h2>
+          {hasContractedPlan && (
+            <section className="account-panel profile-card">
+              <h2><MessageCircle size={20} /> WhatsApp</h2>
               <p>A Luma responde ao número cadastrado quando existe plano ativo ou cancelado ainda dentro do período pago.</p>
-            <a className="luma-whatsapp-link" href={lumaWhatsAppLink} target="_blank" rel="noreferrer">
-              <MessageCircle size={18} />
-              <span>
-                <strong>Número da Luma</strong>
-                {formatWhatsAppNumberDisplay(lumaWhatsAppNumber)}
-              </span>
-            </a>
-            <p className="profile-note">Depois de ativar um plano, envie uma mensagem pelo WhatsApp cadastrado.</p>
-          </section>
+              <a className="luma-whatsapp-link" href={lumaWhatsAppLink} target="_blank" rel="noreferrer">
+                <MessageCircle size={18} />
+                <span>
+                  <strong>Número da Luma</strong>
+                  {formatWhatsAppNumberDisplay(lumaWhatsAppNumber)}
+                </span>
+              </a>
+              <p className="profile-note">Envie uma mensagem pelo WhatsApp cadastrado para começar ou continuar a conversa.</p>
+            </section>
+          )}
 
           <section className="account-panel profile-card">
             <h2><LifeBuoy size={20} /> Precisa de ajuda?</h2>
