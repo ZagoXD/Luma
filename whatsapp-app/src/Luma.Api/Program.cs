@@ -508,6 +508,12 @@ app.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutCr
 
     StripeConfiguration.ApiKey = stripeOptions.SecretKey;
     account.StripeCustomerId = await EnsureStripeCustomerAsync(account);
+    var resolvedPriceId = ResolveStripePriceId(plan, billingInterval, stripeOptions);
+    var priceValidationError = await ValidateStripePriceIntervalAsync(resolvedPriceId, billingInterval);
+    if (priceValidationError is not null)
+    {
+        return Results.BadRequest(new { message = priceValidationError });
+    }
 
     var now = DateTimeOffset.UtcNow;
     var accountPhoneHash = PrivacyRuntime.LookupHash(account.PhoneNumber, "account.phone");
@@ -523,9 +529,9 @@ app.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutCr
         subscription.UpdatedAt = now;
     }
 
-    var stripeSubscription = await CreateStripeSubscriptionAsync(account.StripeCustomerId, plan, billingInterval, stripeOptions);
+    var stripeSubscription = await CreateStripeSubscriptionAsync(account.StripeCustomerId, plan, billingInterval, resolvedPriceId);
     var stripePriceId = stripeSubscription.Items?.Data?.FirstOrDefault()?.Price?.Id
-        ?? BillingPlanCatalog.ResolvePriceId(plan, billingInterval, stripeOptions);
+        ?? resolvedPriceId;
     var clientSecret = stripeSubscription.LatestInvoice?.ConfirmationSecret?.ClientSecret;
     if (string.IsNullOrWhiteSpace(clientSecret))
     {
@@ -779,6 +785,12 @@ app.MapPost("/account/subscription/change-plan", async (HttpRequest http, Change
     }
 
     var nextPriceId = ResolveStripePriceId(nextPlan, nextBillingInterval, stripeOptions);
+    var nextPriceValidationError = await ValidateStripePriceIntervalAsync(nextPriceId, nextBillingInterval);
+    if (nextPriceValidationError is not null)
+    {
+        return Results.BadRequest(new { message = nextPriceValidationError });
+    }
+
     var updated = await new SubscriptionService().UpdateAsync(stripeSubscription.Id, new SubscriptionUpdateOptions
     {
         CancelAtPeriodEnd = false,
@@ -1780,9 +1792,8 @@ static async Task UpdateStripeCustomerBillingDetailsAsync(
     await new CustomerService().UpdateAsync(account.StripeCustomerId, options);
 }
 
-static async Task<Subscription> CreateStripeSubscriptionAsync(string customerId, string planCode, string billingInterval, StripeBillingOptions options)
+static async Task<Subscription> CreateStripeSubscriptionAsync(string customerId, string planCode, string billingInterval, string priceId)
 {
-    var priceId = ResolveStripePriceId(planCode, billingInterval, options);
     return await new SubscriptionService().CreateAsync(new SubscriptionCreateOptions
     {
         Customer = customerId,
@@ -1799,6 +1810,29 @@ static async Task<Subscription> CreateStripeSubscriptionAsync(string customerId,
         },
         Expand = ["latest_invoice.confirmation_secret", "items"]
     });
+}
+
+static async Task<string?> ValidateStripePriceIntervalAsync(string priceId, string billingInterval)
+{
+    var price = await new PriceService().GetAsync(priceId);
+    var expectedInterval = billingInterval == BillingIntervals.Annual ? "year" : "month";
+    var actualInterval = price.Recurring?.Interval;
+    if (actualInterval == expectedInterval)
+    {
+        return null;
+    }
+
+    var expectedLabel = billingInterval == BillingIntervals.Annual ? "anual" : "mensal";
+    var actualLabel = actualInterval switch
+    {
+        "day" => "diária",
+        "week" => "semanal",
+        "month" => "mensal",
+        "year" => "anual",
+        _ => "sem recorrência"
+    };
+
+    return $"O preço da Stripe para o ciclo {expectedLabel} está configurado como cobrança {actualLabel}. Ajuste o Price ID na Stripe antes de vender esse plano.";
 }
 
 static string ResolveStripePriceId(string planCode, string billingInterval, StripeBillingOptions options)

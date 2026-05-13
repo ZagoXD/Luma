@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, BadgeCheck } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
@@ -21,6 +22,7 @@ type CheckoutPageTemplateProps = {
 };
 
 export function CheckoutPageTemplate({ planCode, billingInterval }: CheckoutPageTemplateProps) {
+  const router = useRouter();
   const [status, setStatus] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,12 @@ export function CheckoutPageTemplate({ planCode, billingInterval }: CheckoutPage
     };
   }, [planCode, billingInterval]);
 
+  function selectBillingInterval(nextBillingInterval: BillingInterval) {
+    if (nextBillingInterval === billingInterval) return;
+    setSuccess(false);
+    router.replace(`/checkout/${planCode}?billing=${nextBillingInterval}`);
+  }
+
   const options: StripeElementsOptions | undefined = clientSecret
     ? {
         clientSecret,
@@ -84,10 +92,35 @@ export function CheckoutPageTemplate({ planCode, billingInterval }: CheckoutPage
             <span className="account-kicker">Checkout seguro</span>
             <h1>{plan.name}</h1>
             <p className="checkout-price">{getPlanPrice(planCode, billingInterval)}</p>
+            <div className="checkout-billing-switch" role="tablist" aria-label="Ciclo de cobrança">
+              <button
+                type="button"
+                className={billingInterval === "annual" ? "active" : ""}
+                onClick={() => selectBillingInterval("annual")}
+              >
+                Anual
+              </button>
+              <button
+                type="button"
+                className={billingInterval === "monthly" ? "active" : ""}
+                onClick={() => selectBillingInterval("monthly")}
+              >
+                Mensal
+              </button>
+            </div>
             <p className="profile-note">
               Cobrança {getBillingIntervalLabel(billingInterval).toLowerCase()}.
               {billingInterval === "annual" ? ` ${plan.annualEquivalent}.` : " Você pode cancelar a renovação quando quiser."}
             </p>
+            {billingInterval === "annual" ? (
+              <p className="checkout-installment-note">
+                No anual, o acesso vale por 12 meses. Cancelar impede a próxima renovação anual, mas não transforma o período vigente em plano mensal.
+              </p>
+            ) : (
+              <p className="checkout-installment-note">
+                O plano mensal é cobrado à vista a cada mês e não possui parcelamento.
+              </p>
+            )}
             <ul className="checkout-benefits">
               {plan.benefits.map((benefit) => (
                 <li key={benefit}>

@@ -408,8 +408,10 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
               <>
                 <p>Você ainda não tem um plano ativo. Escolha um plano para liberar a Luma no WhatsApp.</p>
                 <div className="profile-plan-actions">
-                  <Link className="account-primary as-link" href="/checkout/basico">Básico</Link>
+                  <Link className="account-primary as-link" href="/checkout/basico?billing=annual">Básico anual</Link>
+                  <Link className="account-secondary billing-button" href="/checkout/basico?billing=monthly">Básico mensal</Link>
                   <Link className="account-primary as-link" href="/checkout/essencial?billing=annual">Essencial anual</Link>
+                  <Link className="account-secondary billing-button" href="/checkout/essencial?billing=monthly">Essencial mensal</Link>
                 </div>
               </>
             )}
