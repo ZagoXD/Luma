@@ -19,6 +19,8 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
     public DbSet<AccountPhoneVerificationCode> AccountPhoneVerificationCodes => Set<AccountPhoneVerificationCode>();
     public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<BlockedConversation> BlockedConversations => Set<BlockedConversation>();
@@ -196,6 +198,34 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
                 .WithMany(user => user.Subscriptions)
                 .HasForeignKey(subscription => subscription.AccountUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.ToTable("password_reset_tokens");
+            entity.HasKey(token => token.Id);
+            entity.HasIndex(token => token.TokenHash).IsUnique();
+            entity.HasIndex(token => new { token.AccountUserId, token.ExpiresAt });
+            entity.Property(token => token.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(token => token.RequestIp).HasMaxLength(128);
+            entity.Property(token => token.UserAgent).HasMaxLength(512);
+            entity.HasOne(token => token.AccountUser)
+                .WithMany(user => user.PasswordResetTokens)
+                .HasForeignKey(token => token.AccountUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailLog>(entity =>
+        {
+            entity.ToTable("email_logs");
+            entity.HasKey(log => log.Id);
+            entity.HasIndex(log => new { log.To, log.CreatedAt });
+            entity.Property(log => log.To).HasMaxLength(320).IsRequired();
+            entity.Property(log => log.TemplateId).HasMaxLength(128).IsRequired();
+            entity.Property(log => log.Provider).HasMaxLength(32).IsRequired();
+            entity.Property(log => log.ProviderMessageId).HasMaxLength(128);
+            entity.Property(log => log.Status).HasMaxLength(32).IsRequired();
+            entity.Property(log => log.Error).HasMaxLength(512);
         });
 
         modelBuilder.Entity<NotificationPreference>(entity =>

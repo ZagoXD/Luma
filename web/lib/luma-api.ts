@@ -200,6 +200,20 @@ export async function loginAccount(input: { email: string; password: string }) {
   });
 }
 
+export async function forgotPassword(input: { email: string }) {
+  return appRequest<{ message: string }>("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function resetPassword(input: { token: string; newPassword: string }) {
+  return appRequest<{ message: string }>("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function logoutAccount() {
   return appRequest<{ ok: true }>("/api/auth/logout", { method: "POST" });
 }

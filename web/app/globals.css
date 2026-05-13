@@ -122,6 +122,17 @@ nav .nav-cta:focus {
   font: inherit;
 }
 
+.account-inline-link {
+  color: var(--plum-soft);
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.account-inline-link:hover {
+  text-decoration: underline;
+}
+
 .account-panel {
   background: oklch(100% 0 0 / 0.88);
   border: 1px solid oklch(90% 0.03 295);

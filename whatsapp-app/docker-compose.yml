@@ -88,6 +88,13 @@ services:
       ElevenLabs__LanguageCode: ${ELEVENLABS_LANGUAGE_CODE:-pt}
       ElevenLabs__TimeoutSeconds: ${ELEVENLABS_TIMEOUT_SECONDS:-30}
       ElevenLabs__MaxAudioBytes: ${ELEVENLABS_MAX_AUDIO_BYTES:-10485760}
+      Resend__ApiKey: ${RESEND_API_KEY:-}
+      Email__From: ${EMAIL_FROM:-Luma <noreply@ia-luma.com.br>}
+      Email__PasswordResetExpirationMinutes: ${EMAIL_PASSWORD_RESET_EXPIRATION_MINUTES:-30}
+      Email__WebBaseUrl: ${LUMA_WEB_BASE_URL:-http://localhost:3000}
+      Email__Templates__Welcome: ${EMAIL_TEMPLATE_WELCOME:-}
+      Email__Templates__SubscriptionCreated: ${EMAIL_TEMPLATE_SUBSCRIPTION_CREATED:-}
+      Email__Templates__PasswordReset: ${EMAIL_TEMPLATE_PASSWORD_RESET:-}
       R2__AccountId: ${R2_ACCOUNT_ID:-52ed8799dba98c8a90611db618a89e3e}
       R2__BucketName: ${R2_BUCKET_NAME:-luma}
       R2__AccessKeyId: ${R2_ACCESS_KEY_ID:-}

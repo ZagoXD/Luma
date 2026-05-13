@@ -19,6 +19,7 @@ public sealed class AccountUser
     public List<AccountSession> Sessions { get; set; } = [];
     public List<AccountSubscription> Subscriptions { get; set; } = [];
     public List<AccountPhoneVerificationCode> PhoneVerificationCodes { get; set; } = [];
+    public List<PasswordResetToken> PasswordResetTokens { get; set; } = [];
 }
 
 public sealed class AccountPhoneVerificationCode
@@ -73,4 +74,18 @@ public static class SubscriptionStatuses
     public const string Active = "active";
     public const string Canceled = "canceled";
     public const string Pending = "pending";
+}
+
+public sealed class PasswordResetToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid AccountUserId { get; set; }
+    public string TokenHash { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? UsedAt { get; set; }
+    public string? RequestIp { get; set; }
+    public string? UserAgent { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public AccountUser? AccountUser { get; set; }
 }

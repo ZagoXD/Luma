@@ -32,7 +32,20 @@ builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("Open
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
 builder.Services.Configure<ElevenLabsOptions>(builder.Configuration.GetSection("ElevenLabs"));
 builder.Services.Configure<StripeBillingOptions>(builder.Configuration.GetSection("Stripe"));
+builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<EmailTemplateOptions>(builder.Configuration.GetSection("Email:Templates"));
+builder.Services.PostConfigure<EmailOptions>(options =>
+{
+    if (string.IsNullOrWhiteSpace(options.WebBaseUrl))
+    {
+        options.WebBaseUrl = builder.Configuration.GetValue<string>("Luma:WebBaseUrl")
+            ?? builder.Configuration.GetValue<string>("LUMA_WEB_BASE_URL")
+            ?? "http://localhost:3000";
+    }
+});
 builder.Services.AddHttpClient<OpenAiResponsesClient>();
+builder.Services.AddHttpClient<IEmailService, ResendEmailService>();
 builder.Services.AddHttpClient<IBabyImageService, BabyImageService>();
 builder.Services.AddHttpClient<ISpeechToTextService, ElevenLabsSpeechToTextService>();
 builder.Services.AddHttpClient<ITwilioMediaDownloader, TwilioMediaDownloader>();
@@ -53,6 +66,7 @@ builder.Services.AddHttpClient<ITwilioVerifyClient, TwilioVerifyClient>();
 builder.Services.AddSingleton<BabyImageJobQueue>();
 builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
 builder.Services.AddScoped<AccountPhoneVerificationService>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<NotificationPreferenceService>();
 builder.Services.AddScoped<NotificationProcessor>();
 builder.Services.AddScoped<CycleCalendarService>();
@@ -87,7 +101,12 @@ app.MapGet("/health", async (LumaDbContext db) =>
         : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 
-app.MapPost("/account/register", async (AccountRegisterRequest request, LumaDbContext db, AccountPhoneVerificationService phoneVerification) =>
+app.MapPost("/account/register", async (
+    AccountRegisterRequest request,
+    LumaDbContext db,
+    AccountPhoneVerificationService phoneVerification,
+    IEmailService emailService,
+    ILogger<Program> logger) =>
 {
     if (AccountConsentPolicy.ValidateDataConsent(request.DataConsentAccepted) is { } consentError)
     {
@@ -129,10 +148,43 @@ app.MapPost("/account/register", async (AccountRegisterRequest request, LumaDbCo
     db.AccountUsers.Add(account);
     await db.SaveChangesAsync();
     var verification = await phoneVerification.SendCurrentPhoneCodeAsync(account);
+    var welcomeEmail = await emailService.SendWelcomeEmailAsync(account.Email, account.FullName);
+    if (!welcomeEmail.Success)
+    {
+        logger.LogWarning("welcome_email_failed for account {AccountId}: {Error}", account.Id, welcomeEmail.ErrorMessage);
+    }
 
     return Results.Ok(BuildAccountAuthResponse(account, builder.Configuration, verification.Message));
 })
 .WithName("RegisterAccount")
+.WithOpenApi();
+
+app.MapPost("/auth/forgot-password", async (
+    ForgotPasswordRequest request,
+    HttpContext http,
+    PasswordResetService passwordReset) =>
+{
+    var result = await passwordReset.RequestResetAsync(
+        request.Email,
+        http.Connection.RemoteIpAddress?.ToString(),
+        http.Request.Headers.UserAgent.ToString(),
+        http.RequestAborted);
+
+    return Results.Ok(new { message = result.Message });
+})
+.WithName("ForgotPassword")
+.WithOpenApi();
+
+app.MapPost("/auth/reset-password", async (
+    ResetPasswordRequest request,
+    PasswordResetService passwordReset) =>
+{
+    var result = await passwordReset.ResetPasswordAsync(request.Token, request.NewPassword);
+    return result.Success
+        ? Results.Ok(new { message = result.Message })
+        : Results.BadRequest(new { message = result.Message });
+})
+.WithName("ResetPassword")
 .WithOpenApi();
 
 app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext db) =>
@@ -445,7 +497,13 @@ app.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutCr
 .WithName("CreateStripeSubscription")
 .WithOpenApi();
 
-app.MapPost("/checkout/confirm-subscription", async (HttpRequest http, CheckoutConfirmSubscriptionRequest request, LumaDbContext db, IConfiguration configuration) =>
+app.MapPost("/checkout/confirm-subscription", async (
+    HttpRequest http,
+    CheckoutConfirmSubscriptionRequest request,
+    LumaDbContext db,
+    IConfiguration configuration,
+    IEmailService emailService,
+    ILogger<Program> logger) =>
 {
     var account = await GetAuthenticatedAccountAsync(http, db);
     if (account is null)
@@ -488,6 +546,7 @@ app.MapPost("/checkout/confirm-subscription", async (HttpRequest http, CheckoutC
         return Results.NotFound(new { message = "Assinatura local não encontrada." });
     }
 
+    var previousStatus = localSubscription.Status;
     localSubscription.Status = StripeStatusToLocalStatus(stripeSubscription);
     localSubscription.PlanCode = plan;
     localSubscription.BillingInterval = billingInterval;
@@ -514,6 +573,10 @@ app.MapPost("/checkout/confirm-subscription", async (HttpRequest http, CheckoutC
     }
 
     await db.SaveChangesAsync();
+    if (localSubscription.Status == LumaSubscriptionStatuses.Active && previousStatus != LumaSubscriptionStatuses.Active)
+    {
+        await SendSubscriptionCreatedEmailAsync(account, localSubscription, emailService, logger);
+    }
 
     return Results.Ok(new { subscription = BuildSubscriptionResponse(localSubscription) });
 })
@@ -806,7 +869,7 @@ app.MapGet("/account/billing/transactions", async (HttpRequest http, LumaDbConte
 .WithName("GetBillingTransactions")
 .WithOpenApi();
 
-app.MapPost("/webhooks/stripe", async (HttpRequest request, LumaDbContext db, IConfiguration configuration, ILogger<Program> logger) =>
+app.MapPost("/webhooks/stripe", async (HttpRequest request, LumaDbContext db, IConfiguration configuration, IEmailService emailService, ILogger<Program> logger) =>
 {
     var stripeOptions = GetStripeOptions(configuration);
     if (string.IsNullOrWhiteSpace(stripeOptions.SecretKey))
@@ -836,7 +899,7 @@ app.MapPost("/webhooks/stripe", async (HttpRequest request, LumaDbContext db, IC
     }
 
     StripeConfiguration.ApiKey = stripeOptions.SecretKey;
-    await HandleStripeWebhookEventAsync(stripeEvent, payload, db, stripeOptions, logger);
+    await HandleStripeWebhookEventAsync(stripeEvent, payload, db, stripeOptions, emailService, logger);
 
     return Results.Ok(new { received = true });
 })
@@ -1164,6 +1227,29 @@ CREATE TABLE IF NOT EXISTS account_subscriptions (
     "UpdatedAt" timestamp with time zone NOT NULL
 );
 CREATE INDEX IF NOT EXISTS "IX_account_subscriptions_PhoneNumber_Status_CurrentPeriodEndsAt" ON account_subscriptions ("PhoneNumber", "Status", "CurrentPeriodEndsAt");
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    "Id" uuid PRIMARY KEY,
+    "AccountUserId" uuid NOT NULL REFERENCES account_users ("Id") ON DELETE CASCADE,
+    "TokenHash" character varying(128) NOT NULL,
+    "ExpiresAt" timestamp with time zone NOT NULL,
+    "UsedAt" timestamp with time zone,
+    "RequestIp" character varying(128),
+    "UserAgent" character varying(512),
+    "CreatedAt" timestamp with time zone NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_password_reset_tokens_TokenHash" ON password_reset_tokens ("TokenHash");
+CREATE INDEX IF NOT EXISTS "IX_password_reset_tokens_AccountUserId_ExpiresAt" ON password_reset_tokens ("AccountUserId", "ExpiresAt");
+CREATE TABLE IF NOT EXISTS email_logs (
+    "Id" uuid PRIMARY KEY,
+    "To" character varying(320) NOT NULL,
+    "TemplateId" character varying(128) NOT NULL,
+    "Provider" character varying(32) NOT NULL,
+    "ProviderMessageId" character varying(128),
+    "Status" character varying(32) NOT NULL,
+    "Error" character varying(512),
+    "CreatedAt" timestamp with time zone NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "IX_email_logs_To_CreatedAt" ON email_logs ("To", "CreatedAt");
 CREATE TABLE IF NOT EXISTS notification_preferences (
     "Id" uuid PRIMARY KEY,
     "UserId" uuid NOT NULL REFERENCES users ("Id") ON DELETE CASCADE,
@@ -1361,6 +1447,7 @@ static async Task HandleStripeWebhookEventAsync(
     string payload,
     LumaDbContext db,
     StripeBillingOptions stripeOptions,
+    IEmailService emailService,
     ILogger logger)
 {
     switch (stripeEvent.Type)
@@ -1370,7 +1457,7 @@ static async Task HandleStripeWebhookEventAsync(
         case EventTypes.CustomerSubscriptionDeleted:
             if (stripeEvent.Data.Object is StripeSubscription subscription)
             {
-                await SyncStripeSubscriptionAsync(db, subscription, stripeOptions, logger);
+                await SyncStripeSubscriptionAsync(db, subscription, stripeOptions, emailService, logger);
             }
             break;
 
@@ -1383,7 +1470,7 @@ static async Task HandleStripeWebhookEventAsync(
                 {
                     Expand = ["items"]
                 });
-                await SyncStripeSubscriptionAsync(db, invoiceSubscription, stripeOptions, logger);
+                await SyncStripeSubscriptionAsync(db, invoiceSubscription, stripeOptions, emailService, logger);
             }
             break;
 
@@ -1397,10 +1484,13 @@ static async Task SyncStripeSubscriptionAsync(
     LumaDbContext db,
     StripeSubscription stripeSubscription,
     StripeBillingOptions stripeOptions,
+    IEmailService emailService,
     ILogger logger)
 {
     var localSubscription = await db.AccountSubscriptions
+        .Include(subscription => subscription.AccountUser)
         .FirstOrDefaultAsync(subscription => subscription.StripeSubscriptionId == stripeSubscription.Id);
+    var previousStatus = localSubscription?.Status;
 
     if (localSubscription is null)
     {
@@ -1472,6 +1562,30 @@ static async Task SyncStripeSubscriptionAsync(
     }
 
     await db.SaveChangesAsync();
+
+    if (localSubscription.Status == LumaSubscriptionStatuses.Active && previousStatus != LumaSubscriptionStatuses.Active)
+    {
+        var account = localSubscription.AccountUser
+            ?? await db.AccountUsers.FirstOrDefaultAsync(item => item.Id == localSubscription.AccountUserId);
+        if (account is not null)
+        {
+            await SendSubscriptionCreatedEmailAsync(account, localSubscription, emailService, logger);
+        }
+    }
+}
+
+static async Task SendSubscriptionCreatedEmailAsync(
+    AccountUser account,
+    AccountSubscription subscription,
+    IEmailService emailService,
+    ILogger logger)
+{
+    var planName = subscription.PlanCode == "essencial" ? "Essencial" : "Básico";
+    var result = await emailService.SendSubscriptionCreatedEmailAsync(account.Email, account.FullName, planName);
+    if (!result.Success)
+    {
+        logger.LogWarning("subscription_created_email_failed for account {AccountId}: {Error}", account.Id, result.ErrorMessage);
+    }
 }
 
 static string? ExtractStripeSubscriptionIdFromInvoicePayload(string payload)
@@ -1734,6 +1848,8 @@ static string? NormalizePlan(string plan)
 public sealed record DevIncomingMessage(string From, string Body);
 public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber, bool DataConsentAccepted);
 public sealed record AccountLoginRequest(string Email, string Password);
+public sealed record ForgotPasswordRequest(string Email);
+public sealed record ResetPasswordRequest(string Token, string NewPassword);
 public sealed record PhoneVerificationConfirmRequest(string Code);
 public sealed record PhoneChangeRequest(string PhoneNumber);
 public sealed record PhoneChangeConfirmRequest(string PhoneNumber, string Code);

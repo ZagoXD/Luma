@@ -243,6 +243,11 @@ export function LoginPageTemplate() {
             <button className="account-primary" type="submit" disabled={submitting}>
               {submitting ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}
             </button>
+            {mode === "login" && (
+              <Link href="/forgot-password" className="account-inline-link">
+                Esqueci minha senha
+              </Link>
+            )}
             {status && <p className="account-status error">{status}</p>}
           </form>
         </div>
