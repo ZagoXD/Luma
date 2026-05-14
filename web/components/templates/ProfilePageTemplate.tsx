@@ -370,7 +370,9 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
                       disabled={billingAction === `plan-${nextPlanCode}-${subscription.billingInterval}`}
                     >
                       <Repeat2 size={16} />
-                      {billingAction === `plan-${nextPlanCode}-${subscription.billingInterval}` ? "Trocando..." : `Trocar para ${plans[nextPlanCode].name}`}
+                      {billingAction === `plan-${nextPlanCode}-${subscription.billingInterval}`
+                        ? "Trocando..."
+                        : `Trocar para ${plans[nextPlanCode].name} ${formatBillingIntervalName(subscription.billingInterval)}`}
                     </button>
                   )}
                   <button
@@ -380,11 +382,11 @@ export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
                     disabled={billingAction.startsWith(`plan-${subscription.planCode}-`)}
                   >
                     <Repeat2 size={16} />
-                    {subscription.billingInterval === "annual" ? "Trocar para mensal" : "Trocar para anual"}
+                    {`Trocar ${plans[subscription.planCode].name} para ${formatBillingIntervalName(subscription.billingInterval === "annual" ? "monthly" : "annual")}`}
                   </button>
                   <button className="account-secondary billing-button" type="button" onClick={handleStartPaymentMethodUpdate} disabled={billingAction === "card"}>
                     <CreditCard size={16} />
-                    {billingAction === "card" ? "Abrindo..." : "Trocar cartão"}
+                    {billingAction === "card" ? "Abrindo..." : "Trocar cartão de cobrança"}
                   </button>
                 </div>
                 {stripePromise && setupOptions && setupIntentId && (
@@ -600,6 +602,10 @@ function formatMoney(amountInCents: number, currency: string) {
     style: "currency",
     currency: currency || "BRL",
   }).format(amountInCents / 100);
+}
+
+function formatBillingIntervalName(interval: BillingInterval) {
+  return interval === "annual" ? "anual" : "mensal";
 }
 
 function formatContraceptive(value?: string | null) {

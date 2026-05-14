@@ -524,8 +524,21 @@ app.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutCr
 
     foreach (var subscription in previousPending)
     {
-        subscription.Status = LumaSubscriptionStatuses.Canceled;
-        subscription.CanceledAt ??= now;
+        if (!string.IsNullOrWhiteSpace(subscription.StripeSubscriptionId))
+        {
+            try
+            {
+                await new SubscriptionService().CancelAsync(subscription.StripeSubscriptionId);
+            }
+            catch (StripeException)
+            {
+                // A pendência local já será expirada abaixo; a Stripe pode já ter expirado/cancelado a assinatura.
+            }
+        }
+
+        subscription.Status = LumaSubscriptionStatuses.Pending;
+        subscription.CurrentPeriodEndsAt = now.AddSeconds(-1);
+        subscription.CanceledAt = null;
         subscription.UpdatedAt = now;
     }
 
@@ -918,6 +931,13 @@ app.MapGet("/account/billing/transactions", async (HttpRequest http, LumaDbConte
     }
 
     StripeConfiguration.ApiKey = stripeOptions.SecretKey;
+    if (!await StripeCustomerExistsAsync(account.StripeCustomerId))
+    {
+        account.StripeCustomerId = null;
+        await db.SaveChangesAsync();
+        return Results.Ok(new { transactions = Array.Empty<object>() });
+    }
+
     var invoices = await new InvoiceService().ListAsync(new InvoiceListOptions
     {
         Customer = account.StripeCustomerId,
@@ -925,6 +945,8 @@ app.MapGet("/account/billing/transactions", async (HttpRequest http, LumaDbConte
     });
 
     var transactions = invoices.Data
+        .Where(invoice => string.Equals(invoice.Status, "paid", StringComparison.OrdinalIgnoreCase)
+            && invoice.AmountPaid > 0)
         .OrderByDescending(invoice => invoice.Created)
         .Select(invoice => new
         {
@@ -1635,6 +1657,12 @@ static async Task SyncStripeSubscriptionAsync(
     localSubscription.StripePriceId = resolved.PriceId ?? localSubscription.StripePriceId;
     localSubscription.Status = StripeStatusToLocalStatus(stripeSubscription);
     localSubscription.CurrentPeriodEndsAt = GetStripePeriodEnd(stripeSubscription) ?? localSubscription.CurrentPeriodEndsAt;
+    if (localSubscription.Status == LumaSubscriptionStatuses.Canceled && previousStatus != LumaSubscriptionStatuses.Active)
+    {
+        localSubscription.Status = LumaSubscriptionStatuses.Pending;
+        localSubscription.CurrentPeriodEndsAt = now.AddSeconds(-1);
+    }
+
     localSubscription.CanceledAt = localSubscription.Status == LumaSubscriptionStatuses.Canceled
         ? localSubscription.CanceledAt ?? now
         : null;
@@ -1734,18 +1762,12 @@ static async Task<string> EnsureStripeCustomerAsync(AccountUser account)
 {
     if (!string.IsNullOrWhiteSpace(account.StripeCustomerId))
     {
-        try
+        if (await StripeCustomerExistsAsync(account.StripeCustomerId))
         {
-            var existingCustomer = await new CustomerService().GetAsync(account.StripeCustomerId);
-            if (existingCustomer is not null && existingCustomer.Deleted != true)
-            {
-                return account.StripeCustomerId;
-            }
+            return account.StripeCustomerId;
         }
-        catch (StripeException ex) when (ex.StripeError?.Code == "resource_missing" || ex.Message.Contains("No such customer", StringComparison.OrdinalIgnoreCase))
-        {
-            account.StripeCustomerId = null;
-        }
+
+        account.StripeCustomerId = null;
     }
 
     var customer = await new CustomerService().CreateAsync(new CustomerCreateOptions
@@ -1760,6 +1782,19 @@ static async Task<string> EnsureStripeCustomerAsync(AccountUser account)
     });
 
     return customer.Id;
+}
+
+static async Task<bool> StripeCustomerExistsAsync(string customerId)
+{
+    try
+    {
+        var customer = await new CustomerService().GetAsync(customerId);
+        return customer is not null && customer.Deleted != true;
+    }
+    catch (StripeException ex) when (ex.StripeError?.Code == "resource_missing" || ex.Message.Contains("No such customer", StringComparison.OrdinalIgnoreCase))
+    {
+        return false;
+    }
 }
 
 static async Task UpdateStripeCustomerBillingDetailsAsync(
