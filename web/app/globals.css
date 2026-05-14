@@ -258,6 +258,64 @@ nav .nav-cta:focus {
   line-height: 1.45;
 }
 
+.support-page {
+  align-items: flex-start;
+}
+
+.support-shell {
+  max-width: 760px;
+}
+
+.support-panel {
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.support-heading {
+  margin-bottom: 1.5rem;
+}
+
+.support-heading h1 {
+  font-size: clamp(2.15rem, 7vw, 3.4rem);
+  line-height: 0.98;
+  max-width: 9ch;
+}
+
+.support-heading p {
+  max-width: 34rem;
+  font-size: clamp(1rem, 2.8vw, 1.12rem);
+}
+
+.support-form {
+  gap: 1.1rem;
+}
+
+.support-form input,
+.support-form textarea {
+  width: 100%;
+}
+
+.support-file-field {
+  gap: 0.55rem;
+}
+
+.support-file-input {
+  padding: 0.7rem;
+  min-height: auto;
+  line-height: 1.4;
+}
+
+.support-file-input::file-selector-button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--lavender-lt);
+  color: var(--plum-soft);
+  font: inherit;
+  font-weight: 900;
+  padding: 0.65rem 0.8rem;
+  margin-right: 0.75rem;
+  cursor: pointer;
+}
+
 .account-form .account-consent {
   display: flex;
   align-items: flex-start;

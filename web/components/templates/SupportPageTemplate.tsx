@@ -81,21 +81,21 @@ export function SupportPageTemplate({ accountId }: SupportPageTemplateProps) {
   }
 
   return (
-    <main className="account-page">
-      <section className="account-shell account-shell-narrow">
+    <main className="account-page support-page">
+      <section className="account-shell account-shell-narrow support-shell">
         <Link href={`/perfil/${accountId}`} className="account-back">
           <ArrowLeft size={18} />
           Voltar ao perfil
         </Link>
 
-        <div className="account-panel">
-          <div className="account-heading">
+        <div className="account-panel support-panel">
+          <div className="account-heading support-heading">
             <span className="account-kicker">Suporte</span>
             <h1>Precisa de ajuda?</h1>
             <p>Descreva o que aconteceu e, se quiser, envie imagens ou PDFs que ajudem a explicar o problema.</p>
           </div>
 
-          <form className="account-form" onSubmit={handleSubmit}>
+          <form className="account-form support-form" onSubmit={handleSubmit}>
             <label>
               Assunto
               <input name="subject" maxLength={200} required />
@@ -106,9 +106,9 @@ export function SupportPageTemplate({ accountId }: SupportPageTemplateProps) {
               <textarea name="description" rows={7} maxLength={5000} required />
             </label>
 
-            <label>
+            <label className="support-file-field">
               Anexos opcionais
-              <input name="attachments" type="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" multiple />
+              <input className="support-file-input" name="attachments" type="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" multiple />
               <small className="support-help">Até 3 arquivos, com no máximo 5 MB cada. PNG, JPG, JPEG ou PDF.</small>
             </label>
 

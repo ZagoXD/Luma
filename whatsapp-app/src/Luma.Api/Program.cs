@@ -1734,7 +1734,18 @@ static async Task<string> EnsureStripeCustomerAsync(AccountUser account)
 {
     if (!string.IsNullOrWhiteSpace(account.StripeCustomerId))
     {
-        return account.StripeCustomerId;
+        try
+        {
+            var existingCustomer = await new CustomerService().GetAsync(account.StripeCustomerId);
+            if (existingCustomer is not null && existingCustomer.Deleted != true)
+            {
+                return account.StripeCustomerId;
+            }
+        }
+        catch (StripeException ex) when (ex.StripeError?.Code == "resource_missing" || ex.Message.Contains("No such customer", StringComparison.OrdinalIgnoreCase))
+        {
+            account.StripeCustomerId = null;
+        }
     }
 
     var customer = await new CustomerService().CreateAsync(new CustomerCreateOptions
