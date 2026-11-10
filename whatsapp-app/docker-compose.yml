@@ -26,6 +26,7 @@ services:
       - luma_redis_data:/data
 
   api:
+    image: whatsapp-app-api
     build:
       context: .
       dockerfile: src/Luma.Api/Dockerfile
@@ -35,7 +36,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    environment:
+    environment: &api-environment
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-luma};Username=${POSTGRES_USER:-luma};Password=${POSTGRES_PASSWORD:-luma_dev_password}
@@ -57,6 +58,7 @@ services:
       Notifications__WorkerIntervalSeconds: ${NOTIFICATIONS_WORKER_INTERVAL_SECONDS:-60}
       Twilio__AccountSid: ${TWILIO_ACCOUNT_SID:-}
       Twilio__AuthToken: ${TWILIO_AUTH_TOKEN:-}
+      Twilio__WebhookUrl: ${TWILIO_WEBHOOK_URL:-}
       Twilio__WhatsAppFrom: ${TWILIO_WHATSAPP_FROM:-whatsapp:+14155238886}
       Twilio__VerifyServiceSid: ${TWILIO_VERIFY_SERVICE_SID:-}
       Twilio__VerifyChannel: ${TWILIO_VERIFY_CHANNEL:-whatsapp}
@@ -113,6 +115,22 @@ services:
     ports:
       - "${API_HOST_PORT:-5050}:8080"
 
+  api-sandbox:
+    profiles: ["twilio-sandbox"]
+    image: whatsapp-app-api
+    pull_policy: never
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      <<: *api-environment
+      Luma__WebBaseUrl: ${LUMA_SANDBOX_WEB_BASE_URL:-https://dev.ia-luma.com.br}
+      Notifications__WorkerEnabled: "false"
+      Twilio__AccountSid: ${TWILIO_SANDBOX_ACCOUNT_SID:-}
+      Twilio__AuthToken: ${TWILIO_SANDBOX_AUTH_TOKEN:-}
+      Twilio__WhatsAppFrom: ${TWILIO_SANDBOX_WHATSAPP_FROM:-whatsapp:+14155238886}
+      Twilio__WebhookUrl: ${TWILIO_SANDBOX_WEBHOOK_URL:-}
+
   web:
     build:
       context: ../web
@@ -130,6 +148,8 @@ services:
       NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+14155238886}
       LUMA_API_BASE_URL: ${LUMA_API_BASE_URL:-http://api:8080}
       LUMA_COOKIE_SECURE: ${LUMA_COOKIE_SECURE:-false}
+      LUMA_SANDBOX_HOST: ${LUMA_SANDBOX_HOST:-dev.ia-luma.com.br}
+      LUMA_SANDBOX_WHATSAPP_FROM: ${TWILIO_SANDBOX_WHATSAPP_FROM:-whatsapp:+14155238886}
     ports:
       - "${WEB_HOST_PORT:-3000}:3000"
 

@@ -1018,7 +1018,23 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
         return Results.BadRequest("Twilio webhooks must use application/x-www-form-urlencoded.");
     }
 
-    var form = await request.ReadFormAsync();
+    var webhookUrl = configuration["Twilio:WebhookUrl"];
+    var authToken = configuration["Twilio:AuthToken"];
+    var accountSid = configuration["Twilio:AccountSid"];
+    var recipient = configuration["Twilio:WhatsAppFrom"];
+    if (string.IsNullOrWhiteSpace(webhookUrl) || string.IsNullOrWhiteSpace(authToken)
+        || string.IsNullOrWhiteSpace(accountSid) || string.IsNullOrWhiteSpace(recipient))
+    {
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    var form = await request.ReadFormAsync(request.HttpContext.RequestAborted);
+    if (!TwilioWebhookAuthentication.IsValid(webhookUrl, authToken, accountSid, recipient, form,
+        request.Headers["X-Twilio-Signature"].ToString(), request.QueryString.HasValue))
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
     var from = form["From"].ToString();
     var body = form["Body"].ToString();
     var messageSid = form["MessageSid"].ToString();
