@@ -1,0 +1,66 @@
+[
+  {
+    "id": "calendario-estimativas",
+    "title": "Como a Luma calcula previsões",
+    "content": "O calendário da Luma combina registros confirmados e estimativas. Quando a usuária registra um novo início menstrual, o cálculo da próxima menstruação usa essa data e o intervalo habitual informado. A duração habitual é uma preferência e não encerra a menstruação em andamento. Previsões podem mudar e não confirmam ovulação, gravidez ou ausência de gravidez.",
+    "sourceUrl": "https://github.com/ZagoXD/Luma",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "privacidade-luma",
+    "title": "Consentimento e privacidade na Luma",
+    "content": "A Luma pede consentimento antes de persistir informações de saúde. Ela usa dados pessoais para registros, calendário e recursos autorizados. A consulta ao histórico é restrita à conta da usuária. Informações de saúde não devem ser publicadas nem usadas como acervo geral. Perguntas sobre direitos e exclusão de dados devem ser encaminhadas ao suporte pelo perfil. A ferramenta não substitui orientação médica.",
+    "sourceUrl": "https://github.com/ZagoXD/Luma",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "luma-planos",
+    "title": "Planos, recursos e lembretes da Luma",
+    "content": "O Básico dá acesso à conversa em texto, registros e calendário. O Essencial acrescenta áudio, imagens educativas e lembretes. Cada tipo de lembrete tem horário próprio e pode ser consultado e ajustado. Lembretes são apoio à organização e podem falhar por indisponibilidade dos serviços. A Luma não modifica a prescrição ou o modo de uso de medicamentos.",
+    "sourceUrl": "https://github.com/ZagoXD/Luma",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "ciclo-registros",
+    "title": "Acompanhamento do ciclo menstrual",
+    "content": "Registrar datas da menstruação, fluxo e sintomas ajuda a organizar o histórico para a própria pessoa e para conversar com a equipe de saúde. Existem variações entre pessoas e entre ciclos. Um calendário é uma estimativa. Mudanças importantes ou persistentes de ciclo ou fluxo precisam ser avaliadas por um profissional de saúde. A Luma não determina se um sangramento individual é normal.",
+    "sourceUrl": "https://www.gov.br/saude/pt-br/assuntos/noticias/2023/janeiro/serie-orienta-mulheres-sobre-cuidados-durante-a-menstruacao/",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "dignidade-menstrual",
+    "title": "Menstruação e cuidado sem constrangimento",
+    "content": "A menstruação é um processo fisiológico. O acompanhamento pode incluir anotações de datas, sintomas e necessidades de higiene, com respeito à privacidade e sem vergonha. Orientações educativas gerais não substituem uma avaliação individual para dores ou alterações de sangramento.",
+    "sourceUrl": "https://www.gov.br/saude/pt-br/composicao/sectics/publicacoes/cartilha-programa-dignidade-menstrual-um-ciclo-de-respeito",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "gestacao-prenatal",
+    "title": "Pré-natal e acompanhamento da gestação",
+    "content": "A Caderneta Brasileira da Gestante reúne informações para acompanhar a gravidez, o parto e o pós-parto e para facilitar a comunicação com a equipe de saúde. No pré-natal, a gestante pode levar dúvidas e os registros de consultas e exames. A Luma organiza o histórico informado, mas não realiza exames, confirma diagnósticos nem substitui o pré-natal.",
+    "sourceUrl": "https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/s/saude-da-mulher/publicacoes/caderneta-brasileira-da-gestante.pdf/view",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "gestacao-estimativas",
+    "title": "Semanas e data provável do parto",
+    "content": "Semanas gestacionais e a data provável do parto são estimativas usadas no acompanhamento. A Luma calcula a partir da referência informada e deve distinguir DUM, semanas relatadas e DPP informada. A referência deve ser confirmada no pré-natal. Uma data prevista não garante o dia do nascimento.",
+    "sourceUrl": "https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/s/saude-da-mulher/publicacoes/caderneta-brasileira-da-gestante.pdf/view",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  },
+  {
+    "id": "gestacao-desenvolvimento",
+    "title": "Tamanho e imagens educativas do bebê",
+    "content": "Estimativas de desenvolvimento fetal descrevem referências gerais, com variações individuais. Uma imagem educativa gerada pela Luma é ilustrativa e não representa o bebê real, uma fotografia, um ultrassom ou medida em escala garantida na tela. O acompanhamento individual depende dos exames e da equipe de pré-natal.",
+    "sourceUrl": "https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/s/saude-da-mulher/publicacoes/caderneta-brasileira-da-gestante.pdf/view",
+    "version": "2026-11-10-editorial-1",
+    "status": "approved"
+  }
+]

@@ -26,6 +26,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<BlockedConversation> BlockedConversations => Set<BlockedConversation>();
+    public DbSet<AssistantTurnRecord> AssistantTurns => Set<AssistantTurnRecord>();
 
     public override int SaveChanges()
     {
@@ -41,6 +42,16 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AssistantTurnRecord>(entity =>
+        {
+            entity.ToTable("assistant_turns");
+            entity.HasKey(turn => turn.Id);
+            entity.HasIndex(turn => new { turn.Provider, turn.MessageId }).IsUnique();
+            entity.HasIndex(turn => new { turn.UserId, turn.CreatedAt });
+            entity.Property(turn => turn.Request).HasConversion(ProtectedString("assistant.request"));
+            entity.Property(turn => turn.Reply).HasConversion(ProtectedString("assistant.reply"));
+            entity.HasOne<LumaUser>().WithMany().HasForeignKey(turn => turn.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         var accountEmailConverter = ProtectedString("account.email");
         var accountCpfConverter = ProtectedString("account.cpf");
         var accountNameConverter = ProtectedString("account.full_name");

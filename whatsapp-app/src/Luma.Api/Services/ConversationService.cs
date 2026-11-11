@@ -2,10 +2,11 @@ using System.Text.Json;
 using Luma.Api.Data;
 using Luma.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Luma.Api.Services.Assistant;
 
 namespace Luma.Api.Services;
 
-public sealed class ConversationService(
+public sealed partial class ConversationService(
     LumaDbContext db,
     IConfiguration configuration,
     IOnboardingDataExtractor onboardingAi,
@@ -15,7 +16,9 @@ public sealed class ConversationService(
     IDateProvider dateProvider,
     ILogger<ConversationService> logger,
     IBabyImageService? babyImages = null,
-    IBabyImageJobQueue? babyImageJobs = null)
+    IBabyImageJobQueue? babyImageJobs = null,
+    AssistantOrchestrator? assistant = null,
+    KnowledgeStore? knowledge = null)
 {
     private readonly bool _storeMessageBodies = configuration.GetValue("Luma:StoreMessageBodies", false);
     private readonly bool _requireActiveSubscription = configuration.GetValue("Luma:RequireActiveSubscription", false);
@@ -28,6 +31,9 @@ public sealed class ConversationService(
 
     public async Task<ConversationResult> HandleIncomingMessageRichAsync(IncomingMessage incoming)
     {
+        if (assistant?.Enabled == true)
+            return await HandleAssistantIncomingAsync(incoming);
+
         var phone = PhoneNumber.Normalize(incoming.From);
         var userPhoneHash = PrivacyRuntime.LookupHash(phone, "user.phone");
         _mediaUrlForCurrentReply = null;
@@ -640,6 +646,7 @@ public sealed class ConversationService(
             DisplayName = tool.DisplayName,
             IsAdultConfirmed = tool.IsAdultConfirmed,
             LastPeriodStartDate = tool.LastPeriodDate ?? tool.Date,
+            LastPeriodUnknown = tool.LastPeriodUnknown == true,
             AverageCycleLength = tool.AverageCycleLength,
             AveragePeriodLength = tool.AveragePeriodLength,
             ContraceptiveType = tool.ContraceptiveType

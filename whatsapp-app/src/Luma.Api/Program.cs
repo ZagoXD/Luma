@@ -4,6 +4,7 @@ using System.Xml.Linq;
 using Luma.Api.Data;
 using Luma.Api.Models;
 using Luma.Api.Services;
+using Luma.Api.Services.Assistant;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Stripe;
@@ -30,6 +31,12 @@ builder.Services.AddDbContext<LumaDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
+builder.Services.Configure<AssistantOptions>(builder.Configuration.GetSection("Assistant"));
+builder.Services.Configure<RagOptions>(builder.Configuration.GetSection("Rag"));
+builder.Services.AddHttpClient<IAssistantModel, OpenAiAssistantModel>(http => http.Timeout = TimeSpan.FromSeconds(40));
+builder.Services.AddHttpClient<IEmbeddingClient, OpenAiEmbeddingClient>(http => http.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddScoped<AssistantOrchestrator>();
+builder.Services.AddScoped<KnowledgeStore>();
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
 builder.Services.Configure<ElevenLabsOptions>(builder.Configuration.GetSection("ElevenLabs"));
 builder.Services.Configure<StripeBillingOptions>(builder.Configuration.GetSection("Stripe"));
@@ -93,6 +100,15 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<LumaDbContext>();
     await db.Database.EnsureCreatedAsync();
     await EnsureRuntimeSchemaAsync(db);
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS assistant_turns (
+            "Id" uuid PRIMARY KEY, "UserId" uuid NOT NULL REFERENCES users("Id") ON DELETE CASCADE,
+            "Provider" text NOT NULL, "MessageId" text NOT NULL, "Request" text NOT NULL,
+            "Reply" text NOT NULL, "MediaUrl" text, "CreatedAt" timestamptz NOT NULL);
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_assistant_receipt ON assistant_turns ("Provider","MessageId");
+        CREATE INDEX IF NOT EXISTS ix_assistant_memory ON assistant_turns ("UserId","CreatedAt");
+        """);
+    await scope.ServiceProvider.GetRequiredService<KnowledgeStore>().PublishAsync();
 }
 
 app.MapGet("/health", async (LumaDbContext db) =>
