@@ -16,6 +16,20 @@ jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: luma_integration
+          POSTGRES_USER: luma
+          POSTGRES_PASSWORD: luma-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U luma -d luma_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     defaults:
       run:
@@ -23,6 +37,7 @@ jobs:
 
     env:
       ASPNETCORE_ENVIRONMENT: Testing
+      LUMA_INTEGRATION_DATABASE: Host=localhost;Port=5432;Database=luma_integration;Username=luma;Password=luma-ci-only
       Luma__JwtSigningKey: luma-ci-jwt-signing-key-with-enough-length-for-tests
       Luma__RequireActiveSubscription: "false"
       Luma__StoreMessageBodies: "false"

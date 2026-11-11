@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: luma-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-luma}
@@ -78,6 +78,13 @@ services:
       Stripe__EssentialAnnualPriceId: ${STRIPE_ESSENTIAL_ANNUAL_PRICE_ID:-}
       Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+      Assistant__Enabled: ${LUMA_ASSISTANT_ENABLED:-false}
+      Assistant__MaxModelTurns: ${LUMA_ASSISTANT_MAX_MODEL_TURNS:-3}
+      Assistant__MaxToolCalls: ${LUMA_ASSISTANT_MAX_TOOL_CALLS:-5}
+      Assistant__TimeoutSeconds: ${LUMA_ASSISTANT_TIMEOUT_SECONDS:-10}
+      Rag__Enabled: ${LUMA_RAG_ENABLED:-false}
+      Rag__EmbeddingModel: ${LUMA_RAG_EMBEDDING_MODEL:-text-embedding-3-small}
+      Rag__Dimensions: ${LUMA_RAG_DIMENSIONS:-512}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OpenAI__Model: ${OPENAI_MODEL:-gpt-5.4-mini}
       OpenAI__ImageModel: ${OPENAI_IMAGE_MODEL:-gpt-image-1}
