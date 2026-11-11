@@ -45,10 +45,11 @@ Esses limites evitam loops e controlam custos. Uma nova mensagem pode continuar 
 
 ## Conhecimento e publicação
 
-`src/Luma.Api/Knowledge/corpus.json` contém oito fichas editoriais iniciais,
-com identificação, título, conteúdo, fonte HTTPS, versão e status.
-Foram escritas para esta integração com base nas fontes indicadas, sem copiar PDFs
-inteiros. Aprovação editorial não equivale a revisão clínica.
+`src/Luma.Api/Knowledge/corpus.json` contém 31 trechos gerados a partir de quatro
+PDFs e 17 fichas editoriais/produto. O manifesto, páginas, hashes e licenças estão
+documentados em [acervo-rag.md](acervo-rag.md). Aprovação editorial não equivale
+a revisão clínica. Fontes de licença não comercial ou de conteúdo inadequado
+ficam bloqueadas no inventário, não no índice.
 
 Só documentos com status `approved` entram no índice. Conteúdo clínico mais amplo,
 tratamentos ou novas orientações individuais exigem revisão profissional antes
@@ -67,8 +68,12 @@ não existe publicação parcial nem uso silencioso de conhecimento não indexad
 No acervo inicial pequeno, a busca vetorial é exata, sem índice ANN.
 
 A busca combina similaridade de cosseno, full-text português e fusão de rankings.
+Aplica visibilidade e validade de revisão antes de retornar resultados. Informações
+do produto não expõem URLs internas; somente referências educativas públicas são exibidas.
+Uma correspondência lexical não contorna o limiar semântico. Sem evidência,
+o backend retorna o limite sem permitir uma resposta especulativa do modelo.
 Quando a API de embeddings falha na consulta, há fallback full-text. Sem evidência,
-a assistente informa o limite. As fontes selecionadas acompanham a resposta,
+a assistente informa o limite. As fontes públicas selecionadas acompanham a resposta,
 com URLs preservadas pelo formatador.
 
 Para reverter uma publicação, restaure a versão anterior do arquivo e reinicie a API.

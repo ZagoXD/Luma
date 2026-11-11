@@ -89,6 +89,8 @@ Inclui:
 - Backend autoritativo.
 - Resposta final humanizada pela IA.
 - RAG com embeddings, pgvector, full-text português, fontes e publicação transacional versionada.
+- Acervo de 31 trechos, quatro PDFs autorizados, fichas do produto e manifesto de fontes bloqueadas; detalhes em [acervo-rag.md](acervo-rag.md).
+- Filtros de visibilidade, revisão vencida e abstenção sem evidência, sem devolver documentos brutos em falhas.
 - Memória curta criptografada e confirmação de intenções fora da ordem do cadastro.
 - Recibos idempotentes e serialização por usuária em PostgreSQL.
 - Testes de protocolo, fluxos, recuperação e concorrência com PostgreSQL real.
