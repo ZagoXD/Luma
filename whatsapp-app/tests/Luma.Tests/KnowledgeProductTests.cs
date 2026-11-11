@@ -7,6 +7,18 @@ namespace Luma.Tests;
 public sealed class KnowledgeProductTests
 {
     [Fact]
+    public void Manifest_records_owner_approval_without_claiming_independent_review()
+    {
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Knowledge/sources.json")));
+        var sources = manifest.RootElement.GetProperty("sources").EnumerateArray().ToArray();
+        Assert.DoesNotContain(sources, source => source.GetProperty("id").GetString() is "gestante-2026" or "owh-contracepcao");
+        var dignity = Assert.Single(sources.Where(source => source.GetProperty("id").GetString() == "dignidade-2024"));
+        Assert.Equal("approved", dignity.GetProperty("status").GetString());
+        Assert.Contains("responsável", dignity.GetProperty("approvalNote").GetString());
+        Assert.Contains("não verificada", dignity.GetProperty("license").GetString());
+    }
+
+    [Fact]
     public void Product_prices_match_the_frontend_catalog_and_have_no_public_internal_links()
     {
         var corpus = JsonSerializer.Deserialize<KnowledgeDocument[]>(

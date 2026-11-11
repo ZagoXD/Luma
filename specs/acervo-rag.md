@@ -2,10 +2,14 @@
 
 Atualização: 10/11/2026. Revisão **editorial e técnica**, não validação clínica independente.
 
+O responsável da Luma aprovou explicitamente o uso e a publicação do acervo em
+10/11/2026. A aprovação está registrada em `sources.json.releaseApproval` e não
+é apresentada como certificação médica ou jurídica independente.
+
 ## O que foi concluído
 
 - Importação em C# com PdfPig, hashes SHA-256, páginas selecionadas e geração reproduzível.
-- Quatro PDFs indexados, 17 fichas editoriais/produto e 31 trechos no total.
+- Cinco PDFs indexados, 17 fichas editoriais/produto e 47 trechos no total.
 - Classificação de acesso antes da vetorização e na recuperação.
 - Proveniência por documento, página, versão, hash, revisão e licença.
 - Avaliações de recuperação, ausência de evidência e privacidade em PostgreSQL real.
@@ -22,9 +26,12 @@ passou a realizar aconselhamento clínico. O escopo publicado é o inventário a
 | Office on Women's Health/HHS, Pregnancy Tests | 2 páginas | Indexado para educação geral, sem interpretação individual |
 | Office on Women's Health/HHS, Breastfeeding | 2 páginas | Indexado para informação geral e encaminhamento |
 | UFRR, Métodos Contraceptivos Disponíveis no SUS, 2025 | Páginas físicas 5 e 6 | Indexado; licença CC BY-SA 3.0 BR indicada no repositório |
-| Ministério da Saúde, Caderneta Brasileira da Gestante, 2026 | Nenhuma | Bloqueado: CC BY-NC-SA; autorização comercial não esclarecida |
-| Programa Dignidade Menstrual, 2024 | Nenhuma | Bloqueado: permissão comercial e atualização das regras não verificadas |
-| OWH, Birth Control Methods | Nenhuma | Bloqueado: referências a opções antigas e contexto regulatório estrangeiro |
+| Programa Dignidade Menstrual, 2024 | Páginas físicas 4 a 19 | Uso aprovado pelo responsável do produto; permissão comercial do titular não verificada, sem afirmar validação independente |
+
+A Caderneta Brasileira da Gestante 2026 e o PDF OWH Birth Control Methods foram
+removidos do manifesto e dos arquivos locais por decisão do responsável, por
+restrição de licença e referências antigas, respectivamente. Nunca estiveram
+publicados no índice ativo.
 
 As páginas da UFRR sobre percentuais de eficácia, esquemas de uso e detalhes de
 métodos foram excluídas. A Luma não prescreve e esses dados exigem revisão clínica
@@ -40,7 +47,7 @@ Links de origem e licença:
 - [Fichas e declaração de reutilização OWH/HHS](https://womenshealth.gov/patient-materials/resource/fact-sheets).
 - [Cartilha UFRR e licença do repositório](https://educapes.capes.gov.br/handle/capes/1001159).
 - [CC BY-SA 3.0 Brasil](https://creativecommons.org/licenses/by-sa/3.0/br/).
-- [Caderneta Brasileira da Gestante](https://bvsms.saude.gov.br/bvs/publicacoes/caderneta_brasileira_gestante.pdf), licença na página física 107.
+- [Programa Dignidade Menstrual, edição 2024](https://www.gov.br/saude/pt-br/centrais-de-conteudo/publicacoes/cartilhas/2024/dignidademenstrual).
 
 Os trechos textuais da cartilha UFRR no corpus são disponibilizados sob CC BY-SA
 3.0 BR, conforme o repositório de origem. A extração remove arte gráfica e pode
@@ -127,13 +134,23 @@ geração não devolve o texto bruto desses documentos. Se o trecho não respond
 a profissional. Isso reduz riscos, mas não constitui garantia matemática contra
 todo erro de um modelo generativo. Avaliações e revisão profissional continuam necessárias.
 
-## Pendências humanas e atualização
+## Aprovação e atualização
 
-Não há pendência de integração para os quatro PDFs aprovados e fichas publicadas.
-Para ampliar a cobertura clínica, um profissional deve validar o conteúdo, sua
-atualidade e a adequação ao Brasil. Para liberar fontes NC ou de licença incerta,
-obter autorização ou avaliação jurídica apropriada; não basta renomear seu status.
-As fontes não autorizadas permanecem bloqueadas por padrão.
+O responsável aprovou o escopo publicado, incluindo a cartilha Dignidade Menstrual.
+Isso encerra a pendência de decisão de produto; não certifica permissão do titular
+nem substitui revisão clínica independente. A licença externa incerta continua
+registrada de forma transparente no manifesto. Não há pendência de integração
+para os cinco PDFs e fichas publicados. A revisão clínica profissional é recomendada
+para evolução da cobertura, e os limites médicos do bot permanecem inalterados.
+
+As regras do Programa Dignidade Menstrual são as da edição 2024: não prometer
+elegibilidade atual nem valores de benefício sem confirmação no canal oficial.
+
+Referências exibidas usam somente IDs citados explicitamente na resposta e
+retornados pela ferramenta. Fontes recuperadas mas não usadas não são anexadas.
+Buscas com `scope=product` excluem fontes de saúde; `scope=health` exclui fichas
+do produto. `scope=all` atende perguntas mistas. Os marcadores `[fonte:ID]` são
+removidos antes do envio ao WhatsApp; IDs inventados não geram referências.
 
 Revisões vencidas são excluídas da publicação e da busca. Verificar os prazos do
 manifesto e das fichas antes do vencimento; alterações de preço exigem atualização

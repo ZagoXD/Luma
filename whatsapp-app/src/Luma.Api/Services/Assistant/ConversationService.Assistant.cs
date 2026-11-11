@@ -113,7 +113,8 @@ public sealed partial class ConversationService
         if (name == "ask_clarification") return new(true, arguments.GetProperty("question").GetString()!);
         if (name == "get_onboarding_state") return new(true, await AssistantContextAsync(user), ContextOnly: true);
         if (name == "search_luma_knowledge_base")
-            return knowledge is null ? new(false, KnowledgeStore.NoEvidence, true) : await knowledge.SearchAsync(arguments.GetProperty("query").GetString()!, ct);
+            return knowledge is null ? new(false, KnowledgeStore.NoEvidence, true) : await knowledge.SearchAsync(arguments.GetProperty("query").GetString()!, ct,
+                arguments.TryGetProperty("scope", out var scope) ? scope.GetString() ?? "all" : "all");
         if (name != "complete_onboarding_step" && user.ConsentAcceptedAt is null)
             return new(false, InitialConsentMessage(), true);
         if (user.OnboardingStep == OnboardingSteps.UnderageBlocked)

@@ -11,7 +11,7 @@ namespace Luma.Api.Services.Assistant;
 public sealed record PdfKnowledgeSection(string Id, string Title, int FirstPage, int LastPage);
 public sealed record PdfKnowledgeSource(string Id, string Title, string DownloadUrl, string Publisher,
     string Version, string Sha256, string Status, string ReviewedAt, string ReviewDueAt, string License,
-    IReadOnlyList<PdfKnowledgeSection> Sections, string ExclusionReason, bool CommercialUseAllowed = false, string? LicenseUrl = null);
+    IReadOnlyList<PdfKnowledgeSection> Sections, string ExclusionReason, bool CommercialUseAllowed = false, string? LicenseUrl = null, string? ApprovalNote = null);
 public sealed record KnowledgeManifest(string EditorialPath, IReadOnlyList<PdfKnowledgeSource> Sources);
 
 public static class KnowledgeChunker
@@ -42,7 +42,8 @@ public static class KnowledgeChunker
                 section.Title + " (p. " + page + ")", content, source.DownloadUrl + "#page=" + page, source.Version,
                 source.Status, SourceId: source.Id, Page: page, ContentHash: hash,
                 ReviewedAt: source.ReviewedAt, ReviewDueAt: source.ReviewDueAt,
-                Attribution: source.Publisher + "; " + source.License + "; extração textual, sem endosso à Luma.", LicenseUrl: source.LicenseUrl));
+                Attribution: source.Publisher + (source.LicenseUrl is null ? "" : "; " + source.License)
+                    + "; extração textual, sem endosso à Luma.", LicenseUrl: source.LicenseUrl));
             current.Clear();
         }
         foreach (var paragraph in paragraphs)
@@ -143,7 +144,7 @@ public static class KnowledgeIngestor
                 }
             }
             reports.Add(new { source.Id, source.Title, source.Publisher, source.DownloadUrl, source.Version, source.Sha256,
-                source.License, source.ReviewedAt, source.ReviewDueAt, reviewLevel = "editorial", totalPages = pdf.NumberOfPages,
+                source.License, source.ApprovalNote, source.ReviewedAt, source.ReviewDueAt, reviewLevel = "editorial", totalPages = pdf.NumberOfPages,
                 indexedPages = selectedPages.Order().ToArray(), chunks = result.Count - countBefore,
                 excludedPages = Enumerable.Range(1, pdf.NumberOfPages).Except(selectedPages).ToArray(), source.ExclusionReason });
         }

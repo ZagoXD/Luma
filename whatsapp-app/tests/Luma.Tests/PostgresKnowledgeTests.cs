@@ -70,6 +70,13 @@ public sealed class PostgresKnowledgeTests
             Assert.DoesNotContain("Segredo", result.Message);
             Assert.DoesNotContain("internal.example", System.Text.Json.JsonSerializer.Serialize(result));
             Assert.DoesNotContain(result.Sources!, source => source.Id == "product");
+            var product = await store.SearchAsync("Planos", default, "product");
+            Assert.Contains("20,00", product.Message);
+            Assert.DoesNotContain("Previsão menstrual", product.Message);
+            Assert.Empty(product.Sources!);
+            var health = await store.SearchAsync("Calendário", default, "health");
+            Assert.DoesNotContain("Essencial", health.Message);
+            Assert.Contains("Previsão menstrual", health.Message);
             var missing = await store.SearchAsync("calendário quântico desconhecido", default);
             Assert.False(missing.Success);
             Assert.True(missing.Fixed);
