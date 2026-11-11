@@ -16,16 +16,23 @@ public sealed class RagOptions
     public string EmbeddingModel { get; set; } = "text-embedding-3-small";
     public int Dimensions { get; set; } = 512;
     public string CorpusPath { get; set; } = "Knowledge/corpus.json";
-    public double MinSimilarity { get; set; } = 0.32;
+    public double MinSimilarity { get; set; } = 0.45;
 }
 
-public sealed record KnowledgeDocument(string Id, string Title, string Content, string SourceUrl, string Version, string Status);
+public sealed record KnowledgeDocument(string Id, string Title, string Content, string SourceUrl, string Version, string Status,
+    string Visibility = "public", string? SourceId = null, int? Page = null, string? ContentHash = null,
+    string? ReviewedAt = null, string? ReviewDueAt = null, string ReviewLevel = "editorial",
+    string? Attribution = null, string? LicenseUrl = null);
 
 public static class KnowledgeCorpus
 {
     public static IReadOnlyList<KnowledgeDocument> Validate(IEnumerable<KnowledgeDocument> documents)
     {
-        var approved = documents.Where(document => document.Status == "approved").ToArray();
+        var all = documents.ToArray();
+        if (all.Any(document => document.Visibility is not ("public" or "assistant" or "restricted")))
+            throw new InvalidDataException("Classificação de acesso desconhecida.");
+        var approved = all.Where(document => document.Status == "approved" && document.Visibility != "restricted"
+            && (document.ReviewDueAt is null || DateOnly.ParseExact(document.ReviewDueAt, "yyyy-MM-dd", CultureInfo.InvariantCulture) >= DateOnly.FromDateTime(DateTime.UtcNow))).ToArray();
         if (approved.Length == 0 || approved.Select(document => document.Id).Distinct().Count() != approved.Length
             || approved.Any(document => string.IsNullOrWhiteSpace(document.Id) || document.Id.Length > 100
                 || string.IsNullOrWhiteSpace(document.Title) || document.Title.Length > 200
@@ -77,6 +84,7 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
     IEmbeddingClient embeddings, IMemoryCache cache, ILogger<KnowledgeStore> logger)
 {
     private readonly RagOptions _options = options.Value;
+    public const string NoEvidence = "Não tenho informação segura suficiente na minha base para responder isso. Prefiro não arriscar uma orientação incorreta. Se for uma dúvida sobre sua saúde, procure um profissional de saúde; posso ajudar a organizar suas dúvidas e registros.";
 
     private async Task<NpgsqlConnection> ConnectAsync(CancellationToken ct)
     {
@@ -113,6 +121,8 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
             END $$;
             CREATE TABLE IF NOT EXISTS luma_knowledge_active (
                 id integer PRIMARY KEY CHECK(id=1), release text NOT NULL);
+            ALTER TABLE luma_knowledge ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public';
+            ALTER TABLE luma_knowledge ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
             CREATE INDEX IF NOT EXISTS ix_luma_knowledge_search ON luma_knowledge USING gin(search);
             """, db, transaction))
             await schema.ExecuteNonQueryAsync(ct);
@@ -131,8 +141,8 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
         {
             var document = documents[index];
             await using var insert = new NpgsqlCommand("""
-                INSERT INTO luma_knowledge(id,title,content,source_url,version,release,embedding)
-                VALUES (@id,@title,@content,@url,@version,@release,@vector::vector)
+                INSERT INTO luma_knowledge(id,title,content,source_url,version,release,embedding,visibility,metadata)
+                VALUES (@id,@title,@content,@url,@version,@release,@vector::vector,@visibility,@metadata::jsonb)
                 ON CONFLICT(release,id) DO UPDATE SET embedding=excluded.embedding
                 """, db, transaction);
             insert.Parameters.AddWithValue("id", document.Id);
@@ -142,6 +152,9 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
             insert.Parameters.AddWithValue("version", document.Version);
             insert.Parameters.AddWithValue("release", version);
             insert.Parameters.AddWithValue("vector", KnowledgeCorpus.Vector(vectors[index], _options.Dimensions));
+            insert.Parameters.AddWithValue("visibility", document.Visibility);
+            insert.Parameters.AddWithValue("metadata", JsonSerializer.Serialize(new { document.SourceId, document.Page,
+                document.ContentHash, document.ReviewedAt, document.ReviewDueAt, document.ReviewLevel, document.Attribution, document.LicenseUrl }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             await insert.ExecuteNonQueryAsync(ct);
         }
         await ActivateAsync(db, transaction, version, ct);
@@ -162,7 +175,7 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
 
     public async Task<ToolOutcome> SearchAsync(string query, CancellationToken ct)
     {
-        if (!_options.Enabled) return new(false, "A base de conhecimento está indisponível. Não invente orientações de saúde.");
+        if (!_options.Enabled) return new(false, NoEvidence, true);
         query = query.Trim();
         if (query.Length is < 3 or > 600) return new(false, "Envie uma pergunta curta para consultar a base.");
         var vector = "";
@@ -182,28 +195,30 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
         }
         await using var db = await ConnectAsync(ct);
         var sql = vector.Length == 0 ? """
-            SELECT id,title,content,source_url,version FROM luma_knowledge
+            SELECT id,title,content,source_url,version,visibility,metadata FROM luma_knowledge
             WHERE release=(SELECT release FROM luma_knowledge_active WHERE id=1)
-              AND search @@ websearch_to_tsquery('portuguese',@lexical)
-            ORDER BY ts_rank_cd(search,websearch_to_tsquery('portuguese',@lexical)) DESC LIMIT 3
+              AND visibility IN ('public','assistant')
+              AND coalesce(metadata->>'reviewDueAt','9999-12-31')::date>=CURRENT_DATE
+              AND search @@ plainto_tsquery('portuguese',@lexical)
+            ORDER BY ts_rank_cd(search,plainto_tsquery('portuguese',@lexical)) DESC LIMIT 3
             """ : """
             WITH candidates AS (
               SELECT *, 1-(embedding <=> @vector::vector) AS similarity,
-                ts_rank_cd(search,websearch_to_tsquery('portuguese',@lexical)) AS lexical
+                ts_rank_cd(search,plainto_tsquery('portuguese',@lexical)) AS lexical
               FROM luma_knowledge WHERE vector_dims(embedding)=@dimensions AND release LIKE @release
                 AND release=(SELECT release FROM luma_knowledge_active WHERE id=1)
+                AND visibility IN ('public','assistant')
+                AND coalesce(metadata->>'reviewDueAt','9999-12-31')::date>=CURRENT_DATE
             ), ranked AS (
               SELECT *, row_number() OVER(ORDER BY similarity DESC) AS semantic_rank,
                 row_number() OVER(ORDER BY lexical DESC) AS lexical_rank
-              FROM candidates WHERE similarity>=@minimum OR lexical>0
+              FROM candidates WHERE similarity>=@minimum
             )
-            SELECT id,title,content,source_url,version FROM ranked
+            SELECT id,title,content,source_url,version,visibility,metadata FROM ranked
             ORDER BY (1.0/(60+semantic_rank) + CASE WHEN lexical>0 THEN 1.0/(60+lexical_rank) ELSE 0 END) DESC LIMIT 3
             """;
-        var lexicalQuery = string.Join(" OR ", System.Text.RegularExpressions.Regex.Matches(query, @"[\p{L}\p{Nd}]{3,}")
-            .Select(match => match.Value).Distinct(StringComparer.OrdinalIgnoreCase));
         await using var command = new NpgsqlCommand(sql, db);
-        command.Parameters.AddWithValue("lexical", lexicalQuery);
+        command.Parameters.AddWithValue("lexical", query);
         if (vector.Length != 0)
         {
             command.Parameters.AddWithValue("vector", vector);
@@ -216,11 +231,17 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
         var sources = new List<KnowledgeSource>();
         while (await reader.ReadAsync(ct))
         {
-            sources.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(3), reader.GetString(4)));
+            if (reader.GetString(5) == "public")
+            {
+                using var metadata = JsonDocument.Parse(reader.GetString(6));
+                sources.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(3), reader.GetString(4),
+                    metadata.RootElement.TryGetProperty("attribution", out var attribution) ? attribution.GetString() : null,
+                    metadata.RootElement.TryGetProperty("licenseUrl", out var licenseUrl) ? licenseUrl.GetString() : null));
+            }
             excerpts.Add(reader.GetString(1) + "\n" + reader.GetString(2));
         }
         return excerpts.Count == 0
-            ? new(false, "Não encontrei conteúdo revisado suficiente para responder. Peça esclarecimento ou informe esse limite.")
-            : new(true, string.Join("\n\n", excerpts), Sources: sources);
+            ? new(false, NoEvidence, true)
+            : new(true, string.Join("\n\n", excerpts), Sources: sources, ContextOnly: true);
     }
 }

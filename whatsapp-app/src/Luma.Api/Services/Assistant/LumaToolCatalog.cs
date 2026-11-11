@@ -5,9 +5,9 @@ using ModelContextProtocol.Protocol;
 
 namespace Luma.Api.Services.Assistant;
 
-public sealed record KnowledgeSource(string Id, string Title, string Url, string Version);
+public sealed record KnowledgeSource(string Id, string Title, string Url, string Version, string? Attribution = null, string? LicenseUrl = null);
 public sealed record ToolOutcome(bool Success, string Message, bool Fixed = false,
-    string? MediaUrl = null, IReadOnlyList<KnowledgeSource>? Sources = null, string? State = null);
+    string? MediaUrl = null, IReadOnlyList<KnowledgeSource>? Sources = null, string? State = null, bool ContextOnly = false);
 
 public static class LumaToolCatalog
 {

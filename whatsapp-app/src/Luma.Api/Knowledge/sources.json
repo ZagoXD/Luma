@@ -1,0 +1,58 @@
+{
+  "editorialPath": "editorial.json",
+  "sources": [
+    {
+      "id": "owh-ciclo", "title": "OWH/HHS: Top Questions About Your Menstrual Cycle", "publisher": "Office on Women's Health / HHS",
+      "downloadUrl": "https://womenshealth.gov/sites/default/files/documents/fact-sheet-menstrual-cycle.pdf",
+      "version": "2017-08-28-original-revisao-editorial-2026-11-10", "sha256": "f29d646eee9a76aa4f2e92d29ba94ec9ea516e39b1915fd91f5a865841cee7bc",
+      "status": "approved", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Texto declarado livre de restrições de copyright no próprio PDF", "commercialUseAllowed": true,
+      "sections": [{ "id": "ciclo", "title": "Ciclo menstrual, ovulação, sintomas e busca de atendimento (OWH/HHS)", "firstPage": 1, "lastPage": 2 }],
+      "exclusionReason": "Todas as páginas textuais indexadas. Documento educativo, não protocolo clínico atual; não prescrever nem importar contatos ou serviços dos EUA."
+    },
+    {
+      "id": "owh-testes-gravidez", "title": "OWH/HHS: Pregnancy Tests", "publisher": "Office on Women's Health / HHS",
+      "downloadUrl": "https://womenshealth.gov/sites/default/files/documents/fact-sheet-pregnancy-tests.pdf",
+      "version": "2014-06-09-original-revisao-editorial-2026-11-10", "sha256": "06171ed877da138c50a803229c49ba7ec74a65b84f2fc02f17784ede894d7def",
+      "status": "approved", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Texto declarado livre de restrições de copyright no próprio PDF", "commercialUseAllowed": true,
+      "sections": [{ "id": "testes", "title": "Testes de gravidez: informação geral, limites e confirmação profissional (OWH/HHS)", "firstPage": 1, "lastPage": 2 }],
+      "exclusionReason": "Todas as páginas textuais indexadas. Não interpretar resultado individual, garantir acurácia, recomendar marcas ou substituir instruções do fabricante/equipe de saúde."
+    },
+    {
+      "id": "owh-amamentacao", "title": "OWH/HHS: Breastfeeding", "publisher": "Office on Women's Health / HHS",
+      "downloadUrl": "https://womenshealth.gov/sites/default/files/documents/Breastfeeding_Fact_Sheet.pdf",
+      "version": "original-sha256-991196c9-revisao-editorial-2026-11-10", "sha256": "991196c99fe252e8fee2ad85037f3342111b1c4684497458c60a7ca237922aa0",
+      "status": "approved", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Texto declarado livre de restrições de copyright no próprio PDF", "commercialUseAllowed": true,
+      "sections": [{ "id": "amamentacao", "title": "Amamentação: apoio e informações gerais (OWH/HHS)", "firstPage": 1, "lastPage": 2 }],
+      "exclusionReason": "Todas as páginas textuais indexadas. Não usar recomendações individuais, leis e serviços estrangeiros como se fossem brasileiros."
+    },
+    {
+      "id": "contracepcao-2025", "title": "UFRR: Métodos Contraceptivos Disponíveis no SUS", "publisher": "Abraão Souza Porto e colaboradores / Universidade Federal de Roraima",
+      "downloadUrl": "https://educapes.capes.gov.br/bitstream/capes/1001159/2/CARTILHA_METODOS_CONTRACEPTIVOS_SUS_.pdf",
+      "version": "2025-07-28-revisao-editorial-2026-11-10", "sha256": "9c943b35770d95f761f5a08b190eac9c8914191e68708966f86a36e25974f6a0",
+      "status": "approved", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "CC BY-SA 3.0 BR", "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/br/", "commercialUseAllowed": true,
+      "sections": [{ "id": "autonomia", "title": "Saúde sexual, autonomia e escolha profissional de contracepção (UFRR)", "firstPage": 5, "lastPage": 6 }],
+      "exclusionReason": "Capas, créditos e referências não são conhecimento educativo necessário. Páginas 7 a 10 excluídas por conterem eficácia, esquemas de uso e detalhes de métodos que exigem revisão clínica atual e não são prescritos pela Luma."
+    },
+    {
+      "id": "gestante-2026", "title": "Ministério da Saúde: Caderneta Brasileira da Gestante 2026", "publisher": "Ministério da Saúde",
+      "downloadUrl": "https://bvsms.saude.gov.br/bvs/publicacoes/caderneta_brasileira_gestante.pdf",
+      "version": "2026", "sha256": "04a1bf3e60379ddabf1926c8b40e935565e667be4c4f42d0872d0b91f7014de2",
+      "status": "rights_pending", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "CC BY-NC-SA 4.0", "commercialUseAllowed": false,
+      "sections": [], "exclusionReason": "Não indexar no produto pago sem esclarecer autorização para uso comercial. PDF preservado privadamente como referência, não publicado nem enviado ao modelo."
+    },
+    {
+      "id": "dignidade-2024", "title": "Ministério da Saúde: Programa Dignidade Menstrual 2024", "publisher": "Governo Federal",
+      "downloadUrl": "https://www.gov.br/saude/pt-br/centrais-de-conteudo/publicacoes/cartilhas/2024/dignidademenstrual",
+      "version": "2024", "sha256": "f4dac5a4f8a598488b0cb3061942e8ff6c288963da2ea45ba8c32a99b2247921",
+      "status": "rights_pending", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Permissão comercial não verificada", "commercialUseAllowed": false,
+      "sections": [], "exclusionReason": "Excluído até confirmar permissão de reutilização e atualização das regras do programa; não confundir acesso público com licença comercial."
+    },
+    {
+      "id": "owh-contracepcao", "title": "OWH/HHS: Birth Control Methods", "publisher": "Office on Women's Health / HHS",
+      "downloadUrl": "https://womenshealth.gov/sites/default/files/documents/fact-sheet-birth-control-methods.pdf",
+      "version": "original-sha256-24821ea1", "sha256": "24821ea117700378a7f53e75dba55fef01f600d37fbcbb6259023424c8a14b41",
+      "status": "clinical_review_pending", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Livre de restrições de copyright", "commercialUseAllowed": true,
+      "sections": [], "exclusionReason": "Material contém referências a opções antigas como Essure e contexto regulatório norte-americano. Não publicar sem atualização e revisão clínica."
+    }
+  ]
+}

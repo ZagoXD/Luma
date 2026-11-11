@@ -11,6 +11,21 @@ using Stripe;
 using LumaSubscriptionStatuses = Luma.Api.Models.SubscriptionStatuses;
 using StripeSubscription = Stripe.Subscription;
 
+if (args.Length == 2 && args[0] == "--inspect-knowledge")
+{
+    using var pdf = UglyToad.PdfPig.PdfDocument.Open(args[1]);
+    foreach (var page in pdf.GetPages())
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { page = page.Number,
+            text = UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor.ContentOrderTextExtractor.GetText(page) }));
+    return;
+}
+
+if (args.Length == 4 && args[0] == "--ingest-knowledge")
+{
+    await KnowledgeIngestor.IngestAsync(args[1], args[2], args[3]);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 PrivacyRuntime.Configure(builder.Configuration.GetSection("Privacy").Get<PrivacyOptions>() ?? new PrivacyOptions());
 

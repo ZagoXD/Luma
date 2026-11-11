@@ -81,10 +81,18 @@ public sealed partial class ConversationService
     {
         var pending = user.ConsentAcceptedAt is null ? null : await GetLatestPendingIntentAsync(user.Id);
         var pregnancy = user.ConsentAcceptedAt is null ? null : await GetActivePregnancyAsync(user.Id);
+        var accountPhoneHash = PrivacyRuntime.LookupHash(user.PhoneNumber, "account.phone");
+        var now = DateTimeOffset.UtcNow;
+        var subscription = user.ConsentAcceptedAt is null ? null : await db.AccountSubscriptions.AsNoTracking()
+            .Where(item => item.PhoneHash == accountPhoneHash && item.CurrentPeriodEndsAt >= now
+                && (item.Status == SubscriptionStatuses.Active || item.Status == SubscriptionStatuses.Canceled))
+            .OrderByDescending(item => item.CurrentPeriodEndsAt)
+            .Select(item => new { item.PlanCode, item.BillingInterval, item.Status, item.CurrentPeriodEndsAt }).FirstOrDefaultAsync();
         return JsonSerializer.Serialize(new
         {
             today = Today(), name = user.DisplayName, stage = user.OnboardingStep, pending_action = user.PendingAction,
             consent = user.ConsentAcceptedAt is not null, adult = user.IsAdultConfirmed,
+            subscription,
             preferences = user.ConsentAcceptedAt is null || user.Preference is null ? null : new
             {
                 user.Preference.LastPeriodStartDate, user.Preference.AverageCycleLength,
@@ -103,15 +111,15 @@ public sealed partial class ConversationService
         if (name == "medical_guardrail") return new(true, SafetyGuardrail.SafeReply, true);
         if (name == "out_of_scope") return new(true, OutOfScopeMessage(), true);
         if (name == "ask_clarification") return new(true, arguments.GetProperty("question").GetString()!);
-        if (name == "get_onboarding_state") return new(true, await AssistantContextAsync(user));
+        if (name == "get_onboarding_state") return new(true, await AssistantContextAsync(user), ContextOnly: true);
         if (name == "search_luma_knowledge_base")
-            return knowledge is null ? new(false, "A base revisada está indisponível.") : await knowledge.SearchAsync(arguments.GetProperty("query").GetString()!, ct);
+            return knowledge is null ? new(false, KnowledgeStore.NoEvidence, true) : await knowledge.SearchAsync(arguments.GetProperty("query").GetString()!, ct);
         if (name != "complete_onboarding_step" && user.ConsentAcceptedAt is null)
             return new(false, InitialConsentMessage(), true);
         if (user.OnboardingStep == OnboardingSteps.UnderageBlocked)
             return new(false, "Por segurança, não posso continuar esse cadastro para menores de 18 anos.", true);
         if (name == "get_user_profile")
-            return new(true, await AssistantContextAsync(user));
+            return new(true, await AssistantContextAsync(user), ContextOnly: true);
         if (name == "confirm_pending_intent")
         {
             if (user.OnboardingStep != OnboardingSteps.Completed) return new(false, NextOnboardingPrompt(user, null));

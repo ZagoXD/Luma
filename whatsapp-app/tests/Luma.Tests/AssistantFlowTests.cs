@@ -45,6 +45,23 @@ public sealed class AssistantFlowTests
     }
 
     [Fact]
+    public async Task Profile_tool_reads_only_the_current_users_valid_plan()
+    {
+        await using var db = CreateDb();
+        var user = await AddUser(db);
+        db.AccountSubscriptions.AddRange(new AccountSubscription { PhoneNumber = user.PhoneNumber, PlanCode = "essencial",
+            BillingInterval = "annual", CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30) },
+            new AccountSubscription { PhoneNumber = "+5516999998888", PlanCode = "other-user-private-plan" });
+        await db.SaveChangesAsync();
+        var model = new ScriptedModel();
+        model.Call("get_user_profile", new { });
+        await CreateService(db, model).HandleIncomingMessageAsync(new("test", user.PhoneNumber, "qual meu plano?", "plan"));
+        Assert.Contains("essencial", model.LastInput);
+        Assert.Contains("annual", model.LastInput);
+        Assert.DoesNotContain("other-user-private-plan", model.LastInput);
+    }
+
+    [Fact]
     public async Task Onboarding_accepts_informal_age_and_explicit_unknown_date()
     {
         await using var db = CreateDb();
@@ -224,6 +241,7 @@ public sealed class AssistantFlowTests
     {
         private readonly Queue<JsonElement> _calls = new();
         public int Requests { get; private set; }
+        public string LastInput { get; private set; } = "";
         public bool FailAfterCall { get; init; }
         public void Call(string name, object arguments) => _calls.Enqueue(JsonSerializer.SerializeToElement(new
         {
@@ -232,6 +250,7 @@ public sealed class AssistantFlowTests
         public Task<AssistantModelTurn> CompleteAsync(IReadOnlyList<object> input, IReadOnlyList<Tool> tools, bool requireTool, CancellationToken ct)
         {
             Requests++;
+            LastInput = JsonSerializer.Serialize(input);
             if (_calls.TryDequeue(out var call)) return Task.FromResult(new AssistantModelTurn(null, [call]));
             if (FailAfterCall) throw new HttpRequestException("simulated");
             return Task.FromResult(new AssistantModelTurn("Combinado, deixei tudo organizado por aqui.", []));

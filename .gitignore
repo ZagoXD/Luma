@@ -64,3 +64,4 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .backups/
+.knowledge-sources/

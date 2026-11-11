@@ -11,6 +11,27 @@ namespace Luma.Tests;
 public sealed class AssistantOrchestratorTests
 {
     [Fact]
+    public async Task Failed_generation_never_returns_raw_retrieved_documents()
+    {
+        var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "ciclo" }, "", failAfterCall: true);
+        var reply = await Create(model).RespondAsync(new("pergunta", "estado", new(2026, 11, 10), ""),
+            (_, _, _) => Task.FromResult(new ToolOutcome(true, "TEXTO INTEGRAL DO ACERVO", ContextOnly: true)));
+        Assert.DoesNotContain("TEXTO INTEGRAL", reply.Body);
+        Assert.Contains("Não tenho informação segura", reply.Body);
+    }
+
+    [Fact]
+    public async Task Internal_knowledge_never_creates_a_source_block_even_if_model_invents_one()
+    {
+        var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "plano" },
+            "O Básico tem texto.\n\nFontes: https://internal.example/planos");
+        var reply = await Create(model).RespondAsync(new("pergunta", "estado", new(2026, 11, 10), ""),
+            (_, _, _) => Task.FromResult(new ToolOutcome(true, "Plano Básico tem texto.", Sources: [])));
+        Assert.DoesNotContain("internal.example", reply.Body);
+        Assert.DoesNotContain("Fontes:", reply.Body);
+    }
+
+    [Fact]
     public async Task Unknown_tool_from_model_fails_closed_without_breaking_the_webhook()
     {
         var executions = 0;
@@ -74,12 +95,16 @@ public sealed class AssistantOrchestratorTests
     private static AssistantOrchestrator Create(IAssistantModel model) => new(model,
         Options.Create(new AssistantOptions { Enabled = true }), NullLogger<AssistantOrchestrator>.Instance);
 
-    private sealed class CallsThenTextModel(string name, object arguments, string text) : IAssistantModel
+    private sealed class CallsThenTextModel(string name, object arguments, string text, bool failAfterCall = false) : IAssistantModel
     {
         private bool _called;
         public Task<AssistantModelTurn> CompleteAsync(IReadOnlyList<object> input, IReadOnlyList<Tool> tools, bool requireTool, CancellationToken ct)
         {
-            if (_called) return Task.FromResult(new AssistantModelTurn(text, []));
+            if (_called)
+            {
+                if (failAfterCall) throw new HttpRequestException("simulated");
+                return Task.FromResult(new AssistantModelTurn(text, []));
+            }
             _called = true;
             return Task.FromResult(new AssistantModelTurn(null, [JsonSerializer.SerializeToElement(new
             {
