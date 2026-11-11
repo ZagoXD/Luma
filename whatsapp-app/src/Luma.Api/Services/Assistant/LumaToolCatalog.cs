@@ -43,7 +43,7 @@ public static class LumaToolCatalog
         ["get_notification_preferences"] = ("Consulta lembretes e horários salvos.", [], []),
         ["update_notification_preferences"] = ("Atualiza os lembretes explicitamente solicitados; horários individuais HH:mm; plano Essencial obrigatório.", ["period_reminder_enabled", "contraceptive_reminder_enabled", "symptom_checkin_enabled", "reminder_time", "period_reminder_time", "contraceptive_reminder_time", "symptom_checkin_time", "timezone", "contraceptive_type"], []),
         ["disable_notification_preferences"] = ("Desativa todos os lembretes, mediante solicitação.", [], []),
-        ["search_luma_knowledge_base"] = ("Busca conhecimento revisado com fontes sobre ciclo, gravidez, privacidade e produto. Não consulta histórico pessoal.", ["query"], ["query"]),
+        ["search_luma_knowledge_base"] = ("Busca conhecimento revisado. Use scope product para planos/funcionalidades/lembretes da Luma, health para educação em saúde e all para assuntos mistos. Não consulta histórico pessoal.", ["query", "scope"], ["query"]),
         ["medical_guardrail"] = ("Retorna orientação fixa para diagnóstico, tratamento individual ou avaliação de sangramento.", [], []),
         ["out_of_scope"] = ("Recusa assuntos fora do acompanhamento menstrual/gestação e produto.", [], []),
         ["ask_clarification"] = ("Pede esclarecimento sem afirmar qualquer gravação.", ["question"], ["question"])
@@ -55,7 +55,9 @@ public static class LumaToolCatalog
         var properties = new JsonObject();
         foreach (var field in pair.Value.Fields)
         {
-            properties[field] = baseSchema[field]?.DeepClone() ?? new JsonObject { ["type"] = field is "confirmed" or "last_period_unknown" ? "boolean" : "string" };
+            properties[field] = field == "scope"
+                ? new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("product", "health", "all") }
+                : baseSchema[field]?.DeepClone() ?? new JsonObject { ["type"] = field is "confirmed" or "last_period_unknown" ? "boolean" : "string" };
         }
         return new Tool
         {

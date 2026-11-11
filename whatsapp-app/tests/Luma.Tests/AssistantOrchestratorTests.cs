@@ -11,6 +11,33 @@ namespace Luma.Tests;
 public sealed class AssistantOrchestratorTests
 {
     [Fact]
+    public async Task Product_reply_does_not_append_an_unrelated_retrieved_health_source()
+    {
+        var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "lembretes" },
+            "O Essencial permite configurar o lembrete diário da pílula.");
+        var reply = await Create(model).RespondAsync(new("Como funcionam os lembretes?", "estado", new(2026, 11, 10), ""),
+            (_, _, _) => Task.FromResult(new ToolOutcome(true, "Lembretes e ovulação.",
+                Sources: [new("ovulation", "Ovulação", "https://womenshealth.gov/ovulation", "v1")])));
+        Assert.DoesNotContain("Fontes:", reply.Body);
+        Assert.DoesNotContain("womenshealth.gov", reply.Body);
+    }
+
+    [Fact]
+    public async Task Only_explicitly_used_retrieved_sources_are_shown_and_unknown_citations_are_removed()
+    {
+        var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "ciclo" },
+            "O ciclo é uma estimativa. [fonte:cycle] [fonte:forged]");
+        var reply = await Create(model).RespondAsync(new("pergunta", "estado", new(2026, 11, 10), ""),
+            (_, _, _) => Task.FromResult(new ToolOutcome(true, "Dados.", Sources: [
+                new("cycle", "Ciclo", "https://example.com/cycle", "v1"),
+                new("ovulation", "Ovulação", "https://example.com/ovulation", "v1")])));
+        Assert.Contains("https://example.com/cycle", reply.Body);
+        Assert.DoesNotContain("https://example.com/ovulation", reply.Body);
+        Assert.DoesNotContain("[fonte:", reply.Body);
+        Assert.DoesNotContain("forged", reply.Body);
+    }
+
+    [Fact]
     public async Task Failed_generation_never_returns_raw_retrieved_documents()
     {
         var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "ciclo" }, "", failAfterCall: true);
@@ -47,7 +74,7 @@ public sealed class AssistantOrchestratorTests
     public async Task Backend_replaces_model_source_block_with_verified_sources_only()
     {
         var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "ciclo" },
-            "São estimativas.\n\nFontes: fonte inventada https://example.com/inventada");
+            "São estimativas. [fonte:cycle]\n\nFontes: fonte inventada https://example.com/inventada");
         var reply = await Create(model).RespondAsync(new("pergunta", "estado", new(2026, 11, 10), ""),
             (_, _, _) => Task.FromResult(new ToolOutcome(true, "Estimativas.", Sources: [new("cycle", "Ciclo", "https://www.gov.br/saude", "v1")])));
         Assert.DoesNotContain("inventada", reply.Body);
@@ -60,7 +87,7 @@ public sealed class AssistantOrchestratorTests
     {
         const string url = "https://www.gov.br/saude/menstruacao";
         const string calendar = "https://ia-luma.com.br/perfil/calendario?month=2026-11";
-        var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "calendário" }, "Sua proxima menstruacao e uma estimativa. " + calendar);
+        var model = new CallsThenTextModel("search_luma_knowledge_base", new { query = "calendário" }, "Sua proxima menstruacao e uma estimativa. " + calendar + " [fonte:calendar]");
         var reply = await Create(model).RespondAsync(new("pergunta", "cadastro completo", new(2026, 11, 10), ""),
             (_, _, _) => Task.FromResult(new ToolOutcome(true, "Previsões são estimativas.", Sources: [new("calendar", "Calendário", url, "v1")])));
         Assert.Contains(url, reply.Body);

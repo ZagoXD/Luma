@@ -173,8 +173,9 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
         await command.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task<ToolOutcome> SearchAsync(string query, CancellationToken ct)
+    public async Task<ToolOutcome> SearchAsync(string query, CancellationToken ct, string scope = "all")
     {
+        if (scope is not ("all" or "product" or "health")) return new(false, NoEvidence, true);
         if (!_options.Enabled) return new(false, NoEvidence, true);
         query = query.Trim();
         if (query.Length is < 3 or > 600) return new(false, "Envie uma pergunta curta para consultar a base.");
@@ -198,6 +199,7 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
             SELECT id,title,content,source_url,version,visibility,metadata FROM luma_knowledge
             WHERE release=(SELECT release FROM luma_knowledge_active WHERE id=1)
               AND visibility IN ('public','assistant')
+              AND (@scope='all' OR (@scope='product' AND visibility='assistant') OR (@scope='health' AND visibility='public'))
               AND coalesce(metadata->>'reviewDueAt','9999-12-31')::date>=CURRENT_DATE
               AND search @@ plainto_tsquery('portuguese',@lexical)
             ORDER BY ts_rank_cd(search,plainto_tsquery('portuguese',@lexical)) DESC LIMIT 3
@@ -208,6 +210,7 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
               FROM luma_knowledge WHERE vector_dims(embedding)=@dimensions AND release LIKE @release
                 AND release=(SELECT release FROM luma_knowledge_active WHERE id=1)
                 AND visibility IN ('public','assistant')
+                AND (@scope='all' OR (@scope='product' AND visibility='assistant') OR (@scope='health' AND visibility='public'))
                 AND coalesce(metadata->>'reviewDueAt','9999-12-31')::date>=CURRENT_DATE
             ), ranked AS (
               SELECT *, row_number() OVER(ORDER BY similarity DESC) AS semantic_rank,
@@ -219,6 +222,7 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
             """;
         await using var command = new NpgsqlCommand(sql, db);
         command.Parameters.AddWithValue("lexical", query);
+        command.Parameters.AddWithValue("scope", scope);
         if (vector.Length != 0)
         {
             command.Parameters.AddWithValue("vector", vector);

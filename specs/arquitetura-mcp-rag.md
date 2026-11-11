@@ -45,11 +45,12 @@ Esses limites evitam loops e controlam custos. Uma nova mensagem pode continuar 
 
 ## Conhecimento e publicação
 
-`src/Luma.Api/Knowledge/corpus.json` contém 31 trechos gerados a partir de quatro
+`src/Luma.Api/Knowledge/corpus.json` contém 47 trechos gerados a partir de cinco
 PDFs e 17 fichas editoriais/produto. O manifesto, páginas, hashes e licenças estão
 documentados em [acervo-rag.md](acervo-rag.md). Aprovação editorial não equivale
-a revisão clínica. Fontes de licença não comercial ou de conteúdo inadequado
-ficam bloqueadas no inventário, não no índice.
+a revisão clínica. As duas fontes rejeitadas foram removidas. O responsável
+aprovou o acervo e o uso da cartilha Dignidade Menstrual, com as ressalvas de
+licença externa e revisão independente registradas no manifesto.
 
 Só documentos com status `approved` entram no índice. Conteúdo clínico mais amplo,
 tratamentos ou novas orientações individuais exigem revisão profissional antes
@@ -73,7 +74,9 @@ do produto não expõem URLs internas; somente referências educativas públicas
 Uma correspondência lexical não contorna o limiar semântico. Sem evidência,
 o backend retorna o limite sem permitir uma resposta especulativa do modelo.
 Quando a API de embeddings falha na consulta, há fallback full-text. Sem evidência,
-a assistente informa o limite. As fontes públicas selecionadas acompanham a resposta,
+a assistente informa o limite. Só fontes públicas explicitamente citadas pelo modelo,
+entre as retornadas pela ferramenta, acompanham a resposta. O escopo de busca separa
+produto e saúde para evitar referências tematicamente indevidas,
 com URLs preservadas pelo formatador.
 
 Para reverter uma publicação, restaure a versão anterior do arquivo e reinicie a API.

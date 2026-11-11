@@ -7,6 +7,7 @@
     "version": "2017-08-28-original-revisao-editorial-2026-11-10",
     "sha256": "f29d646eee9a76aa4f2e92d29ba94ec9ea516e39b1915fd91f5a865841cee7bc",
     "license": "Texto declarado livre de restrições de copyright no próprio PDF",
+    "approvalNote": null,
     "reviewedAt": "2026-11-10",
     "reviewDueAt": "2027-05-10",
     "reviewLevel": "editorial",
@@ -27,6 +28,7 @@
     "version": "2014-06-09-original-revisao-editorial-2026-11-10",
     "sha256": "06171ed877da138c50a803229c49ba7ec74a65b84f2fc02f17784ede894d7def",
     "license": "Texto declarado livre de restrições de copyright no próprio PDF",
+    "approvalNote": null,
     "reviewedAt": "2026-11-10",
     "reviewDueAt": "2027-05-10",
     "reviewLevel": "editorial",
@@ -47,6 +49,7 @@
     "version": "original-sha256-991196c9-revisao-editorial-2026-11-10",
     "sha256": "991196c99fe252e8fee2ad85037f3342111b1c4684497458c60a7ca237922aa0",
     "license": "Texto declarado livre de restrições de copyright no próprio PDF",
+    "approvalNote": null,
     "reviewedAt": "2026-11-10",
     "reviewDueAt": "2027-05-10",
     "reviewLevel": "editorial",
@@ -67,6 +70,7 @@
     "version": "2025-07-28-revisao-editorial-2026-11-10",
     "sha256": "9c943b35770d95f761f5a08b190eac9c8914191e68708966f86a36e25974f6a0",
     "license": "CC BY-SA 3.0 BR",
+    "approvalNote": null,
     "reviewedAt": "2026-11-10",
     "reviewDueAt": "2027-05-10",
     "reviewLevel": "editorial",
@@ -90,27 +94,45 @@
     "exclusionReason": "Capas, créditos e referências não são conhecimento educativo necessário. Páginas 7 a 10 excluídas por conterem eficácia, esquemas de uso e detalhes de métodos que exigem revisão clínica atual e não são prescritos pela Luma."
   },
   {
-    "id": "gestante-2026",
-    "title": "Ministério da Saúde: Caderneta Brasileira da Gestante 2026",
-    "status": "rights_pending",
-    "license": "CC BY-NC-SA 4.0",
-    "exclusionReason": "Não indexar no produto pago sem esclarecer autorização para uso comercial. PDF preservado privadamente como referência, não publicado nem enviado ao modelo.",
-    "chunks": 0
-  },
-  {
     "id": "dignidade-2024",
     "title": "Ministério da Saúde: Programa Dignidade Menstrual 2024",
-    "status": "rights_pending",
-    "license": "Permissão comercial não verificada",
-    "exclusionReason": "Excluído até confirmar permissão de reutilização e atualização das regras do programa; não confundir acesso público com licença comercial.",
-    "chunks": 0
-  },
-  {
-    "id": "owh-contracepcao",
-    "title": "OWH/HHS: Birth Control Methods",
-    "status": "clinical_review_pending",
-    "license": "Livre de restrições de copyright",
-    "exclusionReason": "Material contém referências a opções antigas como Essure e contexto regulatório norte-americano. Não publicar sem atualização e revisão clínica.",
-    "chunks": 0
+    "publisher": "Governo Federal",
+    "downloadUrl": "https://www.gov.br/saude/pt-br/centrais-de-conteudo/publicacoes/cartilhas/2024/dignidademenstrual",
+    "version": "2024-aprovacao-responsavel-2026-11-10",
+    "sha256": "f4dac5a4f8a598488b0cb3061942e8ff6c288963da2ea45ba8c32a99b2247921",
+    "license": "Permissão comercial do titular não verificada; liberação operacional pelo responsável do produto",
+    "approvalNote": "Uso e publicação aprovados explicitamente pelo responsável da Luma em 10/11/2026. Aprovação do produto não certifica licença do titular nem revisão clínica independente.",
+    "reviewedAt": "2026-11-10",
+    "reviewDueAt": "2027-05-10",
+    "reviewLevel": "editorial",
+    "totalPages": 22,
+    "indexedPages": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "chunks": 16,
+    "excludedPages": [
+      1,
+      2,
+      3,
+      20,
+      21,
+      22
+    ],
+    "exclusionReason": "Capas, sumário, referências e páginas sem conteúdo educativo excluídos. Regras da edição 2024 não são garantia de elegibilidade atual: confirmar no canal oficial do programa."
   }
 ]

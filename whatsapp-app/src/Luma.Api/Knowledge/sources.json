@@ -1,5 +1,12 @@
 {
   "editorialPath": "editorial.json",
+  "releaseApproval": {
+    "approvedBy": "responsável da Luma",
+    "approvedAt": "2026-11-10",
+    "scope": "Uso do acervo e publicação aprovados pelo responsável do produto",
+    "independentClinicalReview": false,
+    "note": "Aprovação de produto não representa avaliação médica ou jurídica independente. Guardrails e abstenção sem evidência permanecem obrigatórios."
+  },
   "sources": [
     {
       "id": "owh-ciclo", "title": "OWH/HHS: Top Questions About Your Menstrual Cycle", "publisher": "Office on Women's Health / HHS",
@@ -34,25 +41,16 @@
       "exclusionReason": "Capas, créditos e referências não são conhecimento educativo necessário. Páginas 7 a 10 excluídas por conterem eficácia, esquemas de uso e detalhes de métodos que exigem revisão clínica atual e não são prescritos pela Luma."
     },
     {
-      "id": "gestante-2026", "title": "Ministério da Saúde: Caderneta Brasileira da Gestante 2026", "publisher": "Ministério da Saúde",
-      "downloadUrl": "https://bvsms.saude.gov.br/bvs/publicacoes/caderneta_brasileira_gestante.pdf",
-      "version": "2026", "sha256": "04a1bf3e60379ddabf1926c8b40e935565e667be4c4f42d0872d0b91f7014de2",
-      "status": "rights_pending", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "CC BY-NC-SA 4.0", "commercialUseAllowed": false,
-      "sections": [], "exclusionReason": "Não indexar no produto pago sem esclarecer autorização para uso comercial. PDF preservado privadamente como referência, não publicado nem enviado ao modelo."
-    },
-    {
       "id": "dignidade-2024", "title": "Ministério da Saúde: Programa Dignidade Menstrual 2024", "publisher": "Governo Federal",
       "downloadUrl": "https://www.gov.br/saude/pt-br/centrais-de-conteudo/publicacoes/cartilhas/2024/dignidademenstrual",
-      "version": "2024", "sha256": "f4dac5a4f8a598488b0cb3061942e8ff6c288963da2ea45ba8c32a99b2247921",
-      "status": "rights_pending", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Permissão comercial não verificada", "commercialUseAllowed": false,
-      "sections": [], "exclusionReason": "Excluído até confirmar permissão de reutilização e atualização das regras do programa; não confundir acesso público com licença comercial."
-    },
-    {
-      "id": "owh-contracepcao", "title": "OWH/HHS: Birth Control Methods", "publisher": "Office on Women's Health / HHS",
-      "downloadUrl": "https://womenshealth.gov/sites/default/files/documents/fact-sheet-birth-control-methods.pdf",
-      "version": "original-sha256-24821ea1", "sha256": "24821ea117700378a7f53e75dba55fef01f600d37fbcbb6259023424c8a14b41",
-      "status": "clinical_review_pending", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Livre de restrições de copyright", "commercialUseAllowed": true,
-      "sections": [], "exclusionReason": "Material contém referências a opções antigas como Essure e contexto regulatório norte-americano. Não publicar sem atualização e revisão clínica."
+      "version": "2024-aprovacao-responsavel-2026-11-10", "sha256": "f4dac5a4f8a598488b0cb3061942e8ff6c288963da2ea45ba8c32a99b2247921",
+      "status": "approved", "reviewedAt": "2026-11-10", "reviewDueAt": "2027-05-10", "license": "Permissão comercial do titular não verificada; liberação operacional pelo responsável do produto", "commercialUseAllowed": true,
+      "approvalNote": "Uso e publicação aprovados explicitamente pelo responsável da Luma em 10/11/2026. Aprovação do produto não certifica licença do titular nem revisão clínica independente.",
+      "sections": [
+        { "id": "programa", "title": "Programa Dignidade Menstrual: apresentação e acesso (regras da edição 2024)", "firstPage": 4, "lastPage": 16 },
+        { "id": "cuidados", "title": "Cuidados gerais e dúvidas de saúde menstrual (Ministério da Saúde, 2024)", "firstPage": 17, "lastPage": 19 }
+      ],
+      "exclusionReason": "Capas, sumário, referências e páginas sem conteúdo educativo excluídos. Regras da edição 2024 não são garantia de elegibilidade atual: confirmar no canal oficial do programa."
     }
   ]
 }
