@@ -43,6 +43,7 @@ import { formatBrazilPhone, formatBrazilPhoneDisplay, isValidBrazilPhone } from 
 
 type ProfilePageTemplateProps = {
   accountId: string;
+  whatsappNumber?: string;
 };
 
 const defaultNotificationPreference: NotificationPreference = {
@@ -56,9 +57,9 @@ const defaultNotificationPreference: NotificationPreference = {
   timeZone: "America/Sao_Paulo",
 };
 
-export function ProfilePageTemplate({ accountId }: ProfilePageTemplateProps) {
+export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTemplateProps) {
   const router = useRouter();
-  const lumaWhatsAppNumber = process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+14155238886";
+  const lumaWhatsAppNumber = whatsappNumber || process.env.NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER || "+14155238886";
   const lumaWhatsAppLink = buildWhatsAppLink(lumaWhatsAppNumber);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [transactions, setTransactions] = useState<BillingTransaction[]>([]);

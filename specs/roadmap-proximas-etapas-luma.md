@@ -1,6 +1,6 @@
 # Roadmap da Luma
 
-Última atualização: 03/05/2026.
+Última atualização: 10/11/2026.
 
 ## Estado Atual
 
@@ -12,7 +12,7 @@ Status resumido:
 - Etapa 1.1: concluída.
 - Etapa 2: concluída.
 - Etapa 3: concluída.
-- Etapa 4: concluída como arquitetura inicial com OpenAI, tools e RAG interno simples.
+- Etapa 4: integrada com MCP oficial, function calling e RAG híbrido com pgvector; detalhes em [arquitetura-mcp-rag.md](arquitetura-mcp-rag.md).
 - Etapa 5: implementada como primeira versão SaaS.
 - Etapa 5.1: concluída.
 - Etapa 6: parcialmente concluída.
@@ -79,23 +79,28 @@ Inclui:
 
 ## Etapa 4 - Luma Inteligente com IA, RAG e Tools
 
-Status: concluída como V1 inicial.
+Status: implementação integrada com MCP e RAG vetorial, em revisão na branch `feat/mcp-and-rag`.
 
 Inclui:
 
 - OpenAI como motor de IA.
 - Ollama removido.
-- Tools internas.
+- Cliente e servidor MCP oficiais em transporte privado, com descoberta e invocação reais.
 - Backend autoritativo.
 - Resposta final humanizada pela IA.
-- RAG interno simples.
+- RAG com embeddings, pgvector, full-text português, fontes e publicação transacional versionada.
+- Acervo de 31 trechos, quatro PDFs autorizados, fichas do produto e manifesto de fontes bloqueadas; detalhes em [acervo-rag.md](acervo-rag.md).
+- Filtros de visibilidade, revisão vencida e abstenção sem evidência, sem devolver documentos brutos em falhas.
+- Memória curta criptografada e confirmação de intenções fora da ordem do cadastro.
+- Recibos idempotentes e serialização por usuária em PostgreSQL.
+- Testes de protocolo, fluxos, recuperação e concorrência com PostgreSQL real.
 - Guardrails fixos.
 
 Próxima evolução:
 
-- RAG real com embeddings.
-- Avaliação automática de qualidade.
-- Observabilidade de prompts, custo e latência.
+- Ampliar o acervo editorial inicial com revisão clínica e fontes versionadas.
+- Expandir avaliações de interpretação com cenários reais anonimizados.
+- Painel de observabilidade de custo e latência, sem conteúdo sensível nos logs.
 
 ## Etapa 5 - SaaS Web e Assinaturas
 

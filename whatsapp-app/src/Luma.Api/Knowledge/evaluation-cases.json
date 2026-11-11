@@ -1,0 +1,19 @@
+[
+  { "query": "plano Básico", "expectedIds": ["luma-plano-basico"], "shouldAnswer": true },
+  { "query": "plano Essencial", "expectedIds": ["luma-plano-essencial"], "shouldAnswer": true },
+  { "query": "anual à vista", "expectedIds": ["luma-plano-basico", "luma-plano-essencial"], "shouldAnswer": true },
+  { "query": "cancelamento renovação", "expectedIds": ["luma-assinatura-cobranca"], "shouldAnswer": true },
+  { "query": "notificações horários", "expectedIds": ["luma-notificacoes"], "shouldAnswer": true },
+  { "query": "código SMS", "expectedIds": ["luma-suporte-conta", "luma-cadastro"], "shouldAnswer": true },
+  { "query": "janela fértil", "expectedIds": ["luma-calendario", "saude-ovulacao"], "shouldAnswer": true },
+  { "query": "imagem educativa", "expectedIds": ["luma-imagens-audio"], "shouldAnswer": true },
+  { "query": "duração ciclo", "expectedIds": ["luma-cadastro", "saude-ciclo-conceito", "luma-registros"], "shouldAnswer": true },
+  { "query": "pré-natal consultas", "expectedIds": ["saude-prenatal", "luma-gravidez"], "shouldAnswer": true },
+  { "query": "ovulation", "expectedIds": ["owh-ciclo-"], "shouldAnswer": true },
+  { "query": "Pregnancy Tests", "expectedIds": ["owh-testes-gravidez-"], "shouldAnswer": true },
+  { "query": "amamentação", "expectedIds": ["owh-amamentacao-"], "shouldAnswer": true },
+  { "query": "saúde sexual autonomia", "expectedIds": ["contracepcao-2025-"], "shouldAnswer": true },
+  { "query": "astrofísica galáctica", "expectedIds": [], "shouldAnswer": false },
+  { "query": "proteína fictícia LUMA-X9", "expectedIds": [], "shouldAnswer": false },
+  { "query": "senha infraestrutura API segredos", "expectedIds": [], "shouldAnswer": false }
+]

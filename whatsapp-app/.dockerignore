@@ -4,3 +4,8 @@
 **/bin
 **/obj
 README.md
+.knowledge-sources
+.backups
+.env
+.env.*
+!.env.example

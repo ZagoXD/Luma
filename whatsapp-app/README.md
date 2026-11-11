@@ -124,6 +124,23 @@ Datas operacionais continuam em colunas próprias para preservar calendário, no
 
 ## Webhook Twilio
 
+Para rodar produção e sandbox na mesma instalação, use
+`COMPOSE_PROFILES=twilio-sandbox` no `.env`. As duas instâncias
+compartilham PostgreSQL, Redis e as chaves de privacidade. Use contas de
+teste dedicadas, pois o sandbox escreve no mesmo banco. O agendador de
+lembretes roda apenas na instância principal, quando habilitado.
+
+Configure `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`
+e `TWILIO_WEBHOOK_URL` para produção. Para o sandbox, use
+`TWILIO_SANDBOX_ACCOUNT_SID`, `TWILIO_SANDBOX_AUTH_TOKEN`,
+`TWILIO_SANDBOX_WHATSAPP_FROM` e `TWILIO_SANDBOX_WEBHOOK_URL`. Se os dois
+senders estiverem na mesma conta Twilio, os SIDs e tokens são iguais.
+
+No Cloudflare Tunnel, encaminhe apenas o caminho exato
+`/webhooks/twilio/whatsapp` para `api:8080` ou `api-sandbox:8080`,
+conforme o domínio, antes da regra geral da web. Cadastre as URLs
+HTTPS na Twilio como POST, sem query string ou barra final.
+
 Endpoint:
 
 ```txt

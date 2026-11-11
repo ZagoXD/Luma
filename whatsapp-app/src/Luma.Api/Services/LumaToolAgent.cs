@@ -29,6 +29,7 @@ public sealed class LumaToolCall
     public bool? ConsentAccepted { get; set; }
     public bool? IsAdultConfirmed { get; set; }
     public DateOnly? Date { get; set; }
+    public bool? LastPeriodUnknown { get; set; }
     public int? AverageCycleLength { get; set; }
     public int? AveragePeriodLength { get; set; }
     public string? ContraceptiveType { get; set; }
@@ -41,6 +42,9 @@ public sealed class LumaToolCall
     public bool? ContraceptiveReminderEnabled { get; set; }
     public bool? SymptomCheckinEnabled { get; set; }
     public string? ReminderTime { get; set; }
+    public string? PeriodReminderTime { get; set; }
+    public string? ContraceptiveReminderTime { get; set; }
+    public string? SymptomCheckinTime { get; set; }
     public string? TimeZone { get; set; }
     public int? GestationalWeeks { get; set; }
     public DateOnly? LastPeriodDate { get; set; }

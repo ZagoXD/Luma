@@ -342,3 +342,14 @@ Principais documentos:
 - `specs/tutorial-stripe-luma.md`
 - `specs/proposta-migracao-openai-luma.md`
 - `specs/plano-criptografia-dados-reais-usuarios-luma.md`
+
+## Integração MCP e RAG
+
+O fluxo novo usa function calling da OpenAI, servidor/cliente MCP oficiais em C#
+e busca híbrida em PostgreSQL com pgvector. Consulte
+[a arquitetura e os procedimentos de operação](specs/arquitetura-mcp-rag.md)
+para ativação, publicação do acervo, limites, testes e rollback.
+
+O [inventário do acervo e a importação de PDFs](specs/acervo-rag.md) detalham as
+fontes aprovadas, licenças, conteúdo dos planos, classificações de acesso e
+avaliações de recuperação. Não há leitura de PDFs durante cada conversa.
