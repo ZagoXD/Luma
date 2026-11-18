@@ -113,5 +113,11 @@ jobs:
       - name: Lint frontend
         run: npm run lint
 
+      - name: Test frontend SEO policy
+        run: npm test
+
       - name: Build frontend
         run: npm run build
+
+      - name: Verify standalone SEO in production and dev modes
+        run: node scripts/check-seo.mjs --local

@@ -42,6 +42,7 @@ for (const environment of ['dev', 'production']) {
     api.Twilio__VerifyServiceSid = '';
   }
   const web = {
+    LUMA_SITE_URL: domain,
     LUMA_API_BASE_URL: 'http://api:8080',
     LUMA_COOKIE_SECURE: 'true',
     LUMA_WHATSAPP_NUMBER: api.Twilio__WhatsAppFrom.replace(/^whatsapp:/, ''),

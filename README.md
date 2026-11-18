@@ -12,6 +12,8 @@ A implantação AWS usa dev e produção isolados em Docker, com PostgreSQL/pgve
 
 Consulte [Operação e migração AWS](specs/deploy-aws-luma.md) para arquitetura, custos do plano FREE, deploy, rollback, retorno ao computador e credenciais pendentes. A branch `backup/local-cloudflared` preserva o ambiente local; seus volumes permanecem no computador.
 
+O SEO técnico, os ícones e a separação de indexação entre produção/dev estão em [SEO e indexação](specs/seo-e-indexacao.md). A verificação do domínio e a solicitação de indexação no Google Search Console dependem do responsável.
+
 Implementado:
 
 - Bot WhatsApp via Twilio.

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { buildMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Luma - Seu ciclo, registrado em uma conversa",
-  description: "Assistente de ciclo menstrual por WhatsApp.",
-};
+// One immutable image serves dev and production; indexing policy is read at request time.
+export const dynamic = "force-dynamic";
+export function generateMetadata(): Metadata { return buildMetadata(); }
 
 const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
