@@ -37,12 +37,13 @@ public sealed class BillingServiceTests
     {
         PrivacyRuntime.Reset();
         var schema = "billing_test_" + Guid.NewGuid().ToString("N");
-        await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable("LUMA_INTEGRATION_DATABASE"));
+        var connectionString = Environment.GetEnvironmentVariable("LUMA_INTEGRATION_DATABASE")!;
+        await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
         await using (var create = new NpgsqlCommand($"CREATE SCHEMA {schema}", connection)) await create.ExecuteNonQueryAsync();
         try
         {
-            var builder = new NpgsqlConnectionStringBuilder(connection.ConnectionString) { SearchPath = schema };
+            var builder = new NpgsqlConnectionStringBuilder(connectionString) { SearchPath = schema };
             var options = new DbContextOptionsBuilder<LumaDbContext>().UseNpgsql(builder.ConnectionString).Options;
             await using var setup = new LumaDbContext(options);
             await setup.Database.ExecuteSqlRawAsync(setup.Database.GenerateCreateScript());
