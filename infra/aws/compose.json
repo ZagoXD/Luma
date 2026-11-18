@@ -12,13 +12,14 @@
       "image": "redis:7-alpine", "restart": "unless-stopped", "mem_limit": "80m",
       "command": ["redis-server", "/etc/redis/redis.conf"],
       "volumes": ["redis:/data", "/opt/luma/runtime/${ENVIRONMENT}/redis.conf:/etc/redis/redis.conf:ro"],
+      "healthcheck": {"test": ["CMD-SHELL", "REDISCLI_AUTH=$(sed -n 's/^requirepass //p' /etc/redis/redis.conf) redis-cli ping | grep -q PONG"], "interval": "5s", "timeout": "5s", "retries": 30},
       "networks": ["data"],
       "logging": {"driver": "json-file", "options": {"max-size": "5m", "max-file": "2"}}
     },
     "api": {
       "image": "luma-api:${IMAGE_TAG}", "pull_policy": "never", "restart": "unless-stopped", "mem_limit": "320m",
       "env_file": ["/opt/luma/runtime/${ENVIRONMENT}/api.env"],
-      "depends_on": {"postgres": {"condition": "service_healthy"}, "redis": {"condition": "service_started"}},
+      "depends_on": {"postgres": {"condition": "service_healthy"}, "redis": {"condition": "service_healthy"}},
       "networks": {"data": {}, "front": {"aliases": ["${ENVIRONMENT}-api"]}},
       "logging": {"driver": "json-file", "options": {"max-size": "10m", "max-file": "3"}}
     },

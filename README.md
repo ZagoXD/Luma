@@ -45,12 +45,12 @@ Pendente para produção completa:
 
 - Criar/aprovar templates Twilio/Meta.
 - Ativar worker de notificações.
-- Configurar WhatsApp Business real fora do Sandbox.
+- Validar entrega no WhatsApp Business e participação no Sandbox, além da configuração dos números.
 - Validar a operação comercial Stripe live; catálogo e configuração estão separados de dev.
 - Configurar domínio customizado para mídia do R2.
 - Publicar termos e política de privacidade.
 - Recuperar as credenciais de ElevenLabs, Resend, R2 e Twilio Verify no ambiente restaurado.
-- Validar restauração dos backups e definir rotação futura de chaves de privacidade.
+- Ensaiar periodicamente a restauração dos backups e definir rotação futura de chaves de privacidade.
 
 ## Planos
 

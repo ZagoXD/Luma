@@ -23,6 +23,15 @@ REPO = "ZagoXD/Luma"
 REGION = "us-east-2"
 
 
+def verification_key_path(environment):
+    return ROOT / "infra/aws/keys" / (environment + ".pem")
+
+
+def runtime_file_mode(name):
+    # The Redis process is non-root; the enclosing host directory remains mode 0700.
+    return 0o644 if name == "redis.conf" else 0o600
+
+
 def validate_manifest(data, environment):
     if environment not in ("dev", "production") or data.get("environment") != environment or data.get("schema") != 1:
         raise ValueError("Invalid environment or manifest schema")
@@ -103,6 +112,9 @@ def backup(environment):
 def wait_ready(environment):
     for attempt in range(90):
         try:
+            redis = run(["docker", "inspect", "--format", "{{.State.Health.Status}}", f"luma-{environment}-redis-1"], capture_output=True, text=True)
+            if redis.stdout.strip() != "healthy":
+                raise subprocess.CalledProcessError(1, "redis health check")
             run(["docker", "exec", "luma-gateway", "wget", "-qO", "/dev/null", f"http://{environment}-api:8080/health"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             run(["docker", "exec", "luma-gateway", "wget", "-qO", "/dev/null", f"http://{environment}-web:3000/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return
@@ -139,7 +151,7 @@ def install(environment):
             if error.code == 404:
                 return
             raise
-        run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(ROOT / "keys" / (environment + ".pem")),
+        run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(verification_key_path(environment)),
              "-rawin", "-in", str(manifest), "-sigfile", str(signature)], stdout=subprocess.DEVNULL)
         release = json.loads(manifest.read_bytes())
         validate_manifest(release, environment)
@@ -162,7 +174,7 @@ def install(environment):
         for name, value in render_environment(config, release["sha"]).items():
             target = runtime / name
             target.write_text(value)
-            target.chmod(0o600)
+            target.chmod(runtime_file_mode(name))
         try:
             compose(environment, "up", "-d", "--wait", "postgres", "redis")
             seed(environment)

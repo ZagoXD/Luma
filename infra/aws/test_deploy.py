@@ -1,8 +1,23 @@
 import unittest
-from deploy import validate_manifest, render_environment
+import json
+from pathlib import Path
+from deploy import validate_manifest, render_environment, verification_key_path, runtime_file_mode
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_redis_config_is_readable_inside_container_but_other_secret_files_stay_private(self):
+        self.assertEqual(runtime_file_mode("redis.conf"), 0o644)
+        for name in ("api.env", "web.env", "postgres.env", ".env"):
+            self.assertEqual(runtime_file_mode(name), 0o600)
+
+    def test_api_waits_for_authenticated_redis_health_check(self):
+        compose = json.loads(Path(__file__).with_name("compose.json").read_text())
+        self.assertIn("healthcheck", compose["services"]["redis"])
+        self.assertEqual(compose["services"]["api"]["depends_on"]["redis"]["condition"], "service_healthy")
+
+    def test_verification_key_matches_bootstrap_layout(self):
+        self.assertEqual(verification_key_path("dev").as_posix(), "/opt/luma/infra/aws/keys/dev.pem")
+
     def manifest(self):
         sha = "a" * 40
         return {"schema": 1, "environment": "dev", "sha": sha, "assets": {
