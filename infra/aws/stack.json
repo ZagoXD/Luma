@@ -1,0 +1,72 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Luma single-host credit-funded deployment with isolated dev and production data, no inbound ports and no AWS keys in GitHub.",
+  "Parameters": {
+    "VpcId": {"Type": "AWS::EC2::VPC::Id"},
+    "SubnetId": {"Type": "AWS::EC2::Subnet::Id"},
+    "ImageId": {"Type": "AWS::EC2::Image::Id"},
+    "InstanceType": {"Type": "String", "Default": "t3.small", "AllowedValues": ["t3.small"]}
+  },
+  "Resources": {
+    "Storage": {
+      "Type": "AWS::S3::Bucket", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "luma-private-${AWS::AccountId}-${AWS::Region}"},
+        "PublicAccessBlockConfiguration": {"BlockPublicAcls": true, "BlockPublicPolicy": true, "IgnorePublicAcls": true, "RestrictPublicBuckets": true},
+        "BucketEncryption": {"ServerSideEncryptionConfiguration": [{"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]},
+        "LifecycleConfiguration": {"Rules": [{"Id": "BackupRetention", "Prefix": "backups/", "Status": "Enabled", "ExpirationInDays": 7}, {"Id": "AbortUploads", "Status": "Enabled", "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1}}]},
+        "Tags": [{"Key": "Project", "Value": "Luma"}]
+      }
+    },
+    "StoragePolicy": {"Type": "AWS::S3::BucketPolicy", "Properties": {"Bucket": {"Ref": "Storage"}, "PolicyDocument": {"Version": "2012-10-17", "Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": [{"Fn::GetAtt": ["Storage", "Arn"]}, {"Fn::Sub": "${Storage.Arn}/*"}], "Condition": {"Bool": {"aws:SecureTransport": "false"}}}]}}},
+    "DevSecret": {"Type": "AWS::SecretsManager::Secret", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain", "Properties": {"Name": "/luma/dev/runtime", "SecretString": "{}", "Tags": [{"Key": "Project", "Value": "Luma"}]}},
+    "ProductionSecret": {"Type": "AWS::SecretsManager::Secret", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain", "Properties": {"Name": "/luma/production/runtime", "SecretString": "{}", "Tags": [{"Key": "Project", "Value": "Luma"}]}},
+    "EdgeSecret": {"Type": "AWS::SecretsManager::Secret", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain", "Properties": {"Name": "/luma/edge/runtime", "SecretString": "{}", "Tags": [{"Key": "Project", "Value": "Luma"}]}},
+    "HostRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "luma-ec2-host", "Path": "/service-role/",
+        "AssumeRolePolicyDocument": {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}]},
+        "ManagedPolicyArns": ["arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"],
+        "Policies": [{"PolicyName": "luma-runtime-only", "PolicyDocument": {"Version": "2012-10-17", "Statement": [
+          {"Effect": "Allow", "Action": ["secretsmanager:GetSecretValue"], "Resource": [{"Ref": "DevSecret"}, {"Ref": "ProductionSecret"}, {"Ref": "EdgeSecret"}]},
+          {"Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": {"Fn::GetAtt": ["Storage", "Arn"]}, "Condition": {"StringLike": {"s3:prefix": ["bootstrap/*", "seeds/*", "backups/*"]}}},
+          {"Effect": "Allow", "Action": ["s3:GetObject"], "Resource": [{"Fn::Sub": "${Storage.Arn}/bootstrap/*"}, {"Fn::Sub": "${Storage.Arn}/seeds/*"}]},
+          {"Effect": "Allow", "Action": ["s3:PutObject"], "Resource": {"Fn::Sub": "${Storage.Arn}/backups/*"}}
+        ]}}], "Tags": [{"Key": "Project", "Value": "Luma"}]
+      }
+    },
+    "HostProfile": {"Type": "AWS::IAM::InstanceProfile", "Properties": {"Roles": [{"Ref": "HostRole"}]}},
+    "HostSecurityGroup": {"Type": "AWS::EC2::SecurityGroup", "Properties": {"GroupDescription": "Luma outbound-only host; access through SSM and Cloudflare Tunnel", "VpcId": {"Ref": "VpcId"}, "SecurityGroupEgress": [{"IpProtocol": "-1", "CidrIp": "0.0.0.0/0"}], "Tags": [{"Key": "Project", "Value": "Luma"}]}},
+    "Host": {
+      "Type": "AWS::EC2::Instance", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ImageId": {"Ref": "ImageId"}, "InstanceType": {"Ref": "InstanceType"},
+        "IamInstanceProfile": {"Ref": "HostProfile"}, "DisableApiTermination": true,
+        "CreditSpecification": {"CPUCredits": "standard"},
+        "MetadataOptions": {"HttpTokens": "required", "HttpEndpoint": "enabled", "HttpPutResponseHopLimit": 1},
+        "NetworkInterfaces": [{"DeviceIndex": "0", "AssociatePublicIpAddress": true, "SubnetId": {"Ref": "SubnetId"}, "GroupSet": [{"Ref": "HostSecurityGroup"}]}],
+        "BlockDeviceMappings": [{"DeviceName": "/dev/xvda", "Ebs": {"Encrypted": true, "VolumeSize": 30, "VolumeType": "gp3", "DeleteOnTermination": false}}],
+        "UserData": {"Fn::Base64": {"Fn::Join": ["\n", [
+          "#!/bin/bash", "set -euo pipefail", "dnf install -y docker python3 openssl tar gzip",
+          "systemctl enable --now docker amazon-ssm-agent", "mkdir -p /usr/local/lib/docker/cli-plugins /opt/luma/runtime",
+          "curl -fsSL https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose",
+          "curl -fsSL https://github.com/docker/compose/releases/download/v2.40.3/checksums.txt -o /tmp/compose-checksums.txt",
+          "cd /usr/local/lib/docker/cli-plugins",
+          "grep 'docker-compose-linux-x86_64$' /tmp/compose-checksums.txt | sed 's/docker-compose-linux-x86_64/docker-compose/' | sha256sum -c -",
+          "chmod +x docker-compose",
+          "if [ ! -f /swapfile ]; then fallocate -l 4G /swapfile; chmod 600 /swapfile; mkswap /swapfile; swapon /swapfile; echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi",
+          "printf 'vm.swappiness=10\\n' > /etc/sysctl.d/90-luma.conf", "sysctl --system",
+          "printf '%s' '{\"log-driver\":\"json-file\",\"log-opts\":{\"max-size\":\"10m\",\"max-file\":\"3\"}}' > /etc/docker/daemon.json",
+          "systemctl restart docker", ""
+        ]]}},
+        "Tags": [{"Key": "Name", "Value": "luma-shared-host"}, {"Key": "Project", "Value": "Luma"}, {"Key": "Environment", "Value": "dev-and-production"}]
+      }
+    }
+  },
+  "Outputs": {
+    "InstanceId": {"Value": {"Ref": "Host"}},
+    "Bucket": {"Value": {"Ref": "Storage"}},
+    "SecurityGroup": {"Value": {"Ref": "HostSecurityGroup"}}
+  }
+}

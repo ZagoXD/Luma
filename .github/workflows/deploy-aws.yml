@@ -1,0 +1,119 @@
+name: Deploy AWS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente de destino
+        required: true
+        type: choice
+        options: [dev, production]
+        default: dev
+      sha:
+        description: Commit completo; produção deve corresponder ao dev validado
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aws-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment || 'dev' }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+      REQUESTED_SHA: ${{ inputs.sha }}
+      CI_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select and validate commit
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_ENV" = production ]; then
+            curl --fail --retry 3 https://dev.ia-luma.com.br/deployment -o /tmp/dev.json
+            SHA=$(jq -r .sha /tmp/dev.json)
+            if [ -n "$REQUESTED_SHA" ] && [ "$SHA" != "$REQUESTED_SHA" ]; then
+              echo 'Production must promote the currently validated dev commit.' >&2
+              exit 1
+            fi
+          else
+            SHA=${REQUESTED_SHA:-${CI_SHA:-$GITHUB_SHA}}
+          fi
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ ]]
+          git merge-base --is-ancestor "$SHA" origin/main
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          git checkout --detach "$SHA"
+      - name: Prepare immutable images
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir out
+          if gh release view "aws-$SHA" >/dev/null 2>&1; then
+            gh release download "aws-$SHA" --dir out --pattern '*.tar.gz'
+          else
+            test "$TARGET_ENV" = dev
+            docker build --label "org.opencontainers.image.revision=$SHA" -t "luma-api:$SHA" -f whatsapp-app/src/Luma.Api/Dockerfile whatsapp-app
+            docker build --label "org.opencontainers.image.revision=$SHA" -t "luma-web:$SHA" web
+            docker save "luma-api:$SHA" | gzip -1 > out/api.tar.gz
+            docker save "luma-web:$SHA" | gzip -1 > out/web.tar.gz
+            gh release create "aws-$SHA" out/api.tar.gz out/web.tar.gz --target "$SHA" --prerelease --title "AWS images $SHA" --notes 'Immutable tested deployment images. No credentials included.'
+          fi
+      - name: Sign deployment channel
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+          SIGNING_KEY: ${{ secrets.DEPLOY_SIGNING_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_KEY"
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > /tmp/luma-signing.pem
+          trap 'rm -f /tmp/luma-signing.pem' EXIT
+          python3 infra/aws/release.py "$SHA" "$TARGET_ENV"
+          openssl pkeyutl -sign -rawin -inkey /tmp/luma-signing.pem -in out/manifest.json -out out/manifest.sig
+          if ! gh release view "aws-channel-$TARGET_ENV" >/dev/null 2>&1; then
+            gh release create "aws-channel-$TARGET_ENV" --target "$SHA" --prerelease --title "AWS $TARGET_ENV channel" --notes 'Signed deployment pointer; signature and archive hashes are verified by the host.'
+          fi
+          gh release upload "aws-channel-$TARGET_ENV" out/manifest.sig out/manifest.json --clobber
+      - name: Verify deployed revision and health
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+          HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HEALTH_URL"
+          for attempt in $(seq 1 120); do
+            echo "Checking $TARGET_ENV deployment ($attempt/120)"
+            if curl --fail --max-time 15 -s "$HEALTH_URL/deployment" | jq -e --arg sha "$SHA" '.sha == $sha' >/dev/null; then
+              curl --fail --max-time 15 "$HEALTH_URL/health"
+              echo "### $TARGET_ENV deployed: $SHA" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'The signed release was published but did not become healthy in time.' >&2
+          exit 1

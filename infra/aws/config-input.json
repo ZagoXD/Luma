@@ -1,0 +1,11 @@
+{
+  "services": {"input": {"image": "busybox", "environment": {
+    "Stripe__SecretKey": "${STRIPE_PRODUCTION_SECRET_KEY:?Production Stripe key missing}",
+    "Stripe__PublishableKey": "${STRIPE_PRODUCTION_PUBLISHABLE_KEY:?Production publishable key missing}",
+    "Stripe__WebhookSecret": "${STRIPE_PRODUCTION_WEBHOOK_SECRET:?Production signing secret missing}",
+    "Stripe__BasicMonthlyPriceId": "${STRIPE_PRODUCTION_BASIC_MONTHLY_PRICE_ID:?Price missing}",
+    "Stripe__BasicAnnualPriceId": "${STRIPE_PRODUCTION_BASIC_ANNUAL_PRICE_ID:?Price missing}",
+    "Stripe__EssentialMonthlyPriceId": "${STRIPE_PRODUCTION_ESSENTIAL_MONTHLY_PRICE_ID:?Price missing}",
+    "Stripe__EssentialAnnualPriceId": "${STRIPE_PRODUCTION_ESSENTIAL_ANNUAL_PRICE_ID:?Price missing}"
+  }}}
+}
