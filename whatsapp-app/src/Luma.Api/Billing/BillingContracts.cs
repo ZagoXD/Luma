@@ -25,7 +25,7 @@ public static class BillingCatalog
     };
 }
 
-public sealed record ProviderSubscription(string Id, string Reference, string Status, decimal Amount, string Currency, int Months, DateTimeOffset? NextPaymentAt);
+public sealed record ProviderSubscription(string Id, string Reference, string Status, decimal Amount, string Currency, int Months, DateTimeOffset? NextPaymentAt, DateTimeOffset? StartsAt = null);
 public sealed record ProviderPayment(string Id, string SubscriptionId, string Status, decimal Amount, string Currency, DateTimeOffset ApprovedAt);
 public sealed record SubscriptionOrder(Guid Id, string Email, BillingPlan Plan, string ReturnUrl, DateTimeOffset? StartAt = null);
 
@@ -34,6 +34,7 @@ public interface ISubscriptionGateway
 {
     string Provider { get; }
     string PublicKey { get; }
+    bool SupportsPix { get; }
     Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string cardToken, CancellationToken ct);
     Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct);
     Task<PixDetails> GetPixAsync(string id, CancellationToken ct);

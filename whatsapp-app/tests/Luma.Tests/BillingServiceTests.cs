@@ -183,6 +183,7 @@ public sealed class BillingServiceTests
     {
         public string Provider => "mercadopago";
         public string PublicKey => "public";
+        public bool SupportsPix => true;
         public ProviderSubscription? Remote;
         public int Creates;
         public string PaymentStatus = "pending";

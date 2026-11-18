@@ -71,6 +71,23 @@ Webhooks no painel Suas integrações → aplicação → Webhooks:
 
 Client ID/Client Secret de OAuth não são necessários: esta integração recebe pagamentos de uma única loja, não conecta contas de terceiros.
 
+### Particularidades do Sandbox e Pendências
+
+O token `APP_USR` de testes de **Assinaturas** pertence ao vendedor de testes e é aceito pela API de recorrência. Nos ensaios reais, a tokenização do cartão pelo Brick retornou HTTP 201, mas a autorização exigiu o e-mail exato de um comprador de testes. Nome de usuário `TESTUSER...` não substitui o e-mail. Essa confirmação depende do responsável fornecer o e-mail; não se usa uma identidade real para contornar o sandbox.
+
+A mesma credencial de testes de Assinaturas foi recusada pela Payments API para Pix com `Unauthorized use of live credentials`. Por isso, Pix fica **desativado em dev até haver credenciais compatíveis**, sem trocar silenciosamente pelo token de produção. Criar uma aplicação de Checkout Bricks/Payments API para testes e configurar:
+
+```dotenv
+MERCADOPAGO_PIX_ENABLED=true
+MERCADOPAGO_PIX_ACCESS_TOKEN=TEST-...
+MERCADOPAGO_PIX_SELLER_ID=ID_DO_TITULAR_DESTE_TOKEN
+MERCADOPAGO_PIX_WEBHOOK_SECRET=SEGREDO_DA_APLICACAO_DE_PIX
+```
+
+Habilitar o webhook de pagamentos dessa aplicação para o mesmo endpoint dev. Os campos ASP.NET Core correspondentes são `MercadoPago__PixEnabled`, `MercadoPago__PixAccessToken`, `MercadoPago__PixSellerId`, `MercadoPago__PixWebhookSecret`. No ambiente real, o adaptador usa o token e vendedor de produção já configurados; receber Pix pode exigir que a conta esteja habilitada pelo Mercado Pago. Nenhum Pix real foi pago nem cartão real foi cobrado como parte dos testes.
+
+Trocar a frequência mensal/anual não usa um update não suportado pelo provedor. O checkout solicita nova autorização com início na data final do período já pago e valida essa data no retorno. Após confirmar a nova autorização, a renovação antiga é pausada. O perfil mostra a troca agendada e permite cancelá-la; a renovação anterior permanece desativada até a usuária retomá-la explicitamente. Para segurança, a troca não é iniciada nas duas horas anteriores ao vencimento.
+
 ## Testar Sem Cobrança Real
 
 Use exclusivamente o ambiente dev e o comprador de testes criado no Mercado Pago. O cadastro de desenvolvimento não envia SMS nem e-mails reais. Use o e-mail do comprador de testes no campo do pagador se o provedor exigir uma conta de testes.

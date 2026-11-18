@@ -40,6 +40,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
     public async Task<AccountSubscription> SubmitAsync(AccountUser user, Guid id, string? token, string method, string? payerEmail, CancellationToken ct)
     {
         if (method is not ("card" or "pix")) throw new BillingException("Forma de pagamento inválida.");
+        if (method == "pix" && !gateway.SupportsPix) throw new BillingException("Pix ainda não está disponível neste ambiente. Você pode usar cartão.");
         if (method == "card" && (string.IsNullOrWhiteSpace(token) || token.Length > 256)) throw new BillingException("Token do cartão inválido.");
         await using var transaction = await LockAsync(user.Id, ct);
         var local = await OwnedAsync(user.Id, id, ct);
@@ -212,6 +213,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
                 previous.ReplacedBySubscriptionId = local.Id;
                 previous.Status = SubscriptionStatuses.Canceled;
                 previous.CanceledAt = DateTimeOffset.UtcNow;
+                local.ReplacementConfirmedAt = DateTimeOffset.UtcNow;
                 await db.SaveChangesAsync(ct);
             }
         }

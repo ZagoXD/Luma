@@ -12,6 +12,10 @@ public sealed class MercadoPagoOptions
     public string WebhookSecret { get; set; } = "";
     public string SellerId { get; set; } = "";
     public bool TestMode { get; set; } = true;
+    public bool PixEnabled { get; set; }
+    public string PixAccessToken { get; set; } = "";
+    public string PixSellerId { get; set; } = "";
+    public string PixWebhookSecret { get; set; } = "";
 }
 
 public sealed record PixDetails(string QrCode, string QrCodeBase64, DateTimeOffset? ExpiresAt);
@@ -21,8 +25,11 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     private readonly MercadoPagoOptions settings = options.Value;
     public string Provider => "mercadopago";
     public string PublicKey => settings.PublicKey;
+    public bool SupportsPix => settings.PixEnabled && (!settings.TestMode
+        || (settings.PixAccessToken.StartsWith("TEST-", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(settings.PixSellerId)));
     public bool VerifyWebhook(string resourceId, string requestId, string signature, DateTimeOffset now)
-        => MercadoPagoWebhook.Verify(settings.WebhookSecret, resourceId, requestId, signature, now);
+        => MercadoPagoWebhook.Verify(settings.WebhookSecret, resourceId, requestId, signature, now)
+            || (SupportsPix && MercadoPagoWebhook.Verify(settings.PixWebhookSecret, resourceId, requestId, signature, now));
 
     public async Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string cardToken, CancellationToken ct)
     {
@@ -43,12 +50,19 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
                 ["frequency"] = order.Plan.Months, ["frequency_type"] = "months", ["transaction_amount"] = order.Plan.Amount, ["currency_id"] = "BRL"
             }.Concat(order.StartAt is null ? [] : new Dictionary<string, object> { ["start_date"] = order.StartAt.Value.ToString("o") }).ToDictionary(pair => pair.Key, pair => pair.Value)
         }, order.Id.ToString("N"), ct);
-        return ParseSubscription(data);
+        var created = ParseSubscription(data);
+        if (order.StartAt is DateTimeOffset start && (created.StartsAt is null || created.StartsAt < start.AddMinutes(-1)))
+        {
+            await SetRenewalAsync(created.Id, false, ct);
+            throw new BillingException("O provedor não confirmou a data futura. A nova renovação foi interrompida; seu plano atual não foi alterado.");
+        }
+        return created;
     }
 
     public async Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct)
     {
-        await ValidateSellerAsync(ct);
+        if (!SupportsPix) throw new BillingException("Pix ainda não está disponível neste ambiente. Você pode usar cartão.");
+        if (!settings.TestMode) await ValidateSellerAsync(ct);
         var existing = await FindAsync(order.Id, "pix", ct);
         if (existing is not null) return existing;
         var data = await SendAsync(HttpMethod.Post, "v1/payments", new
@@ -60,13 +74,13 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             payer = new { email = order.Email, first_name = name, identification = new { type = "CPF", number = cpf } },
             metadata = new { billing_interval = order.Plan.Interval },
             date_of_expiration = DateTimeOffset.UtcNow.AddMinutes(30).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz")
-        }, order.Id.ToString("N"), ct);
+        }, order.Id.ToString("N"), ct, pix: true);
         return ParsePix(data);
     }
 
     public async Task<PixDetails> GetPixAsync(string id, CancellationToken ct)
     {
-        var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct);
+        var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true);
         ValidatePayment(payment);
         var transaction = payment.GetProperty("point_of_interaction").GetProperty("transaction_data");
         return new(Text(transaction, "qr_code"), Text(transaction, "qr_code_base64"), Date(payment, "date_of_expiration"));
@@ -74,13 +88,13 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     public async Task<ProviderSubscription> GetAsync(string id, CancellationToken ct)
         => id.StartsWith("pix:", StringComparison.Ordinal)
-            ? ParsePix(await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct))
+            ? ParsePix(await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true))
             : ParseSubscription(await SendAsync(HttpMethod.Get, "preapproval/" + Resource(id), null, null, ct));
 
     public async Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct)
     {
         var path = paymentMethod == "pix" ? "v1/payments/search" : "preapproval/search";
-        var results = await SendAsync(HttpMethod.Get, $"{path}?external_reference={reference:N}", null, null, ct);
+        var results = await SendAsync(HttpMethod.Get, $"{path}?external_reference={reference:N}", null, null, ct, pix: paymentMethod == "pix");
         if (!results.TryGetProperty("results", out var items)) return null;
         var matches = items.EnumerateArray().Where(item => Text(item, "external_reference") == reference.ToString("N")).ToArray();
         if (matches.Length > 1) throw new BillingException("Existe mais de uma cobrança para este pedido. Entre em contato com o suporte antes de tentar novamente.", true);
@@ -113,7 +127,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     {
         if (id.StartsWith("pix:", StringComparison.Ordinal))
         {
-            var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct);
+            var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true);
             ValidatePayment(payment);
             return [ParsePayment(payment, id)];
         }
@@ -145,7 +159,10 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             return Text(await SendAsync(HttpMethod.Get, "authorized_payments/" + Resource(id), null, null, ct), "preapproval_id");
         if (topic == "payment")
         {
-            var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct);
+            JsonElement payment;
+            try { payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct); }
+            catch (BillingException) when (SupportsPix && !string.IsNullOrWhiteSpace(settings.PixAccessToken))
+            { payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct, pix: true); }
             ValidatePayment(payment);
             if (Text(payment, "payment_method_id") == "pix") return "pix:" + Resource(id);
             var invoices = await SendAsync(HttpMethod.Get, "authorized_payments/search?payment_id=" + Resource(id), null, null, ct);
@@ -156,7 +173,8 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     private void ValidatePayment(JsonElement data)
     {
-        if (Text(data, "collector_id") != settings.SellerId
+        var seller = Text(data, "payment_method_id") == "pix" && !string.IsNullOrWhiteSpace(settings.PixSellerId) ? settings.PixSellerId : settings.SellerId;
+        if (Text(data, "collector_id") != seller
             || !data.TryGetProperty("live_mode", out var live) || live.GetBoolean() == settings.TestMode)
             throw new BillingException("O pagamento não pertence ao ambiente ou vendedor configurado.");
     }
@@ -175,7 +193,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             throw new BillingException("Assinatura de outro vendedor.");
         var recurring = data.GetProperty("auto_recurring");
         if (Text(recurring, "frequency_type") != "months") throw new BillingException("Frequência de cobrança incompatível.");
-        return new(Text(data, "id"), Text(data, "external_reference"), Text(data, "status"), Amount(recurring), Text(recurring, "currency_id"), recurring.GetProperty("frequency").GetInt32(), Date(data, "next_payment_date"));
+        return new(Text(data, "id"), Text(data, "external_reference"), Text(data, "status"), Amount(recurring), Text(recurring, "currency_id"), recurring.GetProperty("frequency").GetInt32(), Date(data, "next_payment_date"), Date(recurring, "start_date"));
     }
 
     private ProviderSubscription ParsePix(JsonElement payment)
@@ -191,12 +209,12 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     private static decimal Amount(JsonElement data)
         => decimal.Parse(Text(data, "transaction_amount"), System.Globalization.CultureInfo.InvariantCulture);
 
-    private async Task<JsonElement> SendAsync(HttpMethod method, string path, object? body, string? idempotency, CancellationToken ct)
+    private async Task<JsonElement> SendAsync(HttpMethod method, string path, object? body, string? idempotency, CancellationToken ct, bool pix = false)
     {
         if (string.IsNullOrWhiteSpace(settings.AccessToken) || string.IsNullOrWhiteSpace(settings.SellerId))
             throw new BillingException("Pagamentos temporariamente indisponíveis. Tente novamente mais tarde.");
         using var request = new HttpRequestMessage(method, "https://api.mercadopago.com/" + path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pix && !string.IsNullOrWhiteSpace(settings.PixAccessToken) ? settings.PixAccessToken : settings.AccessToken);
         if (idempotency is not null) request.Headers.Add("X-Idempotency-Key", idempotency);
         if (body is not null) request.Content = JsonContent.Create(body);
         using var response = await http.SendAsync(request, ct);

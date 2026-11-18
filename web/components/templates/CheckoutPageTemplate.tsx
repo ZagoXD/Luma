@@ -83,7 +83,7 @@ export function CheckoutPageTemplate({ planCode, billingInterval, replacesSubscr
           {checkout && !waiting && !pix && <>
             <div className="checkout-billing-switch" role="group" aria-label="Forma de pagamento">
               <button type="button" className={method === "card" ? "active" : ""} onClick={() => setMethod("card")}>Cartão</button>
-              {!replacesSubscriptionId && <button type="button" className={method === "pix" ? "active" : ""} onClick={() => setMethod("pix")}>Pix</button>}
+              {!replacesSubscriptionId && checkout.pixAvailable && <button type="button" className={method === "pix" ? "active" : ""} onClick={() => setMethod("pix")}>Pix</button>}
             </div>
             {method === "card" ? <PaymentCardForm publicKey={checkout.publicKey} amount={checkout.amount} email={checkout.email}
               onSubmit={async form => {

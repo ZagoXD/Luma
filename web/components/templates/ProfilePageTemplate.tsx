@@ -399,7 +399,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
             ) : (
               <>
                 <p>Você ainda não tem um plano ativo. Escolha um plano para liberar a Luma no WhatsApp.</p>
-                {profile?.pendingCheckout && <p className="account-status info">Existe um pagamento aguardando confirmação. <Link href={`/checkout/${profile.pendingCheckout.planCode}?billing=${profile.pendingCheckout.billingInterval}`}>Acompanhar pagamento</Link></p>}
+                {profile?.pendingCheckout && <p className="account-status info">Existe um pagamento aguardando confirmação. <Link href={`/checkout/${profile.pendingCheckout.planCode}?billing=${profile.pendingCheckout.billingInterval}${profile.pendingCheckout.replacesSubscriptionId ? `&replace=${profile.pendingCheckout.replacesSubscriptionId}` : ""}`}>Acompanhar pagamento</Link></p>}
                 <div className="profile-plan-actions">
                   <Link className="account-primary as-link" href="/checkout/basico?billing=annual">Básico anual</Link>
                   <Link className="account-secondary billing-button" href="/checkout/basico?billing=monthly">Básico mensal</Link>

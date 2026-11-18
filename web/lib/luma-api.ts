@@ -55,7 +55,7 @@ export type MenstrualSummary = {
 export type AccountProfile = {
   user: AccountUser;
   subscription?: AccountSubscription | null;
-  pendingCheckout?: { id: string; planCode: PlanCode; billingInterval: BillingInterval; startsAt: string; scheduled?: boolean } | null;
+  pendingCheckout?: { id: string; planCode: PlanCode; billingInterval: BillingInterval; startsAt: string; replacesSubscriptionId?: string; scheduled?: boolean } | null;
   menstrual?: MenstrualSummary | null;
 };
 

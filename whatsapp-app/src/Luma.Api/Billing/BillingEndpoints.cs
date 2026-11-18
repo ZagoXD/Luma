@@ -31,7 +31,7 @@ public static class BillingEndpoints
                 ? await gateway.GetPixAsync(local.ProviderSubscriptionId, ct) : null;
             return Results.Ok(new { provider = gateway.Provider, publicKey = gateway.PublicKey, checkoutId = local.Id,
                 amount = BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount, email = user.Email,
-                submitted = local.PaymentAttemptedAt is not null, pix, scheduled = local.ReplacesSubscriptionId != null && local.ProviderSubscriptionId != null, startsAt = local.StartsAt });
+                submitted = local.PaymentAttemptedAt is not null, pix, pixAvailable = gateway.SupportsPix, scheduled = local.ReplacementConfirmedAt != null, startsAt = local.StartsAt });
         });
 
         group.MapPost("/checkout/confirm-subscription", async (HttpRequest http, PaymentRequest input, LumaDbContext db,
@@ -122,7 +122,7 @@ public static class BillingEndpoints
         subscription.BillingInterval, billingLabel = subscription.BillingInterval == "annual" ? "Anual" : "Mensal",
         subscription.Status, subscription.StartsAt, subscription.CurrentPeriodEndsAt, subscription.CanceledAt,
         subscription.PaymentMethod, subscription.PendingPlanCode, subscription.PendingBillingInterval,
-        scheduled = subscription.ReplacesSubscriptionId != null && subscription.ProviderSubscriptionId != null && subscription.StartsAt > DateTimeOffset.UtcNow,
+        scheduled = subscription.ReplacementConfirmedAt != null && subscription.StartsAt > DateTimeOffset.UtcNow,
         canManage = subscription.BillingProvider == "mercadopago" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
     };
 }
