@@ -27,7 +27,7 @@ public static class BillingCatalog
 
 public sealed record ProviderSubscription(string Id, string Reference, string Status, decimal Amount, string Currency, int Months, DateTimeOffset? NextPaymentAt);
 public sealed record ProviderPayment(string Id, string SubscriptionId, string Status, decimal Amount, string Currency, DateTimeOffset ApprovedAt);
-public sealed record SubscriptionOrder(Guid Id, string Email, BillingPlan Plan, string ReturnUrl);
+public sealed record SubscriptionOrder(Guid Id, string Email, BillingPlan Plan, string ReturnUrl, DateTimeOffset? StartAt = null);
 
 // The application accepts only a single-use token. PAN, expiration and CVV never enter these contracts.
 public interface ISubscriptionGateway

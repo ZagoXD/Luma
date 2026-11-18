@@ -9,6 +9,8 @@ public static class BillingSchema
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "BillingProvider" varchar(32) NOT NULL DEFAULT 'legacy';
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PaymentMethod" varchar(16) NOT NULL DEFAULT 'card';
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PaymentAttemptedAt" timestamptz;
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ReplacesSubscriptionId" uuid;
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ReplacedBySubscriptionId" uuid;
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingPlanCode" varchar(32);
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingBillingInterval" varchar(32);
 CREATE TABLE IF NOT EXISTS billing_payments (

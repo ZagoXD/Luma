@@ -350,9 +350,11 @@ nav .nav-cta:focus {
 .form-row { grid-template-columns: 1fr 0.7fr; }
 
 .checkout-grid {
-  grid-template-columns: 0.85fr 1.15fr;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   align-items: start;
 }
+
+.checkout-grid > * { min-width: 0; }
 
 .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
@@ -680,10 +682,8 @@ nav .nav-cta:focus {
 }
 
 .payment-element-shell {
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  padding: 1rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .checkout-pix { display: grid; gap: 16px; justify-items: start; min-width: 0; }
@@ -763,7 +763,7 @@ nav .nav-cta:focus {
   .profile-grid,
   .form-row,
   .profile-plan-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .profile-topbar { align-items: flex-start; }

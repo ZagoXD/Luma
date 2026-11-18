@@ -23,7 +23,7 @@ O frontend mantém atomic design. `PaymentCardForm`, em organisms, encapsula o C
 
 O anual equivale a R$ 5,90 ou R$ 9,90 por mês; não significa doze parcelas. Não foram criados produtos no painel: a assinatura sem plano associado recebe o preço validado pela API.
 
-Cartão: autorização de recorrência via `/preapproval`, frequência de um ou doze meses. Autorização não prova pagamento. O acesso só é concedido após leitura de pagamento aprovado, com valor e moeda esperados. A cobrança inicial pode ser assíncrona; a tela informa que está aguardando confirmação.
+Cartão: autorização de recorrência via `/preapproval`, frequência de um ou doze meses. Autorização não prova pagamento. O acesso só é concedido após leitura de pagamento aprovado, com valor e moeda esperados. A primeira cobrança é assíncrona e, segundo a documentação do provedor, ocorre aproximadamente uma hora depois da assinatura; a tela informa que está aguardando confirmação, o webhook e a reconciliação podem concluir o acesso mesmo após a usuária fechar a página.
 
 Pix: pagamento de um período via `/v1/payments`, com QR Code/Copia e Cola e validade de 30 minutos. Não é Pix Automático, não cobra novamente e não cria uma falsa recorrência. Depois do período pago, a usuária faz nova compra.
 

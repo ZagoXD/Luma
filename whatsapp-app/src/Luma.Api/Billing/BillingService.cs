@@ -9,21 +9,27 @@ namespace Luma.Api.Billing;
 public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gateway, IConfiguration configuration,
     IEmailService emails, ILogger<BillingService> logger)
 {
-    public async Task<AccountSubscription> PrepareAsync(AccountUser user, string planCode, string interval, CancellationToken ct)
+    public async Task<AccountSubscription> PrepareAsync(AccountUser user, string planCode, string interval, CancellationToken ct, Guid? replaces = null)
     {
         BillingCatalog.Get(planCode, interval);
         if (user.PhoneVerifiedAt is null) throw new BillingException("Confirme seu celular antes de contratar um plano.");
         await using var transaction = await LockAsync(user.Id, ct);
-        if (await db.AccountSubscriptions.AnyAsync(s => s.AccountUserId == user.Id && s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow
-            && (s.Status == SubscriptionStatuses.Active || s.Status == SubscriptionStatuses.Canceled), ct))
-            throw new BillingException("Você já possui acesso. Gerencie sua assinatura no perfil para evitar cobranças duplicadas.");
         var pending = await db.AccountSubscriptions.FirstOrDefaultAsync(s => s.AccountUserId == user.Id
             && s.BillingProvider == gateway.Provider && s.Status == SubscriptionStatuses.Pending
-            && s.PlanCode == planCode && s.BillingInterval == interval, ct);
+            && s.PlanCode == planCode && s.BillingInterval == interval && s.ReplacesSubscriptionId == replaces, ct);
+        var current = await db.AccountSubscriptions.Where(s => s.AccountUserId == user.Id && s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow
+            && (s.Status == SubscriptionStatuses.Active || s.Status == SubscriptionStatuses.Canceled)).OrderByDescending(s => s.CurrentPeriodEndsAt).FirstOrDefaultAsync(ct);
+        if (current is not null && current.Id != replaces)
+            throw new BillingException("Você já possui acesso. Gerencie sua assinatura no perfil para evitar cobranças duplicadas.");
+        if (replaces is not null && (current is null || current.Id != replaces || (current.ReplacedBySubscriptionId is not null && current.ReplacedBySubscriptionId != pending?.Id)
+            || current.BillingProvider != gateway.Provider || current.PaymentMethod != "card" || current.CurrentPeriodEndsAt <= DateTimeOffset.UtcNow.AddHours(2)))
+            throw new BillingException("Não foi possível agendar essa troca. Consulte seu perfil ou entre em contato com o suporte.");
         if (pending is null)
         {
             pending = new() { AccountUserId = user.Id, PhoneNumber = user.PhoneNumber, PlanCode = planCode, BillingInterval = interval,
                 BillingProvider = gateway.Provider, Status = SubscriptionStatuses.Pending, CurrentPeriodEndsAt = DateTimeOffset.UtcNow };
+            pending.ReplacesSubscriptionId = replaces;
+            if (current is not null) pending.StartsAt = current.CurrentPeriodEndsAt;
             db.AccountSubscriptions.Add(pending);
             await db.SaveChangesAsync(ct);
         }
@@ -38,8 +44,10 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         await using var transaction = await LockAsync(user.Id, ct);
         var local = await OwnedAsync(user.Id, id, ct);
         if (local.Status != SubscriptionStatuses.Pending) return local;
+        if (local.ReplacesSubscriptionId is not null && method != "card")
+            throw new BillingException("A troca da recorrência requer uma nova autorização de cartão. Pix pode ser contratado ao fim do período pago.");
         if (await db.AccountSubscriptions.AnyAsync(s => s.AccountUserId == user.Id && s.Id != id
-            && ((s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow && (s.Status == SubscriptionStatuses.Active || s.Status == SubscriptionStatuses.Canceled))
+            && ((s.Id != local.ReplacesSubscriptionId && s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow && (s.Status == SubscriptionStatuses.Active || s.Status == SubscriptionStatuses.Canceled))
                 || (s.Status == SubscriptionStatuses.Pending && s.PaymentAttemptedAt != null)), ct))
             throw new BillingException("Você já possui acesso. Consulte seu perfil antes de fazer uma nova compra.");
         if (local.PaymentAttemptedAt is not null && local.PaymentMethod != method)
@@ -50,7 +58,8 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
             var email = string.IsNullOrWhiteSpace(payerEmail) ? user.Email : payerEmail.Trim();
             if (!System.Net.Mail.MailAddress.TryCreate(email, out var address) || address.Address != email || email.Length > 254)
                 throw new BillingException("E-mail do pagador inválido.");
-            var order = new SubscriptionOrder(local.Id, email, BillingCatalog.Get(local.PlanCode, local.BillingInterval), returnUrl);
+            var order = new SubscriptionOrder(local.Id, email, BillingCatalog.Get(local.PlanCode, local.BillingInterval), returnUrl,
+                local.ReplacesSubscriptionId is not null ? local.StartsAt : null);
             local.PaymentAttemptedAt ??= DateTimeOffset.UtcNow;
             local.PaymentMethod = method;
             await db.SaveChangesAsync(ct);
@@ -106,6 +115,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
     {
         await using var transaction = await LockAsync(userId, ct);
         var local = await CurrentAsync(userId, ct);
+        if (local.ReplacedBySubscriptionId is not null) throw new BillingException("Existe uma troca agendada. Cancele a troca antes de alterar a renovação atual.");
         if (local.PaymentMethod != "card") throw new BillingException("O Pix não possui renovação automática. Uma nova compra pode ser feita ao fim do acesso.");
         await gateway.SetRenewalAsync(local.ProviderSubscriptionId!, enabled, ct);
         local.Status = enabled ? SubscriptionStatuses.Active : SubscriptionStatuses.Canceled;
@@ -121,6 +131,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         var plan = BillingCatalog.Get(code, interval);
         await using var transaction = await LockAsync(userId, ct);
         var local = await CurrentAsync(userId, ct);
+        if (interval != local.BillingInterval) throw new BillingException("A troca entre mensal e anual exige uma nova autorização no checkout.");
         if (local.PaymentMethod != "card" || local.Status != SubscriptionStatuses.Active)
             throw new BillingException("Retome a renovação antes de alterar o plano. No Pix, escolha o novo plano ao renovar.");
         // Keep the paid entitlement unchanged; the new tier is granted only when its renewal is paid.
@@ -155,6 +166,21 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         if (transaction is not null) await transaction.CommitAsync(ct);
     }
 
+    public async Task CancelScheduledAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        await using var transaction = await LockAsync(userId, ct);
+        var scheduled = await OwnedAsync(userId, id, ct);
+        if (scheduled.ReplacesSubscriptionId is not Guid previousId || scheduled.StartsAt <= DateTimeOffset.UtcNow
+            || scheduled.ProviderSubscriptionId is null || scheduled.Status != "pending")
+            throw new BillingException("Nenhuma troca futura disponível para cancelar.");
+        await gateway.SetRenewalAsync(scheduled.ProviderSubscriptionId, false, ct);
+        scheduled.Status = "failed";
+        var previous = await db.AccountSubscriptions.SingleAsync(s => s.Id == previousId && s.AccountUserId == userId, ct);
+        previous.ReplacedBySubscriptionId = null;
+        await db.SaveChangesAsync(ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
+    }
+
     public async Task ReceiveAsync(string topic, string resourceId, CancellationToken ct)
     {
         var remoteId = await gateway.ResolveSubscriptionAsync(topic, resourceId, ct);
@@ -176,6 +202,19 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
     private async Task SyncAsync(AccountSubscription local, CancellationToken ct)
     {
         var remote = await gateway.GetAsync(local.ProviderSubscriptionId!, ct);
+        if (local.ReplacesSubscriptionId is Guid previousId && remote.Status == "authorized")
+        {
+            var previous = await db.AccountSubscriptions.SingleAsync(s => s.Id == previousId && s.AccountUserId == local.AccountUserId, ct);
+            if (previous.ReplacedBySubscriptionId != local.Id)
+            {
+                if (previous.ProviderSubscriptionId is null) throw new BillingException("Assinatura anterior inválida.");
+                await gateway.SetRenewalAsync(previous.ProviderSubscriptionId, false, ct);
+                previous.ReplacedBySubscriptionId = local.Id;
+                previous.Status = SubscriptionStatuses.Canceled;
+                previous.CanceledAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
         var effective = local;
         if (local.PendingPlanCode is not null && local.PendingBillingInterval is not null)
             effective = new() { Id = local.Id, PlanCode = local.PendingPlanCode, BillingInterval = local.PendingBillingInterval };
@@ -192,7 +231,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
                 continue;
             }
             if (!BillingPolicy.IsPaid(effective, remote, payment) || payment.ApprovedAt > DateTimeOffset.UtcNow.AddMinutes(5)
-                || payment.ApprovedAt < local.CreatedAt.AddMinutes(-5)) continue;
+                || payment.ApprovedAt < local.StartsAt.AddMinutes(-5)) continue;
             var plan = BillingCatalog.Get(effective.PlanCode, effective.BillingInterval);
             db.BillingPayments.Add(new() { Id = key, AccountSubscriptionId = local.Id, Status = payment.Status,
                 Amount = payment.Amount, Currency = payment.Currency, ApprovedAt = payment.ApprovedAt, PeriodEndsAt = plan.PeriodEnd(payment.ApprovedAt) });
@@ -211,7 +250,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
                 ? SubscriptionStatuses.Canceled : SubscriptionStatuses.Active;
             local.CanceledAt = local.Status == SubscriptionStatuses.Canceled ? local.CanceledAt ?? DateTimeOffset.UtcNow : null;
         }
-        else local.Status = remote.Status is "cancelled" or "canceled" or "rejected" ? "failed" : SubscriptionStatuses.Pending;
+        else local.Status = remote.Status is "cancelled" or "canceled" or "rejected" || local.Status == "failed" ? "failed" : SubscriptionStatuses.Pending;
         local.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         if (wasPending && end > DateTimeOffset.UtcNow)

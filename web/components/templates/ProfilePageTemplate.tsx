@@ -19,6 +19,7 @@ import {
 import { PaymentCardForm } from "@/components/organisms/PaymentCardForm";
 import {
   cancelSubscription,
+  cancelScheduledSubscription,
   changeSubscriptionPlan,
   getPaymentMethodConfiguration, confirmPaymentMethod,
   getBillingTransactions,
@@ -140,6 +141,11 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
   }
 
   async function handleChangePlan(planCode: PlanCode, billingInterval?: BillingInterval) {
+    const current = profile?.subscription;
+    if (current && billingInterval && billingInterval !== current.billingInterval) {
+      router.push(`/checkout/${planCode}?billing=${billingInterval}&replace=${current.id}`);
+      return;
+    }
     setStatus("");
     const actionKey = `plan-${planCode}-${billingInterval || "same"}`;
     setBillingAction(actionKey);
@@ -152,6 +158,17 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
     } finally {
       setBillingAction("");
     }
+  }
+
+  async function handleCancelScheduled() {
+    if (!profile?.pendingCheckout) return;
+    setBillingAction("scheduled");
+    try {
+      await cancelScheduledSubscription(profile.pendingCheckout.id);
+      setProfile(await getAccountProfile());
+      setStatus("Troca cancelada. Seu acesso atual permanece até o fim do período pago. A renovação antiga continua desativada; você pode retomá-la no perfil.");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Não consegui cancelar a troca."); }
+    finally { setBillingAction(""); }
   }
 
   async function handleStartPaymentMethodUpdate() {
@@ -321,10 +338,14 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
             {subscription && plan ? (
               <>
                 <p className="plan-pill">{plan.name} - {getPlanPrice(subscription.planCode, subscription.billingInterval)}</p>
+                {profile?.pendingCheckout?.scheduled && <div className="account-status info">
+                  <p>Troca para {plans[profile.pendingCheckout.planCode].name} {formatBillingIntervalName(profile.pendingCheckout.billingInterval)} agendada para {formatDate(profile.pendingCheckout.startsAt)}, após confirmação da cobrança.</p>
+                  <button type="button" className="account-secondary" onClick={handleCancelScheduled} disabled={billingAction === "scheduled"}>Cancelar troca agendada</button>
+                </div>}
                 {subscription.pendingPlanCode && <p>Próxima renovação: {getPlanPrice(subscription.pendingPlanCode, subscription.pendingBillingInterval || subscription.billingInterval)} no plano {plans[subscription.pendingPlanCode].name}.</p>}
                 {subscription.paymentMethod === "pix" && <p>Pago com Pix. Seu acesso não possui renovação automática.</p>}
                 <dl className="profile-list">
-                  <div><dt>Status</dt><dd>{formatSubscriptionStatus(subscription.status)}</dd></div>
+                  <div><dt>Status</dt><dd>{subscription.paymentMethod === "pix" ? "Ativo, sem renovação automática" : formatSubscriptionStatus(subscription.status)}</dd></div>
                   <div><dt>Cobrança</dt><dd>{subscription.billingLabel}</dd></div>
                   <div><dt>Acesso até</dt><dd>{formatDate(subscription.currentPeriodEndsAt)}</dd></div>
                 </dl>
@@ -332,11 +353,11 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
                   {subscription.status === "canceled" ? (
                     <button className="account-primary" type="button" onClick={handleResume} disabled={billingAction === "resume"}>
                       <RefreshCcw size={16} />
-                      {billingAction === "resume" ? "Retomando..." : "Retomar assinatura"}
+                      {billingAction === "resume" ? "Retomando..." : "Retomar renovação"}
                     </button>
                   ) : (
                     <button className="account-secondary danger" type="button" onClick={handleCancel} disabled={canceling}>
-                      {canceling ? "Cancelando..." : "Cancelar assinatura"}
+                      {canceling ? "Cancelando..." : "Cancelar renovação"}
                     </button>
                   )}
                   {nextPlanCode && (

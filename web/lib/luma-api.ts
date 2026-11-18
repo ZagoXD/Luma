@@ -20,6 +20,7 @@ export type AccountSubscription = {
   status: "active" | "canceled" | "pending";
   paymentMethod: "card" | "pix";
   canManage: boolean;
+  scheduled?: boolean;
   pendingPlanCode?: PlanCode | null;
   pendingBillingInterval?: BillingInterval | null;
   startsAt: string;
@@ -54,7 +55,7 @@ export type MenstrualSummary = {
 export type AccountProfile = {
   user: AccountUser;
   subscription?: AccountSubscription | null;
-  pendingCheckout?: { id: string; planCode: PlanCode; billingInterval: BillingInterval } | null;
+  pendingCheckout?: { id: string; planCode: PlanCode; billingInterval: BillingInterval; startsAt: string; scheduled?: boolean } | null;
   menstrual?: MenstrualSummary | null;
 };
 
@@ -230,8 +231,11 @@ export async function getAccountCalendar(month: string) {
   return appRequest<CycleCalendar>(`/api/account/calendar?month=${encodeURIComponent(month)}`);
 }
 
-export async function prepareCheckout(input: { planCode: PlanCode; billingInterval: BillingInterval }) {
+export async function prepareCheckout(input: { planCode: PlanCode; billingInterval: BillingInterval; replacesSubscriptionId?: string }) {
   return appRequest<import("./billing").CheckoutConfiguration>("/api/checkout/create-subscription", { method: "POST", body: JSON.stringify(input) });
+}
+export async function cancelScheduledSubscription(id: string) {
+  return appRequest<{ ok: true }>("/api/account/subscription/scheduled/cancel", { method: "POST", body: JSON.stringify({ id }) });
 }
 export async function submitCheckout(input: { checkoutId: string; paymentToken?: string; paymentMethod: "card" | "pix"; payerEmail?: string }) {
   return appRequest<{ subscription: AccountSubscription; pix?: PixDetails }>("/api/checkout/confirm-subscription", { method: "POST", body: JSON.stringify(input) });

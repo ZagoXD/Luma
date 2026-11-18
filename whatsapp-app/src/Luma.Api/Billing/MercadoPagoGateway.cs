@@ -38,7 +38,10 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             card_token_id = cardToken,
             back_url = order.ReturnUrl,
             status = "authorized",
-            auto_recurring = new { frequency = order.Plan.Months, frequency_type = "months", transaction_amount = order.Plan.Amount, currency_id = "BRL" }
+            auto_recurring = new Dictionary<string, object>
+            {
+                ["frequency"] = order.Plan.Months, ["frequency_type"] = "months", ["transaction_amount"] = order.Plan.Amount, ["currency_id"] = "BRL"
+            }.Concat(order.StartAt is null ? [] : new Dictionary<string, object> { ["start_date"] = order.StartAt.Value.ToString("o") }).ToDictionary(pair => pair.Key, pair => pair.Value)
         }, order.Id.ToString("N"), ct);
         return ParseSubscription(data);
     }
@@ -96,7 +99,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
         var response = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new
         {
             reason = plan.Name,
-            auto_recurring = new { transaction_amount = plan.Amount, currency_id = "BRL", frequency = plan.Months, frequency_type = "months" }
+            auto_recurring = new { transaction_amount = plan.Amount, currency_id = "BRL" }
         }, null, ct);
         var remote = ParseSubscription(response);
         if (remote.Amount != plan.Amount || remote.Months != plan.Months || remote.Currency != "BRL")

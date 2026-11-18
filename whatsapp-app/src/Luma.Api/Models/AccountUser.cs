@@ -63,6 +63,8 @@ public sealed class AccountSubscription
     public string? ProviderPlanId { get; set; }
     public string PaymentMethod { get; set; } = "card";
     public DateTimeOffset? PaymentAttemptedAt { get; set; }
+    public Guid? ReplacesSubscriptionId { get; set; }
+    public Guid? ReplacedBySubscriptionId { get; set; }
     public string? PendingPlanCode { get; set; }
     public string? PendingBillingInterval { get; set; }
     public DateTimeOffset StartsAt { get; set; } = DateTimeOffset.UtcNow;

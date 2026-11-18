@@ -26,12 +26,12 @@ public static class BillingEndpoints
             if (user is null) return Results.Unauthorized();
             if (string.IsNullOrWhiteSpace(gateway.PublicKey) || string.IsNullOrWhiteSpace(options.Value.WebhookSecret))
                 return Results.Json(new { message = "O checkout está temporariamente indisponível." }, statusCode: 503);
-            var local = await billing.PrepareAsync(user, input.PlanCode, input.BillingInterval, ct);
+            var local = await billing.PrepareAsync(user, input.PlanCode, input.BillingInterval, ct, input.ReplacesSubscriptionId);
             var pix = local.PaymentMethod == "pix" && local.ProviderSubscriptionId is not null
                 ? await gateway.GetPixAsync(local.ProviderSubscriptionId, ct) : null;
             return Results.Ok(new { provider = gateway.Provider, publicKey = gateway.PublicKey, checkoutId = local.Id,
                 amount = BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount, email = user.Email,
-                submitted = local.PaymentAttemptedAt is not null, pix });
+                submitted = local.PaymentAttemptedAt is not null, pix, scheduled = local.ReplacesSubscriptionId != null && local.ProviderSubscriptionId != null, startsAt = local.StartsAt });
         });
 
         group.MapPost("/checkout/confirm-subscription", async (HttpRequest http, PaymentRequest input, LumaDbContext db,
@@ -65,6 +65,13 @@ public static class BillingEndpoints
         {
             var user = await authenticate(http, db);
             return user is null ? Results.Unauthorized() : Results.Ok(new { subscription = View(await billing.ChangePlanAsync(user.Id, input.PlanCode, input.BillingInterval, ct)) });
+        });
+        group.MapPost("/account/subscription/scheduled/cancel", async (HttpRequest http, ScheduledRequest input, LumaDbContext db, BillingService billing, CancellationToken ct) =>
+        {
+            var user = await authenticate(http, db);
+            if (user is null) return Results.Unauthorized();
+            await billing.CancelScheduledAsync(user.Id, input.Id, ct);
+            return Results.Ok(new { ok = true });
         });
         group.MapGet("/account/payment-method/config", async (HttpRequest http, LumaDbContext db, ISubscriptionGateway gateway) =>
         {
@@ -115,13 +122,16 @@ public static class BillingEndpoints
         subscription.BillingInterval, billingLabel = subscription.BillingInterval == "annual" ? "Anual" : "Mensal",
         subscription.Status, subscription.StartsAt, subscription.CurrentPeriodEndsAt, subscription.CanceledAt,
         subscription.PaymentMethod, subscription.PendingPlanCode, subscription.PendingBillingInterval,
-        canManage = subscription.BillingProvider == "mercadopago" && subscription.PaymentMethod == "card"
+        scheduled = subscription.ReplacesSubscriptionId != null && subscription.ProviderSubscriptionId != null && subscription.StartsAt > DateTimeOffset.UtcNow,
+        canManage = subscription.BillingProvider == "mercadopago" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
     };
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record CheckoutRequest(string PlanCode, string BillingInterval);
+public sealed record CheckoutRequest(string PlanCode, string BillingInterval, Guid? ReplacesSubscriptionId = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentRequest(Guid CheckoutId, string? PaymentToken, string PaymentMethod, string? PayerEmail);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CardRequest(string PaymentToken);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ScheduledRequest(Guid Id);

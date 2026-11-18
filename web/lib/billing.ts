@@ -5,6 +5,8 @@ export type CheckoutConfiguration = {
   amount: number;
   email: string;
   submitted?: boolean;
+  scheduled?: boolean;
+  startsAt?: string;
   pix?: { qrCode: string; qrCodeBase64: string; expiresAt?: string };
 };
 

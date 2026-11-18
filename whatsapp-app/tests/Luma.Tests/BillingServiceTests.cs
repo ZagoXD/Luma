@@ -136,11 +136,25 @@ public sealed class BillingServiceTests
         var pending = await Prepare();
         gateway.PaymentStatus = "approved";
         await Service.SubmitAsync(account, pending.Id, "token", "card", null, default);
-        await Service.ChangePlanAsync(account.Id, "basico", "monthly", default);
+        await Service.ChangePlanAsync(account.Id, "basico", "annual", default);
         Assert.Equal("essencial", pending.PlanCode);
         Assert.Equal("basico", pending.PendingPlanCode);
         await Service.RefreshAsync(account.Id, pending.Id, default);
         Assert.Equal("essencial", pending.PlanCode);
+    }
+
+    [Fact]
+    public async Task ChangingFrequencyRequiresNewAuthorizationRatherThanAnUnsupportedUpdate()
+    {
+        var pending = await Prepare();
+        gateway.PaymentStatus = "approved";
+        await Service.SubmitAsync(account, pending.Id, "token", "card", null, default);
+        await Assert.ThrowsAsync<BillingException>(() => Service.ChangePlanAsync(account.Id, "essencial", "monthly", default));
+        var replacement = await Service.PrepareAsync(account, "essencial", "monthly", default, pending.Id);
+        Assert.Equal(pending.CurrentPeriodEndsAt, replacement.StartsAt);
+        Assert.Equal(pending.Id, replacement.ReplacesSubscriptionId);
+        Assert.Equal("active", pending.Status);
+        Assert.Equal(1, gateway.Creates);
     }
 
     [Fact]
