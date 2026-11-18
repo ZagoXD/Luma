@@ -14,5 +14,5 @@ export default async function CheckoutPlanPage({ params, searchParams }: Checkou
     notFound();
   }
 
-  return <CheckoutPageTemplate planCode={plan as PlanCode} billingInterval={getBillingInterval(billing)} />;
+  return <CheckoutPageTemplate key={`${plan}-${getBillingInterval(billing)}`} planCode={plan as PlanCode} billingInterval={getBillingInterval(billing)} />;
 }

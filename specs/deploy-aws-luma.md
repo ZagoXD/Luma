@@ -8,12 +8,12 @@ Uma EC2 `t3.small` executa dev e produção para conter o custo inicial. CPU usa
 
 Cada ambiente tem seus próprios containers de API, web, PostgreSQL com pgvector, Redis, volumes, rede de dados, JWT e segredos. PostgreSQL e Redis não publicam portas. A instância também não tem portas de entrada abertas: administração por SSM, tráfego HTTPS por Cloudflare Tunnel.
 
-| Ambiente | Site e webhook WhatsApp | Stripe | Número WhatsApp |
+| Ambiente | Site e webhook WhatsApp | Mercado Pago | Número WhatsApp |
 | --- | --- | --- | --- |
 | Dev | `https://dev.ia-luma.com.br` | Testes | Sandbox `+14155238886` |
 | Produção | `https://ia-luma.com.br` | Live | `+16204008668` |
 
-A API de produção usa `https://api.ia-luma.com.br`. O webhook Stripe é `/webhooks/stripe`; o webhook Twilio é `/webhooks/twilio/whatsapp`. No host dev, `/health` consulta a API e `/deployment` informa o commit instalado, sem credenciais. A mesma convenção existe no site de produção.
+A API de produção usa `https://api.ia-luma.com.br`. O webhook Mercado Pago é `/webhooks/mercadopago`; o webhook Twilio é `/webhooks/twilio/whatsapp`. No host dev, `/health` consulta a API e `/deployment` informa o commit instalado, sem credenciais. A mesma convenção existe no site de produção.
 
 ## Preservação do ambiente local
 
@@ -37,7 +37,7 @@ Os dados que forem gravados na AWS depois da migração não retornam automatica
 
 As credenciais OpenAI podem ser iguais nos dois ambientes; a memória conversacional e os dados pessoais não são compartilhados. O RAG é copiado com os vetores existentes. `Rag__AllowEmbeddingGeneration=false` impede geração automática de embeddings na inicialização; se o acervo mudar, deve existir um processo explícito de atualização antes do deploy.
 
-Notificações usam worker de produção e templates aprovados; dev e Docker local mantêm o worker desativado. Consulte [Notificações e R2](notificacoes-r2-operacao.md) para horários, retentativas e callbacks. A configuração da Stripe é separada por ambiente; nenhuma chave live é aceita em dev pelo serviço de deploy.
+Notificações usam worker de produção e templates aprovados; dev e Docker local mantêm o worker desativado. Consulte [Notificações e R2](notificacoes-r2-operacao.md) para horários, retentativas e callbacks. A configuração da Mercado Pago é separada por ambiente; nenhuma chave live é aceita em dev pelo serviço de deploy.
 
 ## CI e deploy
 

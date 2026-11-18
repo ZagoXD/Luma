@@ -12,7 +12,7 @@ public sealed class AccountUser
     public string PhoneNumber { get; set; } = string.Empty;
     public string PhoneHash { get; set; } = string.Empty;
     public DateTimeOffset? PhoneVerifiedAt { get; set; }
-    public string? StripeCustomerId { get; set; }
+    public string? BillingCustomerId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -57,9 +57,14 @@ public sealed class AccountSubscription
     public string PhoneHash { get; set; } = string.Empty;
     public string PlanCode { get; set; } = string.Empty;
     public string BillingInterval { get; set; } = "monthly";
-    public string Status { get; set; } = SubscriptionStatuses.Active;
-    public string? StripeSubscriptionId { get; set; }
-    public string? StripePriceId { get; set; }
+    public string Status { get; set; } = SubscriptionStatuses.Pending;
+    public string BillingProvider { get; set; } = "legacy";
+    public string? ProviderSubscriptionId { get; set; }
+    public string? ProviderPlanId { get; set; }
+    public string PaymentMethod { get; set; } = "card";
+    public DateTimeOffset? PaymentAttemptedAt { get; set; }
+    public string? PendingPlanCode { get; set; }
+    public string? PendingBillingInterval { get; set; }
     public DateTimeOffset StartsAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset CurrentPeriodEndsAt { get; set; } = DateTimeOffset.UtcNow.AddDays(30);
     public DateTimeOffset? CanceledAt { get; set; }
@@ -67,6 +72,17 @@ public sealed class AccountSubscription
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public AccountUser? AccountUser { get; set; }
+}
+
+public sealed class BillingPayment
+{
+    public string Id { get; set; } = string.Empty;
+    public Guid AccountSubscriptionId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Currency { get; set; } = "BRL";
+    public DateTimeOffset ApprovedAt { get; set; }
+    public DateTimeOffset PeriodEndsAt { get; set; }
 }
 
 public static class SubscriptionStatuses

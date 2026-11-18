@@ -151,7 +151,7 @@ Conteúdo sugerido:
 <p>Com carinho,<br />Equipe Luma</p>
 ```
 
-O envio deve ocorrer apenas após confirmação real da assinatura no backend, preferencialmente após evento confiável do Stripe ou ponto já consolidado do fluxo de assinatura.
+O envio deve ocorrer apenas após confirmação real da assinatura no backend, preferencialmente após evento confiável do Mercado Pago ou ponto já consolidado do fluxo de assinatura.
 
 ---
 
@@ -316,7 +316,7 @@ Enviar quando o backend tiver certeza de que a assinatura foi criada/ativada com
 
 Possíveis pontos de disparo:
 
-- Após processamento de webhook confiável do Stripe.
+- Após processamento de webhook confiável do Mercado Pago.
 - Após atualização interna do status da assinatura para ativo.
 
 Evitar envio apenas com base em uma navegação do frontend, para não disparar e-mails sem confirmação real.

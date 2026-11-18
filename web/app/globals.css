@@ -675,16 +675,21 @@ nav .nav-cta:focus {
   letter-spacing: 0.06em;
 }
 
-.stripe-payment-form {
+.payment-form {
   margin-top: 1rem;
 }
 
-.stripe-element-shell {
+.payment-element-shell {
   border: 1.5px solid var(--border);
   border-radius: 8px;
   background: #fff;
   padding: 1rem;
 }
+
+.checkout-pix { display: grid; gap: 16px; justify-items: start; min-width: 0; }
+.checkout-pix img { max-width: 100%; height: auto; }
+.checkout-pix label { display: grid; gap: 8px; width: 100%; min-width: 0; }
+.checkout-pix textarea { width: 100%; box-sizing: border-box; min-height: 100px; resize: vertical; overflow-wrap: anywhere; }
 
 .notification-card {
   grid-column: 1 / -1;

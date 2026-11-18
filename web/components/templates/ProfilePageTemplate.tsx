@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,13 +16,11 @@ import {
   Save,
   User,
 } from "lucide-react";
-import { Elements } from "@stripe/react-stripe-js";
-import { loadStripe, type StripeElementsOptions } from "@stripe/stripe-js";
-import { StripePaymentMethodForm } from "@/components/organisms/StripePaymentMethodForm";
+import { PaymentCardForm } from "@/components/organisms/PaymentCardForm";
 import {
   cancelSubscription,
   changeSubscriptionPlan,
-  createPaymentMethodSetupIntent,
+  getPaymentMethodConfiguration, confirmPaymentMethod,
   getBillingTransactions,
   getAccountProfile,
   getNotificationPreferences,
@@ -71,18 +69,11 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
   const [canceling, setCanceling] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [billingAction, setBillingAction] = useState("");
-  const [setupClientSecret, setSetupClientSecret] = useState("");
-  const [setupIntentId, setSetupIntentId] = useState("");
-  const [setupPublishableKey, setSetupPublishableKey] = useState("");
+  const [cardConfig, setCardConfig] = useState<{ publicKey: string; email: string; amount: number }>();
   const [editingPhone, setEditingPhone] = useState(false);
   const [newPhoneNumber, setNewPhoneNumber] = useState("");
   const [phoneChangeCode, setPhoneChangeCode] = useState("");
   const [phoneChangeWaitingCode, setPhoneChangeWaitingCode] = useState(false);
-  const stripePromise = useMemo(
-    () => setupPublishableKey ? loadStripe(setupPublishableKey) : null,
-    [setupPublishableKey],
-  );
-
   useEffect(() => {
     let active = true;
 
@@ -155,7 +146,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
     try {
       const result = await changeSubscriptionPlan({ planCode, billingInterval });
       setProfile((current) => current && { ...current, subscription: result.subscription });
-      setStatus(`Plano alterado para ${plans[planCode].name}. A Stripe calculará ajustes proporcionais quando aplicável.`);
+      setStatus(`Troca para ${plans[planCode].name} solicitada para a próxima cobrança. Seu plano pago atual permanece válido até lá.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Não consegui trocar o plano agora.");
     } finally {
@@ -167,10 +158,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
     setStatus("");
     setBillingAction("card");
     try {
-      const result = await createPaymentMethodSetupIntent();
-      setSetupPublishableKey(result.publishableKey);
-      setSetupClientSecret(result.clientSecret);
-      setSetupIntentId(result.setupIntentId);
+      setCardConfig(await getPaymentMethodConfiguration());
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Não consegui abrir a atualização de cartão.");
     } finally {
@@ -253,20 +241,6 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
     : subscription?.planCode === "essencial"
       ? "basico"
       : null;
-  const setupOptions: StripeElementsOptions | undefined = setupClientSecret
-    ? {
-        clientSecret: setupClientSecret,
-        appearance: {
-          theme: "stripe",
-          variables: {
-            colorPrimary: "#6d3fb3",
-            borderRadius: "8px",
-            fontFamily: "DM Sans, system-ui, sans-serif",
-          },
-        },
-      }
-    : undefined;
-
   return (
     <main className="account-page">
       <section className="account-shell">
@@ -347,12 +321,14 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
             {subscription && plan ? (
               <>
                 <p className="plan-pill">{plan.name} - {getPlanPrice(subscription.planCode, subscription.billingInterval)}</p>
+                {subscription.pendingPlanCode && <p>Próxima renovação: {getPlanPrice(subscription.pendingPlanCode, subscription.pendingBillingInterval || subscription.billingInterval)} no plano {plans[subscription.pendingPlanCode].name}.</p>}
+                {subscription.paymentMethod === "pix" && <p>Pago com Pix. Seu acesso não possui renovação automática.</p>}
                 <dl className="profile-list">
                   <div><dt>Status</dt><dd>{formatSubscriptionStatus(subscription.status)}</dd></div>
                   <div><dt>Cobrança</dt><dd>{subscription.billingLabel}</dd></div>
                   <div><dt>Acesso até</dt><dd>{formatDate(subscription.currentPeriodEndsAt)}</dd></div>
                 </dl>
-                <div className="billing-actions">
+                {subscription.canManage && <div className="billing-actions">
                   {subscription.status === "canceled" ? (
                     <button className="account-primary" type="button" onClick={handleResume} disabled={billingAction === "resume"}>
                       <RefreshCcw size={16} />
@@ -389,27 +365,20 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
                     <CreditCard size={16} />
                     {billingAction === "card" ? "Abrindo..." : "Trocar cartão de cobrança"}
                   </button>
-                </div>
-                {stripePromise && setupOptions && setupIntentId && (
-                  <div className="payment-method-panel">
-                    <p>Informe o novo cartão. A Stripe salvará esse método como padrão para as próximas faturas.</p>
-                    <Elements stripe={stripePromise} options={setupOptions}>
-                      <StripePaymentMethodForm
-                        setupIntentId={setupIntentId}
-                        onSuccess={() => {
-                          setSetupClientSecret("");
-                          setSetupIntentId("");
-                          setSetupPublishableKey("");
-                          setStatus("Cartão atualizado para as próximas cobranças.");
-                        }}
-                      />
-                    </Elements>
-                  </div>
-                )}
+                </div>}
+                {cardConfig && <div className="payment-method-panel">
+                  <PaymentCardForm publicKey={cardConfig.publicKey} email={cardConfig.email} amount={cardConfig.amount} updatingCard
+                    onSubmit={async (form) => {
+                      if (!form.token) throw new Error("Confira os dados do cartão.");
+                      await confirmPaymentMethod({ paymentToken: form.token });
+                      setCardConfig(undefined); setStatus("Cartão atualizado para as próximas cobranças.");
+                    }} />
+                </div>}
               </>
             ) : (
               <>
                 <p>Você ainda não tem um plano ativo. Escolha um plano para liberar a Luma no WhatsApp.</p>
+                {profile?.pendingCheckout && <p className="account-status info">Existe um pagamento aguardando confirmação. <Link href={`/checkout/${profile.pendingCheckout.planCode}?billing=${profile.pendingCheckout.billingInterval}`}>Acompanhar pagamento</Link></p>}
                 <div className="profile-plan-actions">
                   <Link className="account-primary as-link" href="/checkout/basico?billing=annual">Básico anual</Link>
                   <Link className="account-secondary billing-button" href="/checkout/basico?billing=monthly">Básico mensal</Link>
@@ -437,7 +406,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
                 ))}
               </div>
             ) : (
-              <p>Quando houver cobranças confirmadas pela Stripe, elas aparecerão aqui.</p>
+              <p>Suas cobranças confirmadas aparecerão aqui.</p>
             )}
           </section>
 
@@ -588,6 +557,10 @@ function formatSubscriptionStatus(status: "active" | "canceled" | "pending") {
 
 function formatInvoiceStatus(status: string) {
   const labels: Record<string, string> = {
+    approved: "Pago",
+    refunded: "Reembolsado",
+    charged_back: "Contestado",
+    rejected: "Recusado",
     paid: "Pago",
     open: "Aberto",
     draft: "Rascunho",

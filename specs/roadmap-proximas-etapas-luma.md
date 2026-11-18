@@ -4,7 +4,7 @@
 
 ## Estado Atual
 
-A Luma está na reta final da V1 operacional. O MVP de WhatsApp, cadastro, ciclo menstrual, gravidez, web, Stripe, Redis, notificações estruturais, áudio, imagem educativa, calendário e criptografia de dados reais foi implementado.
+A Luma está na reta final da V1 operacional. O MVP de WhatsApp, cadastro, ciclo menstrual, gravidez, web, Mercado Pago, Redis, notificações estruturais, áudio, imagem educativa, calendário e criptografia de dados reais foi implementado.
 
 Status resumido:
 
@@ -113,13 +113,13 @@ Inclui:
 - Cadastro web.
 - Perfil.
 - Planos.
-- Stripe Elements.
+- Checkout Bricks.
 - Assinaturas.
 - Cancelamento.
 - Retomada.
 - Troca de plano.
 - Troca de cartão.
-- Webhooks Stripe.
+- Webhooks Mercado Pago.
 
 ## Etapa 5.1 - WhatsApp Responde Apenas Assinantes
 
@@ -179,7 +179,7 @@ Para considerar a V1.0.0 pronta para piloto:
 1. API e Web deployadas no Render ou ambiente equivalente.
 2. Postgres gerenciado configurado.
 3. Redis Cloud configurado.
-4. Stripe em modo produção com produtos e preços reais.
+4. Mercado Pago em modo produção com produtos e preços reais.
 5. Twilio WhatsApp Business fora do Sandbox.
 6. Templates de notificação aprovados.
 7. Worker de notificações habilitado.

@@ -147,11 +147,11 @@ Implementado:
 - Pré-cadastro web com autenticação JWT/cookie.
 - Cadastro com e-mail, CPF, nome, senha e celular.
 - Validação e normalização de CPF e celular.
-- Checkout com Stripe Elements.
+- Checkout com Checkout Bricks.
 - Planos:
   - Luma Básico: R$ 5,90/mês.
   - Luma Essencial: R$ 9,90/mês.
-- Webhooks Stripe para sincronizar assinatura.
+- Webhooks Mercado Pago para sincronizar assinatura.
 - Cancelamento no fim do período.
 - Retomada de assinatura.
 - Troca de plano.

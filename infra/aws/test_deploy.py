@@ -63,19 +63,19 @@ class DeploymentTests(unittest.TestCase):
 
     def test_refuses_live_credentials_in_dev(self):
         with self.assertRaises(ValueError):
-            render_environment({"environment": "dev", "api": {"Stripe__SecretKey": "rk_live_no"}, "web": {}, "postgres": {}}, "a" * 40)
+            render_environment({"environment": "dev", "api": {"MercadoPago__TestMode": "false"}, "web": {}, "postgres": {}}, "a" * 40)
 
     def test_requires_private_data_and_auth_keys(self):
         with self.assertRaises(ValueError):
             render_environment({"environment": "production", "api": {}, "web": {}, "postgres": {}}, "a" * 40)
 
     def test_renders_separate_environment_files(self):
-        source = {"environment": "dev", "api": {"Stripe__SecretKey": "rk_test_example",
+        source = {"environment": "dev", "api": {"MercadoPago__AccessToken": "test_example", "MercadoPago__TestMode": "true",
             "Privacy__EncryptionKey": "key", "Privacy__LookupPepper": "pepper", "Luma__JwtSigningKey": "jwt"},
             "web": {}, "postgres": {"POSTGRES_PASSWORD": "dbpassword"}}
         files = render_environment(source, "a" * 40)
-        self.assertIn("rk_test_example", files["api.env"])
-        self.assertNotIn("rk_test_example", files["web.env"])
+        self.assertIn("test_example", files["api.env"])
+        self.assertNotIn("test_example", files["web.env"])
         self.assertNotIn("dbpassword", files["web.env"])
         self.assertIn("IMAGE_TAG", files[".env"])
 

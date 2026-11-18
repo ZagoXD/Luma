@@ -50,7 +50,7 @@ public sealed class AssistantFlowTests
         await using var db = CreateDb();
         var user = await AddUser(db);
         db.AccountSubscriptions.AddRange(new AccountSubscription { PhoneNumber = user.PhoneNumber, PlanCode = "essencial",
-            BillingInterval = "annual", CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30) },
+            Status = SubscriptionStatuses.Active, BillingInterval = "annual", CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30) },
             new AccountSubscription { PhoneNumber = "+5516999998888", PlanCode = "other-user-private-plan" });
         await db.SaveChangesAsync();
         var model = new ScriptedModel();

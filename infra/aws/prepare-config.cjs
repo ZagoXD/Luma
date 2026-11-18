@@ -46,11 +46,10 @@ for (const environment of ['dev', 'production']) {
     LUMA_API_BASE_URL: 'http://api:8080',
     LUMA_COOKIE_SECURE: 'true',
     LUMA_WHATSAPP_NUMBER: api.Twilio__WhatsAppFrom.replace(/^whatsapp:/, ''),
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: api.Stripe__PublishableKey,
     NEXT_PUBLIC_BASE_URL: domain,
     NODE_OPTIONS: '--max-old-space-size=192'
   };
   const config = { environment, api, web, postgres: { POSTGRES_DB: 'luma', POSTGRES_USER: 'luma', POSTGRES_PASSWORD: postgresPassword }, redisPassword };
   fs.writeFileSync(output, JSON.stringify(config), { mode: 0o600 });
-  console.log(JSON.stringify({ environment, saved: true, stripeMode: api.Stripe__SecretKey.startsWith('rk_test_') ? 'test' : 'live' }));
+  console.log(JSON.stringify({ environment, saved: true, paymentsTestMode: api.MercadoPago__TestMode }));
 }

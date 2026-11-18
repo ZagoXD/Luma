@@ -23,7 +23,7 @@ Implementado:
 - Redis para rate limit, deduplicação, cooldown e locks.
 - OpenAI como motor de IA, tools e respostas humanizadas.
 - ElevenLabs para transcrição de áudio no WhatsApp.
-- Stripe Billing com Stripe Elements.
+- Mercado Pago com Checkout Bricks.
 - Cadastro web com autenticação JWT/cookie.
 - Checkbox de consentimento LGPD no cadastro web.
 - Perfil da usuária.
@@ -46,7 +46,7 @@ Implementado:
 Pendente para produção completa:
 
 - Validar entrega no WhatsApp Business e participação no Sandbox, além da configuração dos números.
-- Validar a operação comercial Stripe live; catálogo e configuração estão separados de dev.
+- Validar a operação comercial Mercado Pago live; catálogo e configuração estão separados de dev.
 - Configurar domínio customizado para mídia do R2.
 - Publicar termos e política de privacidade.
 - Validar a transcrição real da ElevenLabs.
@@ -54,6 +54,8 @@ Pendente para produção completa:
 - Ensaiar periodicamente a restauração dos backups e definir rotação futura de chaves de privacidade.
 
 ## Planos
+
+Pagamentos usam **Mercado Pago Checkout Bricks**: cartão com renovação automática ou Pix para um período, sem renovação automática. O anual continua cobrado à vista. A arquitetura de cobrança separa domínio, casos de uso e adaptador; o acesso exige pagamento aprovado, nunca apenas abrir o checkout. Consulte [Pagamentos e operação](specs/pagamentos-mercadopago.md) para configuração, segurança, cancelamento, testes e migração.
 
 Notificações e armazenamento de imagens estão descritos em [Notificações e R2](specs/notificacoes-r2-operacao.md), incluindo templates, retentativas, fusos, callbacks de entrega e limpeza automática no bucket.
 
@@ -92,8 +94,8 @@ Web:
 ```txt
 Next.js
   -> API Luma
-  -> Stripe Elements
-  -> Stripe Billing
+  -> Checkout Bricks
+  -> Mercado Pago Assinaturas
   -> PostgreSQL
 ```
 
@@ -142,11 +144,9 @@ Copy-Item web/.env.example web/.env
 
 ```env
 OPENAI_API_KEY=
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-STRIPE_SECRET_KEY=
-STRIPE_BASIC_PRICE_ID=
-STRIPE_ESSENTIAL_PRICE_ID=
-STRIPE_WEBHOOK_SECRET=
+MERCADOPAGO_PUBLIC_KEY=
+MERCADOPAGO_ACCESS_TOKEN=
+MERCADOPAGO_WEBHOOK_SECRET=
 ```
 
 3. Configure privacidade:
@@ -243,9 +243,9 @@ Método:
 POST
 ```
 
-## Stripe
+## Mercado Pago
 
-O checkout usa Stripe Elements.
+O checkout usa Checkout Bricks.
 
 Cartão de teste:
 
@@ -256,7 +256,7 @@ Cartão de teste:
 Mais detalhes:
 
 ```txt
-specs/tutorial-stripe-luma.md
+specs/pagamentos-mercadopago.md
 ```
 
 ## Redis
@@ -307,8 +307,8 @@ Privacy__LookupPepper=
 Privacy__ActiveKeyId=prod-2026-01
 Redis__ConnectionString=
 ConnectionStrings__DefaultConnection=
-Stripe__SecretKey=
-Stripe__WebhookSecret=
+Mercado Pago__SecretKey=
+Mercado Pago__WebhookSecret=
 Resend__ApiKey=
 Email__From=Luma <noreply@ia-luma.com.br>
 Email__SupportTo=lumasuporte.ia@gmail.com
@@ -335,7 +335,7 @@ Web:
 LUMA_API_BASE_URL=https://sua-api
 NEXT_PUBLIC_API_BASE_URL=https://sua-api
 NEXT_PUBLIC_BASE_URL=https://sua-web
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+MERCADOPAGO_PUBLIC_KEY=
 NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER=+16204008668
 LUMA_COOKIE_SECURE=true
 ```
@@ -349,7 +349,7 @@ Principais documentos:
 - `specs/roadmap-proximas-etapas-luma.md`
 - `specs/plano-fechamento-v1-operacional.md`
 - `specs/plano-final-v1-gravidez-bebe-calendario.md`
-- `specs/tutorial-stripe-luma.md`
+- `specs/pagamentos-mercadopago.md`
 - `specs/proposta-migracao-openai-luma.md`
 - `specs/plano-criptografia-dados-reais-usuarios-luma.md`
 

@@ -59,10 +59,11 @@ def render_environment(config, sha):
             raise ValueError("Missing required security configuration")
     if not config["postgres"].get("POSTGRES_PASSWORD"):
         raise ValueError("Missing database password")
-    if environment == "dev" and re.match(r"[sr]k_live_", api.get("Stripe__SecretKey", "")):
-        raise ValueError("Live Stripe key forbidden in dev")
-    if environment == "production" and re.match(r"[sr]k_test_", api.get("Stripe__SecretKey", "")):
-        raise ValueError("Test Stripe key forbidden in production")
+    test_mode = str(api.get("MercadoPago__TestMode", "true")).lower() == "true"
+    if environment == "dev" and not test_mode:
+        raise ValueError("Live payments forbidden in dev")
+    if environment == "production" and test_mode:
+        raise ValueError("Test payments forbidden in production")
 
     def encode(values):
         return "".join(f"{key}={json.dumps(str(value), ensure_ascii=True)}\n" for key, value in values.items())

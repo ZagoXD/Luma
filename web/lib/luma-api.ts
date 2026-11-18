@@ -18,8 +18,10 @@ export type AccountSubscription = {
   billingInterval: BillingInterval;
   billingLabel: string;
   status: "active" | "canceled" | "pending";
-  stripeSubscriptionId?: string | null;
-  stripePriceId?: string | null;
+  paymentMethod: "card" | "pix";
+  canManage: boolean;
+  pendingPlanCode?: PlanCode | null;
+  pendingBillingInterval?: BillingInterval | null;
   startsAt: string;
   currentPeriodEndsAt: string;
   canceledAt?: string | null;
@@ -37,17 +39,7 @@ export type BillingTransaction = {
   created: string;
 };
 
-export type StripeSubscriptionIntent = {
-  publishableKey: string;
-  clientSecret: string;
-  stripeSubscriptionId: string;
-};
-
-export type StripeSetupIntent = {
-  publishableKey: string;
-  clientSecret: string;
-  setupIntentId: string;
-};
+export type PixDetails = { qrCode: string; qrCodeBase64: string; expiresAt?: string };
 
 export type MenstrualSummary = {
   displayName?: string | null;
@@ -62,6 +54,7 @@ export type MenstrualSummary = {
 export type AccountProfile = {
   user: AccountUser;
   subscription?: AccountSubscription | null;
+  pendingCheckout?: { id: string; planCode: PlanCode; billingInterval: BillingInterval } | null;
   menstrual?: MenstrualSummary | null;
 };
 
@@ -237,24 +230,14 @@ export async function getAccountCalendar(month: string) {
   return appRequest<CycleCalendar>(`/api/account/calendar?month=${encodeURIComponent(month)}`);
 }
 
-export async function createStripeSubscription(input: { planCode: PlanCode; billingInterval: BillingInterval }) {
-  return appRequest<StripeSubscriptionIntent>("/api/checkout/create-subscription", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+export async function prepareCheckout(input: { planCode: PlanCode; billingInterval: BillingInterval }) {
+  return appRequest<import("./billing").CheckoutConfiguration>("/api/checkout/create-subscription", { method: "POST", body: JSON.stringify(input) });
 }
-
-export async function confirmStripeSubscription(input: {
-  planCode: PlanCode;
-  billingInterval: BillingInterval;
-  stripeSubscriptionId: string;
-  cardholderName?: string;
-  billingCpf?: string;
-}) {
-  return appRequest<{ subscription: AccountSubscription }>("/api/checkout/confirm-subscription", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+export async function submitCheckout(input: { checkoutId: string; paymentToken?: string; paymentMethod: "card" | "pix"; payerEmail?: string }) {
+  return appRequest<{ subscription: AccountSubscription; pix?: PixDetails }>("/api/checkout/confirm-subscription", { method: "POST", body: JSON.stringify(input) });
+}
+export async function getCheckoutStatus(id: string) {
+  return appRequest<{ subscription: AccountSubscription }>("/api/checkout/status/" + encodeURIComponent(id));
 }
 
 export async function cancelSubscription() {
@@ -276,21 +259,11 @@ export async function changeSubscriptionPlan(input: { planCode: PlanCode; billin
   });
 }
 
-export async function createPaymentMethodSetupIntent() {
-  return appRequest<StripeSetupIntent>("/api/account/payment-method/setup-intent", {
-    method: "POST",
-  });
+export async function getPaymentMethodConfiguration() {
+  return appRequest<{ publicKey: string; email: string; amount: number }>("/api/account/payment-method/config");
 }
-
-export async function confirmPaymentMethod(input: {
-  setupIntentId: string;
-  cardholderName?: string;
-  billingCpf?: string;
-}) {
-  return appRequest<{ ok: true }>("/api/account/payment-method/confirm", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+export async function confirmPaymentMethod(input: { paymentToken: string }) {
+  return appRequest<{ ok: true }>("/api/account/payment-method/confirm", { method: "POST", body: JSON.stringify(input) });
 }
 
 export async function getBillingTransactions() {

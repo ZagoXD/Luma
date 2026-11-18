@@ -58,6 +58,6 @@ node scripts/check-seo.mjs https://ia-luma.com.br production
 node scripts/check-seo.mjs https://dev.ia-luma.com.br development
 ```
 
-O CI verifica as políticas puras e inicia a mesma versão standalone em modos produção/dev para checar HTML, canonical, robots, sitemap, bloqueio de indexação das áreas privadas e dimensões reais dos PNGs. O teste não chama OpenAI, Twilio, ElevenLabs ou Stripe.
+O CI verifica as políticas puras e inicia a mesma versão standalone em modos produção/dev para checar HTML, canonical, robots, sitemap, bloqueio de indexação das áreas privadas e dimensões reais dos PNGs. O teste não chama OpenAI, Twilio, ElevenLabs ou Mercado Pago.
 
 Após deploy, conferir também o redirecionamento de `https://www.ia-luma.com.br/`. A Cloudflare pode acrescentar suas próprias regras ao robots; preserve as políticas de bloqueio de treinamento sem confundi-las com bloqueio de busca tradicional.

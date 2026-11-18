@@ -2,7 +2,7 @@
 
 Este diretório contém a API da Luma, os testes de backend e o Docker Compose usado no desenvolvimento local.
 
-Status atual: a API cobre WhatsApp, cadastro, ciclo menstrual, gravidez, calendário, assinaturas, Stripe, Redis, áudio por ElevenLabs, imagens educativas por OpenAI + R2, notificações estruturais, e-mails transacionais por Resend, suporte por e-mail e criptografia de dados reais da usuária.
+Status atual: a API cobre WhatsApp, cadastro, ciclo menstrual, gravidez, calendário, assinaturas, Mercado Pago, Redis, áudio por ElevenLabs, imagens educativas por OpenAI + R2, notificações estruturais, e-mails transacionais por Resend, suporte por e-mail e criptografia de dados reais da usuária.
 
 ## Serviços Locais
 
@@ -59,10 +59,8 @@ PRIVACY_ENCRYPTION_ENABLED=true
 PRIVACY_ENCRYPTION_KEY=
 PRIVACY_LOOKUP_PEPPER=
 PRIVACY_ACTIVE_KEY_ID=local-dev
-STRIPE_SECRET_KEY=
-STRIPE_BASIC_PRICE_ID=
-STRIPE_ESSENTIAL_PRICE_ID=
-STRIPE_WEBHOOK_SECRET=
+MERCADOPAGO_ACCESS_TOKEN=
+MERCADOPAGO_WEBHOOK_SECRET=
 RESEND_API_KEY=
 EMAIL_FROM=Luma <noreply@ia-luma.com.br>
 EMAIL_PASSWORD_RESET_EXPIRATION_MINUTES=30

@@ -74,15 +74,11 @@ services:
       Twilio__TemplateContraceptiveDaily: ${TWILIO_TEMPLATE_CONTRACEPTIVE_DAILY:-}
       Twilio__TemplateSymptomCheckin: ${TWILIO_TEMPLATE_SYMPTOM_CHECKIN:-}
       Twilio__TemplateAccountVerification: ${TWILIO_TEMPLATE_ACCOUNT_VERIFICATION:-}
-      Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
-      Stripe__PublishableKey: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
-      Stripe__BasicPriceId: ${STRIPE_BASIC_PRICE_ID:-}
-      Stripe__EssentialPriceId: ${STRIPE_ESSENTIAL_PRICE_ID:-}
-      Stripe__BasicMonthlyPriceId: ${STRIPE_BASIC_MONTHLY_PRICE_ID:-}
-      Stripe__BasicAnnualPriceId: ${STRIPE_BASIC_ANNUAL_PRICE_ID:-}
-      Stripe__EssentialMonthlyPriceId: ${STRIPE_ESSENTIAL_MONTHLY_PRICE_ID:-}
-      Stripe__EssentialAnnualPriceId: ${STRIPE_ESSENTIAL_ANNUAL_PRICE_ID:-}
-      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
+      MercadoPago__AccessToken: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MercadoPago__PublicKey: ${MERCADOPAGO_PUBLIC_KEY:-}
+      MercadoPago__WebhookSecret: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      MercadoPago__SellerId: ${MERCADOPAGO_SELLER_ID:-}
+      MercadoPago__TestMode: ${MERCADOPAGO_TEST_MODE:-true}
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
       Assistant__Enabled: ${LUMA_ASSISTANT_ENABLED:-false}
       Assistant__MaxModelTurns: ${LUMA_ASSISTANT_MAX_MODEL_TURNS:-3}
@@ -158,7 +154,6 @@ services:
         condition: service_started
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5050}
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
       NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER: ${NEXT_PUBLIC_LUMA_WHATSAPP_NUMBER:-+14155238886}
       LUMA_API_BASE_URL: ${LUMA_API_BASE_URL:-http://api:8080}
       LUMA_COOKIE_SECURE: ${LUMA_COOKIE_SECURE:-false}

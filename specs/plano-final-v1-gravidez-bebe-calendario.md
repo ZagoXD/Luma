@@ -192,7 +192,7 @@ R2_IMAGE_RETENTION_DAYS=1
 A V1.0.0 fica pronta quando:
 
 - cadastro web e WhatsApp estiverem funcionais;
-- assinatura Stripe liberar ou bloquear WhatsApp corretamente;
+- assinatura Mercado Pago liberar ou bloquear WhatsApp corretamente;
 - ciclo menstrual estiver completo;
 - gravidez estiver validada;
 - desenvolvimento do bebê por semana estiver disponível;

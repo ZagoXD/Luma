@@ -13,7 +13,7 @@ A Luma é composta por:
 - OpenAI API.
 - ElevenLabs Speech to Text.
 - Twilio WhatsApp.
-- Stripe Billing.
+- Mercado Pago Assinaturas.
 - Cloudflare R2.
 - Docker para desenvolvimento local.
 - Render como ambiente atual de teste/deploy.
@@ -35,7 +35,7 @@ Responsabilidades:
 - Validação autoritativa das ações sugeridas pela IA.
 - Persistência de cadastro, eventos de ciclo, gravidez e assinatura.
 - Guardrails fixos.
-- Webhooks Stripe.
+- Webhooks Mercado Pago.
 - Rate limit e locks com Redis.
 - Worker de notificações.
 - Transcrição de áudio.
@@ -54,7 +54,7 @@ Stack:
   - `molecules`
   - `organisms`
   - `templates`
-- Stripe Elements.
+- Checkout Bricks.
 
 Responsabilidades:
 
@@ -213,9 +213,9 @@ Limitações:
 
 Stack:
 
-- Stripe Billing.
-- Stripe Elements.
-- Stripe Webhooks.
+- Mercado Pago Assinaturas.
+- Checkout Bricks.
+- Mercado Pago Webhooks.
 
 Planos:
 

@@ -19,6 +19,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
     public DbSet<AccountPhoneVerificationCode> AccountPhoneVerificationCodes => Set<AccountPhoneVerificationCode>();
     public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
+    public DbSet<BillingPayment> BillingPayments => Set<BillingPayment>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<SupportRequest> SupportRequests => Set<SupportRequest>();
@@ -42,6 +43,16 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<BillingPayment>(entity =>
+        {
+            entity.ToTable("billing_payments");
+            entity.HasKey(payment => payment.Id);
+            entity.Property(payment => payment.Id).HasMaxLength(160);
+            entity.Property(payment => payment.Status).HasMaxLength(32);
+            entity.Property(payment => payment.Amount).HasPrecision(18, 2);
+            entity.Property(payment => payment.Currency).HasMaxLength(3);
+            entity.HasOne<AccountSubscription>().WithMany().HasForeignKey(payment => payment.AccountSubscriptionId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<AssistantTurnRecord>(entity =>
         {
             entity.ToTable("assistant_turns");
@@ -164,7 +175,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(user => user.PasswordHash).HasMaxLength(512).IsRequired();
             entity.Property(user => user.PhoneNumber).HasConversion(accountPhoneConverter).HasMaxLength(1024).IsRequired();
             entity.Property(user => user.PhoneHash).HasMaxLength(128).IsRequired();
-            entity.Property(user => user.StripeCustomerId).HasMaxLength(128);
+            entity.Property(user => user.BillingCustomerId).HasMaxLength(128);
         });
 
         modelBuilder.Entity<AccountSession>(entity =>
@@ -205,8 +216,12 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
             entity.Property(subscription => subscription.PlanCode).HasMaxLength(32).IsRequired();
             entity.Property(subscription => subscription.BillingInterval).HasMaxLength(32).IsRequired();
             entity.Property(subscription => subscription.Status).HasMaxLength(32).IsRequired();
-            entity.Property(subscription => subscription.StripeSubscriptionId).HasMaxLength(128);
-            entity.Property(subscription => subscription.StripePriceId).HasMaxLength(128);
+            entity.Property(subscription => subscription.BillingProvider).HasMaxLength(32);
+            entity.Property(subscription => subscription.ProviderSubscriptionId).HasMaxLength(128);
+            entity.Property(subscription => subscription.ProviderPlanId).HasMaxLength(128);
+            entity.Property(subscription => subscription.PaymentMethod).HasMaxLength(16);
+            entity.Property(subscription => subscription.PendingPlanCode).HasMaxLength(32);
+            entity.Property(subscription => subscription.PendingBillingInterval).HasMaxLength(32);
             entity.HasOne(subscription => subscription.AccountUser)
                 .WithMany(user => user.Subscriptions)
                 .HasForeignKey(subscription => subscription.AccountUserId)

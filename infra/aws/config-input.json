@@ -1,13 +1,16 @@
 {
-  "services": {"input": {"image": "busybox", "environment": {
-    "Resend__ApiKey": "${RESEND_PRODUCTION_API_KEY:-}",
-    "Twilio__VerifyServiceSid": "${TWILIO_PRODUCTION_VERIFY_SERVICE_SID:-}",
-    "Stripe__SecretKey": "${STRIPE_PRODUCTION_SECRET_KEY:?Production Stripe key missing}",
-    "Stripe__PublishableKey": "${STRIPE_PRODUCTION_PUBLISHABLE_KEY:?Production publishable key missing}",
-    "Stripe__WebhookSecret": "${STRIPE_PRODUCTION_WEBHOOK_SECRET:?Production signing secret missing}",
-    "Stripe__BasicMonthlyPriceId": "${STRIPE_PRODUCTION_BASIC_MONTHLY_PRICE_ID:?Price missing}",
-    "Stripe__BasicAnnualPriceId": "${STRIPE_PRODUCTION_BASIC_ANNUAL_PRICE_ID:?Price missing}",
-    "Stripe__EssentialMonthlyPriceId": "${STRIPE_PRODUCTION_ESSENTIAL_MONTHLY_PRICE_ID:?Price missing}",
-    "Stripe__EssentialAnnualPriceId": "${STRIPE_PRODUCTION_ESSENTIAL_ANNUAL_PRICE_ID:?Price missing}"
-  }}}
+  "services": {
+    "input": {
+      "image": "busybox",
+      "environment": {
+        "Resend__ApiKey": "${RESEND_PRODUCTION_API_KEY:-}",
+        "Twilio__VerifyServiceSid": "${TWILIO_PRODUCTION_VERIFY_SERVICE_SID:-}",
+        "MercadoPago__AccessToken": "${MERCADOPAGO_PRODUCTION_ACCESS_TOKEN:?Missing production token}",
+        "MercadoPago__PublicKey": "${MERCADOPAGO_PRODUCTION_PUBLIC_KEY:?Missing production public key}",
+        "MercadoPago__WebhookSecret": "${MERCADOPAGO_PRODUCTION_WEBHOOK_SECRET:?Missing webhook secret}",
+        "MercadoPago__SellerId": "${MERCADOPAGO_PRODUCTION_SELLER_ID:?Missing production seller}",
+        "MercadoPago__TestMode": "false"
+      }
+    }
+  }
 }
