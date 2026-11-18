@@ -25,6 +25,7 @@ export function LoginPageTemplate() {
   const [cpf, setCpf] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [pendingVerificationUser, setPendingVerificationUser] = useState<AccountUser | null>(null);
+  const [verificationMessage, setVerificationMessage] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -91,7 +92,8 @@ export function LoginPageTemplate() {
       if (!result.user.phoneVerifiedAt) {
         setPendingVerificationUser(result.user);
         setResendCooldown(resendCooldownSeconds);
-        setStatus(phoneVerificationSentMessage);
+        setVerificationMessage(result.phoneVerificationMessage || phoneVerificationSentMessage);
+        setStatus("");
         return;
       }
 
@@ -125,9 +127,9 @@ export function LoginPageTemplate() {
     setStatus("");
     setSubmitting(true);
     try {
-      await resendPhoneVerificationCode();
+      const result = await resendPhoneVerificationCode();
       setResendCooldown(resendCooldownSeconds);
-      setStatus(phoneVerificationResentMessage);
+      setVerificationMessage(result.message || phoneVerificationResentMessage);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Não consegui reenviar o código agora.");
     } finally {
@@ -148,7 +150,7 @@ export function LoginPageTemplate() {
             <div className="account-heading">
               <span className="account-kicker">Confirmação</span>
               <h1>Confirme seu celular</h1>
-              <p>Para finalizarmos seu cadastro, enviamos um código por SMS para {pendingVerificationUser.phoneNumber}. Digite o código recebido abaixo.</p>
+              <p>{verificationMessage} Celular: {pendingVerificationUser.phoneNumber}.</p>
             </div>
 
             <form className="account-form" onSubmit={handleConfirmVerification}>

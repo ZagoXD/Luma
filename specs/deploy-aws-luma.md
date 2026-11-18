@@ -17,7 +17,7 @@ A API de produção usa `https://api.ia-luma.com.br`. O webhook Stripe é `/webh
 
 ## Preservação do ambiente local
 
-A branch `backup/local-cloudflared` preserva o ambiente local anterior à migração e foi enviada ao GitHub. Os volumes locais PostgreSQL/Redis não são apagados. Produção recebe uma cópia dos dados locais, preservando as chaves de privacidade necessárias para decifrá-los. Dev recebe apenas o schema e o acervo RAG vetorizado, sem cadastros ou históricos pessoais.
+A branch `backup/local-cloudflared` preserva o ambiente local anterior à migração e foi enviada ao GitHub. Os volumes locais PostgreSQL/Redis não são apagados. Após a migração inicial, por solicitação do responsável, os cadastros e históricos na AWS foram zerados, preservando o schema e o acervo RAG vetorizado. Dados de teste também são removidos ao concluir a validação.
 
 O túnel local `luma-local-dev` permanece disponível; o túnel AWS é separado (`luma-aws`). Voltar ao computador exige atualizar os registros DNS para o túnel local, iniciar os containers locais e conferir os webhooks. Não se deve conectar o computador ao token do túnel AWS: isso distribuiria requisições entre origens diferentes.
 
@@ -71,14 +71,24 @@ Para renovar credenciais, edite o JSON do segredo correspondente no Secrets Mana
 
 Para conter consumo, é possível parar a instância após realizar e verificar os backups. EBS, Secrets Manager e armazenamento S3 podem continuar consumindo créditos. Não faça upgrade para Paid para reativar o ambiente sem uma decisão explícita do responsável. A desativação de proteção contra término e a exclusão de bancos ou volumes exigem uma decisão deliberada.
 
-## Credenciais pendentes
+## Comunicação por ambiente
 
-Por decisão do responsável, estes recursos ficam configuráveis, mas sem validação real nesta migração:
+Produção usa Resend e Twilio Verify real por SMS. Dev mantém essas credenciais desativadas e usa confirmação simulada com o código `123456`, claramente informado na tela. Isso exige `Deployment__Environment=dev` e `Twilio__VerifyDevelopmentMode=true`. A API e o deploy recusam essa simulação em produção; não habilite essa opção na configuração de produção.
 
-- **ElevenLabs:** Developers → API Keys. Recuperar a API key com permissão de Speech to Text. Campos de API: `ElevenLabs__ApiKey`, modelo `ElevenLabs__SpeechToTextModel`.
-- **Resend:** API Keys para a chave de envio; Domains para o domínio verificado; Templates para os IDs/aliases publicados de boas-vindas, assinatura, recuperação de senha e suporte. Campos `Resend__ApiKey` e `Email__Templates__*`, além de remetente e destinatário do suporte.
+O backend informa o canal e o resultado reais da solicitação. A interface preserva essa mensagem, sem afirmar entrega quando o provedor apenas aceitou o pedido. ElevenLabs usa a chave compartilhada nos dois ambientes. O Docker local não ativa e-mail ou SMS real apenas porque as credenciais destinadas à produção estão salvas no `.env`.
+
+Validação de 18/11/2026: boas-vindas, recuperação de senha e suporte (administrador e confirmação da usuária) entregues pelo Resend, com variáveis renderizadas. Recuperação de senha testada com login após troca e recusa de reutilização do token. Anexo PNG aceito e `.exe` recusado. Os cinco templates publicados correspondem aos tipos enviados pelo código; `expiresInMinutes` permanece numérico e `ATTACHMENT_COUNT`, string. Webhook Resend não é necessário para esses envios; callbacks de eventos podem ser adicionados futuramente.
+
+A tentativa real de SMS foi aceita pelo Twilio, mas ficou `UNCONFIRMED` e o titular informou não ter recebido. Não considerar a entrega nem a confirmação do celular validadas. Não fazer reenvios automáticos de teste.
+
+## Pendências e localização das credenciais
+
+As chaves recebidas ficam no `.env` ignorado pelo Git e nos segredos AWS, nunca nos arquivos versionados:
+
+- **ElevenLabs:** chave configurada; Developers → API Keys para manutenção. Exige Speech to Text. Uma consulta de perfil retornou falta da permissão `user_read`, não chave inválida; não ampliar permissões só para ler o perfil. A transcrição paga não foi executada nesta validação.
+- **Resend:** configurado e envios reais validados. API Keys, Domains e Templates no painel. Aliases: `welcome_email`, `subscription_created_email`, `password_reset_email`, `support_request_admin_email`, `support_request_user_confirmation_email`. Campos `Resend__ApiKey` e `Email__Templates__*`. O suporte administrativo usa `Email__SupportTo` (padrão `lumasuporte.ia@gmail.com`).
 - **Cloudflare R2:** R2 → Manage R2 API Tokens → Account API Tokens; permissão Object Read & Write limitada ao bucket `luma`. Recuperar Access Key ID e Secret Access Key, não o token da API Cloudflare. Campos `R2__AccessKeyId`, `R2__SecretAccessKey`, endpoint e domínio público de mídia.
-- **Twilio Verify:** Console → Verify → Services → serviço da Luma → Service SID (`VA…`). Campo `Twilio__VerifyServiceSid`; canal `sms`.
+- **Twilio Verify:** Service SID configurado; Console → Verify → Services. Campo `Twilio__VerifyServiceSid`, canal `sms`. Falta validar entrega real. Não assumir que WhatsApp Verify funciona só porque o WhatsApp Sender está online: o canal Verify precisa de configuração própria.
 - **Notificações:** Messaging → Content Template Builder; recuperar os Content SIDs (`HX…`) aprovados e preencher `Twilio__TemplatePeriodTomorrow`, `Twilio__TemplatePeriodToday`, `Twilio__TemplateContraceptiveDaily` e `Twilio__TemplateSymptomCheckin`. Só então validar e ativar `Notifications__WorkerEnabled`.
 
-Não foram feitas chamadas pagas de teste de OpenAI, Twilio ou ElevenLabs. A migração não substitui a revisão das dependências npm, dos termos de uso, da política de privacidade ou dos fluxos fiscais, estornos e disputas antes de um lançamento comercial amplo.
+Foi solicitada uma tentativa real de SMS com autorização do titular, além dos e-mails de teste. Não foram feitas chamadas pagas de teste de OpenAI ou ElevenLabs. A migração não substitui a revisão das dependências npm, dos termos de uso, da política de privacidade ou dos fluxos fiscais, estornos e disputas antes de um lançamento comercial amplo.

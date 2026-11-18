@@ -1,5 +1,7 @@
 {
   "services": {"input": {"image": "busybox", "environment": {
+    "Resend__ApiKey": "${RESEND_PRODUCTION_API_KEY:-}",
+    "Twilio__VerifyServiceSid": "${TWILIO_PRODUCTION_VERIFY_SERVICE_SID:-}",
     "Stripe__SecretKey": "${STRIPE_PRODUCTION_SECRET_KEY:?Production Stripe key missing}",
     "Stripe__PublishableKey": "${STRIPE_PRODUCTION_PUBLISHABLE_KEY:?Production publishable key missing}",
     "Stripe__WebhookSecret": "${STRIPE_PRODUCTION_WEBHOOK_SECRET:?Production signing secret missing}",

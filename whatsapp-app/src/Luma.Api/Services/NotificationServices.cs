@@ -45,6 +45,7 @@ public sealed record TwilioVerifyCheckResult(bool Approved, string? Status, stri
 
 public interface ITwilioVerifyClient
 {
+    string Channel => "whatsapp";
     Task<TwilioVerifySendResult> SendVerificationAsync(string to, CancellationToken cancellationToken = default);
     Task<TwilioVerifyCheckResult> CheckVerificationAsync(string to, string code, CancellationToken cancellationToken = default);
 }
@@ -169,6 +170,7 @@ public sealed class TwilioVerifyClient(HttpClient http, IConfiguration configura
     private readonly string _authToken = configuration.GetValue<string>("Twilio:AuthToken") ?? string.Empty;
     private readonly string _serviceSid = configuration.GetValue<string>("Twilio:VerifyServiceSid") ?? string.Empty;
     private readonly string _channel = configuration.GetValue<string>("Twilio:VerifyChannel") ?? "whatsapp";
+    public string Channel => _channel;
 
     public async Task<TwilioVerifySendResult> SendVerificationAsync(string to, CancellationToken cancellationToken = default)
     {

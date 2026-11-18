@@ -21,6 +21,8 @@ for (const environment of ['dev', 'production']) {
     api.Privacy__ActiveKeyId = 'aws-dev-v1';
   }
   Object.assign(api, {
+    Deployment__Environment: environment,
+    Twilio__VerifyDevelopmentMode: String(environment === 'dev'),
     ASPNETCORE_ENVIRONMENT: 'Production',
     ConnectionStrings__DefaultConnection: `Host=postgres;Port=5432;Database=luma;Username=luma;Password=${postgresPassword}`,
     Redis__ConnectionString: `redis:6379,password=${redisPassword}`,
@@ -34,6 +36,10 @@ for (const environment of ['dev', 'production']) {
     Twilio__VerifyChannel: 'sms',
     DOTNET_GCHeapHardLimit: '0xC000000'
   });
+  if (environment === 'dev') {
+    api.Resend__ApiKey = '';
+    api.Twilio__VerifyServiceSid = '';
+  }
   const web = {
     LUMA_API_BASE_URL: 'http://api:8080',
     LUMA_COOKIE_SECURE: 'true',

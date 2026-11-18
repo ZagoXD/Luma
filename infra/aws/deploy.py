@@ -52,6 +52,8 @@ def render_environment(config, sha):
     if environment not in ("dev", "production"):
         raise ValueError("Unknown environment")
     api = config["api"]
+    if environment == "production" and str(api.get("Twilio__VerifyDevelopmentMode", "false")).lower() == "true":
+        raise ValueError("Simulated phone verification forbidden in production")
     for key in ("Privacy__EncryptionKey", "Privacy__LookupPepper", "Luma__JwtSigningKey"):
         if not api.get(key):
             raise ValueError("Missing required security configuration")

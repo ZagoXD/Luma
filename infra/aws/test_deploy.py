@@ -9,6 +9,13 @@ from deploy import validate_manifest, render_environment, verification_key_path,
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_production_rejects_simulated_phone_verification(self):
+        source = {"environment": "production", "api": {"Twilio__VerifyDevelopmentMode": "true",
+            "Privacy__EncryptionKey": "key", "Privacy__LookupPepper": "pepper", "Luma__JwtSigningKey": "jwt"},
+            "web": {}, "postgres": {"POSTGRES_PASSWORD": "test-only"}}
+        with self.assertRaises(ValueError):
+            render_environment(source, "a" * 40)
+
     def test_channel_checks_bypass_stale_redirects_and_close_missing_responses(self):
         response = io.BytesIO()
         error = urllib.error.HTTPError("https://example.invalid", 404, "Not published", {}, response)

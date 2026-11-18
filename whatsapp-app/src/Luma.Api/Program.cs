@@ -85,7 +85,10 @@ builder.Services.AddHttpClient<IWhatsAppNotificationSender, TwilioWhatsAppNotifi
 builder.Services.AddHttpClient<IWhatsAppTextSender, TwilioWhatsAppTextSender>();
 builder.Services.AddHttpClient<IWhatsAppMediaSender, TwilioWhatsAppMediaSender>();
 builder.Services.AddHttpClient<IWhatsAppTypingIndicatorSender, TwilioWhatsAppTypingIndicatorSender>();
-builder.Services.AddHttpClient<ITwilioVerifyClient, TwilioVerifyClient>();
+if (PhoneVerificationPolicy.UseDevelopmentClient(builder.Configuration))
+    builder.Services.AddSingleton<ITwilioVerifyClient, DevelopmentVerifyClient>();
+else
+    builder.Services.AddHttpClient<ITwilioVerifyClient, TwilioVerifyClient>();
 builder.Services.AddSingleton<BabyImageJobQueue>();
 builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
 builder.Services.AddScoped<AccountPhoneVerificationService>();

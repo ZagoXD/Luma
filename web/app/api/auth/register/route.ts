@@ -20,7 +20,11 @@ export async function POST(request: Request) {
     return NextResponse.json(data, { status: apiResponse.status });
   }
 
-  const response = NextResponse.json({ user: data.user });
+  const response = NextResponse.json({
+    user: data.user,
+    phoneVerificationRequired: data.phoneVerificationRequired,
+    phoneVerificationMessage: data.phoneVerificationMessage,
+  });
   setSessionCookie(response, data.token);
   return response;
 }

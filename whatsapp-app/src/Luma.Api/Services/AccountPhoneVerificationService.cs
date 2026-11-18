@@ -131,10 +131,12 @@ public sealed class AccountPhoneVerificationService(
         if (!sendResult.Success)
         {
             logger.LogWarning("Could not send account phone verification code to {Phone}. Error: {Error}", PhoneNumber.Mask(phoneNumber), sendResult.ErrorMessage);
-            return new AccountPhoneVerificationResult(false, "Não consegui enviar o código pelo WhatsApp agora. Tente novamente em instantes.");
+            return new AccountPhoneVerificationResult(false, $"Não consegui solicitar o código por {PhoneVerificationPolicy.ChannelLabel(verifyClient.Channel)} agora. Tente novamente em instantes.");
         }
 
-        return new AccountPhoneVerificationResult(true, "Código enviado pelo WhatsApp.");
+        return new AccountPhoneVerificationResult(true, verifyClient.Channel == "development"
+            ? $"Ambiente de testes: nenhum SMS foi enviado. Use o código {PhoneVerificationPolicy.DevelopmentCode} para confirmar seu celular."
+            : $"Solicitamos seu código de confirmação por {PhoneVerificationPolicy.ChannelLabel(verifyClient.Channel)}. Confira as mensagens no celular informado e digite o código recebido.");
     }
 
     private async Task<AccountPhoneVerificationResult> ConfirmCodeAsync(AccountUser account, string phoneNumber, string purpose, string code, CancellationToken cancellationToken)
@@ -142,7 +144,7 @@ public sealed class AccountPhoneVerificationService(
         var normalizedCode = AccountInputNormalizer.OnlyDigits(code);
         if (normalizedCode.Length != 6)
         {
-            return new AccountPhoneVerificationResult(false, "Informe o código de 6 dígitos enviado pelo WhatsApp.");
+            return new AccountPhoneVerificationResult(false, "Informe o código de 6 dígitos da confirmação do celular.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -170,7 +172,7 @@ public sealed class AccountPhoneVerificationService(
         {
             verificationCode.Attempts += 1;
             await db.SaveChangesAsync(cancellationToken);
-            return new AccountPhoneVerificationResult(false, "Código inválido. Confira a mensagem recebida no WhatsApp e tente novamente.");
+            return new AccountPhoneVerificationResult(false, "Código inválido. Confira o código de confirmação e tente novamente.");
         }
 
         verificationCode.ConsumedAt = now;

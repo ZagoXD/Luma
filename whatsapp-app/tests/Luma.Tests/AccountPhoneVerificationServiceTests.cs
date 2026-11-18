@@ -8,6 +8,33 @@ namespace Luma.Tests;
 
 public sealed class AccountPhoneVerificationServiceTests
 {
+    [Theory]
+    [InlineData("sms", "SMS")]
+    [InlineData("whatsapp", "WhatsApp")]
+    public async Task SendCurrentPhoneCodeAsync_ReportsConfiguredChannel(string channel, string label)
+    {
+        await using var db = CreateDbContext();
+        var account = CreateAccount("+5516992330309");
+        db.AccountUsers.Add(account);
+        await db.SaveChangesAsync();
+        var result = await CreateService(db, new CapturingVerifyClient { Channel = channel }).SendCurrentPhoneCodeAsync(account);
+        Assert.True(result.Success);
+        Assert.Contains(label, result.Message);
+        Assert.DoesNotContain("123456", result.Message);
+    }
+
+    [Fact]
+    public async Task DevelopmentSend_ExplicitlyDisclosesThatNoSmsWasSent()
+    {
+        await using var db = CreateDbContext();
+        var account = CreateAccount("+5516992330309");
+        db.AccountUsers.Add(account);
+        await db.SaveChangesAsync();
+        var result = await CreateService(db, new DevelopmentVerifyClient()).SendCurrentPhoneCodeAsync(account);
+        Assert.Contains("nenhum SMS foi enviado", result.Message);
+        Assert.Contains(PhoneVerificationPolicy.DevelopmentCode, result.Message);
+    }
+
     [Fact]
     public async Task SendCurrentPhoneCodeAsync_CreatesCodeAndSendsWhatsAppMessage()
     {
@@ -129,6 +156,7 @@ public sealed class AccountPhoneVerificationServiceTests
 
     private sealed class CapturingVerifyClient : ITwilioVerifyClient
     {
+        public string Channel { get; init; } = "whatsapp";
         public List<string> SentPhones { get; } = [];
         public HashSet<string> ApprovedCodes { get; } = [];
 
