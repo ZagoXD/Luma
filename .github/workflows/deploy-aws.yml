@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$TARGET_ENV" = production ]; then
-            curl --fail --retry 3 https://dev.ia-luma.com.br/deployment -o /tmp/dev.json
+            curl --fail --retry 3 "https://dev.ia-luma.com.br/deployment?run=$GITHUB_RUN_ID" -o /tmp/dev.json
             SHA=$(jq -r .sha /tmp/dev.json)
             if [ -n "$REQUESTED_SHA" ] && [ "$SHA" != "$REQUESTED_SHA" ]; then
               echo 'Production must promote the currently validated dev commit.' >&2
@@ -106,14 +106,5 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$HEALTH_URL"
-          for attempt in $(seq 1 120); do
-            echo "Checking $TARGET_ENV deployment ($attempt/120)"
-            if curl --fail --max-time 15 -s "$HEALTH_URL/deployment" | jq -e --arg sha "$SHA" '.sha == $sha' >/dev/null; then
-              curl --fail --max-time 15 "$HEALTH_URL/health"
-              echo "### $TARGET_ENV deployed: $SHA" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo 'The signed release was published but did not become healthy in time.' >&2
-          exit 1
+          python3 infra/aws/health.py "$HEALTH_URL" "$SHA" "$TARGET_ENV"
+          echo "### $TARGET_ENV deployed: $SHA" >> "$GITHUB_STEP_SUMMARY"
