@@ -34,6 +34,7 @@ public interface ISubscriptionGateway
 {
     string Provider { get; }
     string PublicKey { get; }
+    bool IsReady { get; }
     bool SupportsPix { get; }
     Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string cardToken, CancellationToken ct);
     Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct);

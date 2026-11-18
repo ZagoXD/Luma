@@ -26,6 +26,8 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     private bool sellerVerified;
     public string Provider => "mercadopago";
     public string PublicKey => settings.PublicKey;
+    public bool IsReady => !string.IsNullOrWhiteSpace(settings.PublicKey) && !string.IsNullOrWhiteSpace(settings.AccessToken)
+        && !string.IsNullOrWhiteSpace(settings.SellerId) && !string.IsNullOrWhiteSpace(settings.WebhookSecret);
     public bool SupportsPix => settings.PixEnabled && (!settings.TestMode
         || (settings.PixAccessToken.StartsWith("TEST-", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(settings.PixSellerId)));
     public bool VerifyWebhook(string resourceId, string requestId, string signature, DateTimeOffset now)

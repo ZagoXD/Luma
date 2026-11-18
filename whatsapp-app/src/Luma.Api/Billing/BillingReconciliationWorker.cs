@@ -15,8 +15,10 @@ public sealed class BillingReconciliationWorker(IServiceScopeFactory scopes, ICo
             {
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<LumaDbContext>();
+                var gateway = scope.ServiceProvider.GetRequiredService<ISubscriptionGateway>();
+                if (!gateway.IsReady) continue;
                 var before = DateTimeOffset.UtcNow.AddMinutes(-10);
-                var subscriptions = await db.AccountSubscriptions.AsNoTracking().Where(s => s.BillingProvider == "mercadopago" && s.Status != "failed"
+                var subscriptions = await db.AccountSubscriptions.AsNoTracking().Where(s => s.BillingProvider == gateway.Provider && s.Status != "failed"
                     && s.PaymentAttemptedAt != null && s.UpdatedAt < before
                     && (s.Status == "pending" || s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow.AddDays(-7)))
                     .OrderBy(s => s.UpdatedAt).Select(s => new { s.AccountUserId, s.Id }).Take(20).ToListAsync(stoppingToken);

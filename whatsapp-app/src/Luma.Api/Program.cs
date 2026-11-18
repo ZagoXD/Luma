@@ -313,7 +313,7 @@ app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext 
 .WithName("LoginAccount")
 .WithOpenApi();
 
-app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db) =>
+app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db, ISubscriptionGateway gateway) =>
 {
     var account = await GetAuthenticatedAccountAsync(request, db);
     if (account is null)
@@ -323,7 +323,7 @@ app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db) =>
 
     var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
     var pendingCheckout = await db.AccountSubscriptions.AsNoTracking()
-        .Where(s => s.AccountUserId == account.Id && s.BillingProvider == "mercadopago" && s.Status == LumaSubscriptionStatuses.Pending && s.PaymentAttemptedAt != null)
+        .Where(s => s.AccountUserId == account.Id && s.BillingProvider == gateway.Provider && s.Status == LumaSubscriptionStatuses.Pending && s.PaymentAttemptedAt != null)
         .OrderByDescending(s => s.CreatedAt).Select(s => new { s.Id, s.PlanCode, s.BillingInterval, s.StartsAt, s.ReplacesSubscriptionId, scheduled = s.ReplacementConfirmedAt != null }).FirstOrDefaultAsync();
     var userPhoneHash = PrivacyRuntime.LookupHash(account.PhoneNumber, "user.phone");
     var lumaUser = await db.Users

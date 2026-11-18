@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using Luma.Api.Data;
 using Luma.Api.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Luma.Api.Billing;
 
@@ -20,11 +19,11 @@ public static class BillingEndpoints
         });
 
         group.MapPost("/checkout/create-subscription", async (HttpRequest http, CheckoutRequest input, LumaDbContext db,
-            BillingService billing, ISubscriptionGateway gateway, IOptions<MercadoPagoOptions> options, CancellationToken ct) =>
+            BillingService billing, ISubscriptionGateway gateway, CancellationToken ct) =>
         {
             var user = await authenticate(http, db);
             if (user is null) return Results.Unauthorized();
-            if (string.IsNullOrWhiteSpace(gateway.PublicKey) || string.IsNullOrWhiteSpace(options.Value.WebhookSecret))
+            if (!gateway.IsReady)
                 return Results.Json(new { message = "O checkout está temporariamente indisponível." }, statusCode: 503);
             var local = await billing.PrepareAsync(user, input.PlanCode, input.BillingInterval, ct, input.ReplacesSubscriptionId);
             var pix = local.PaymentMethod == "pix" && local.ProviderSubscriptionId is not null
@@ -123,7 +122,7 @@ public static class BillingEndpoints
         subscription.Status, subscription.StartsAt, subscription.CurrentPeriodEndsAt, subscription.CanceledAt,
         subscription.PaymentMethod, subscription.PendingPlanCode, subscription.PendingBillingInterval,
         scheduled = subscription.ReplacementConfirmedAt != null && subscription.StartsAt > DateTimeOffset.UtcNow,
-        canManage = subscription.BillingProvider == "mercadopago" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
+        canManage = subscription.BillingProvider != "legacy" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
     };
 }
 
