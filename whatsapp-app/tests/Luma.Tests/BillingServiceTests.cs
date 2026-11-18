@@ -182,6 +182,7 @@ public sealed class BillingServiceTests
         public Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct) => CreateAsync(order, "", ct);
         public Task<PixDetails> GetPixAsync(string id, CancellationToken ct) => Task.FromResult(new PixDetails("qr", "bitmap", null));
         public Task<ProviderSubscription> GetAsync(string id, CancellationToken ct) => Task.FromResult(Remote!);
+        public Task<ProviderSubscription?> FindAsync(Guid reference, string method, CancellationToken ct) => Task.FromResult(Remote);
         public Task SetRenewalAsync(string id, bool enabled, CancellationToken ct) { Remote = Remote! with { Status = enabled ? "authorized" : "paused" }; return Task.CompletedTask; }
         public Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset date, CancellationToken ct) { Remote = Remote! with { Amount = plan.Amount, Months = plan.Months }; return Task.CompletedTask; }
         public Task ChangeCardAsync(string id, string token, CancellationToken ct) => Task.CompletedTask;

@@ -21,7 +21,9 @@ export function CheckoutPageTemplate({ planCode, billingInterval }: { planCode: 
 
   useEffect(() => {
     let active = true;
-    prepareCheckout({ planCode, billingInterval }).then(result => { if (active) setCheckout(result); })
+    prepareCheckout({ planCode, billingInterval }).then(result => {
+      if (active) { setCheckout(result); setWaiting(!!result.submitted); setPix(result.pix); }
+    })
       .catch(error => { if (active) setStatus(error instanceof Error ? error.message : "Não consegui preparar o checkout."); });
     return () => { active = false; };
   }, [planCode, billingInterval]);

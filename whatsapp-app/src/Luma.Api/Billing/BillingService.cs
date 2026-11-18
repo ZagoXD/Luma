@@ -87,6 +87,16 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
     {
         await using var transaction = await LockAsync(userId, ct);
         var local = await OwnedAsync(userId, id, ct);
+        if (local.ProviderSubscriptionId is null && local.PaymentAttemptedAt is not null)
+        {
+            var recovered = await gateway.FindAsync(local.Id, local.PaymentMethod, ct);
+            if (recovered is not null)
+            {
+                if (!BillingPolicy.Matches(local, recovered)) throw new BillingException("Cobrança incompatível com este pedido.");
+                local.ProviderSubscriptionId = recovered.Id;
+                await db.SaveChangesAsync(ct);
+            }
+        }
         if (local.ProviderSubscriptionId is not null && local.BillingProvider == gateway.Provider) await SyncAsync(local, ct);
         if (transaction is not null) await transaction.CommitAsync(ct);
         return local;
@@ -114,10 +124,23 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         if (local.PaymentMethod != "card" || local.Status != SubscriptionStatuses.Active)
             throw new BillingException("Retome a renovação antes de alterar o plano. No Pix, escolha o novo plano ao renovar.");
         // Keep the paid entitlement unchanged; the new tier is granted only when its renewal is paid.
+        var previousPlan = local.PendingPlanCode;
+        var previousInterval = local.PendingBillingInterval;
         local.PendingPlanCode = code;
         local.PendingBillingInterval = interval;
         await db.SaveChangesAsync(ct);
-        await gateway.ChangePlanAsync(local.ProviderSubscriptionId!, plan, local.CurrentPeriodEndsAt, ct);
+        try { await gateway.ChangePlanAsync(local.ProviderSubscriptionId!, plan, local.CurrentPeriodEndsAt, ct); }
+        catch (Exception exception) when (exception is BillingException or HttpRequestException or TaskCanceledException)
+        {
+            if (exception is BillingException { Uncertain: false })
+            {
+                local.PendingPlanCode = previousPlan;
+                local.PendingBillingInterval = previousInterval;
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+            if (transaction is not null) await transaction.CommitAsync(CancellationToken.None);
+            throw;
+        }
         if (transaction is not null) await transaction.CommitAsync(ct);
         return local;
     }

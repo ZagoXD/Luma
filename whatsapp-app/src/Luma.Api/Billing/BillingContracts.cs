@@ -38,6 +38,7 @@ public interface ISubscriptionGateway
     Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct);
     Task<PixDetails> GetPixAsync(string id, CancellationToken ct);
     Task<ProviderSubscription> GetAsync(string id, CancellationToken ct);
+    Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct);
     Task SetRenewalAsync(string id, bool enabled, CancellationToken ct);
     Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset nextPaymentAt, CancellationToken ct);
     Task ChangeCardAsync(string id, string cardToken, CancellationToken ct);

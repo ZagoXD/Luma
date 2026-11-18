@@ -28,12 +28,8 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     {
         await ValidateSellerAsync(ct);
         // Recover a timed-out creation by our unguessable external reference before attempting another POST.
-        var existing = await SendAsync(HttpMethod.Get, $"preapproval/search?external_reference={order.Id:N}", null, null, ct);
-        if (existing.TryGetProperty("results", out var results))
-        {
-            var match = results.EnumerateArray().FirstOrDefault(item => Text(item, "external_reference") == order.Id.ToString("N"));
-            if (match.ValueKind == JsonValueKind.Object) return ParseSubscription(match);
-        }
+        var existing = await FindAsync(order.Id, "card", ct);
+        if (existing is not null) return existing;
         var data = await SendAsync(HttpMethod.Post, "preapproval", new
         {
             reason = order.Plan.Name,
@@ -50,6 +46,8 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     public async Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct)
     {
         await ValidateSellerAsync(ct);
+        var existing = await FindAsync(order.Id, "pix", ct);
+        if (existing is not null) return existing;
         var data = await SendAsync(HttpMethod.Post, "v1/payments", new
         {
             transaction_amount = order.Plan.Amount,
@@ -76,15 +74,34 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             ? ParsePix(await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct))
             : ParseSubscription(await SendAsync(HttpMethod.Get, "preapproval/" + Resource(id), null, null, ct));
 
+    public async Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct)
+    {
+        var path = paymentMethod == "pix" ? "v1/payments/search" : "preapproval/search";
+        var results = await SendAsync(HttpMethod.Get, $"{path}?external_reference={reference:N}", null, null, ct);
+        if (!results.TryGetProperty("results", out var items)) return null;
+        var matches = items.EnumerateArray().Where(item => Text(item, "external_reference") == reference.ToString("N")).ToArray();
+        if (matches.Length > 1) throw new BillingException("Existe mais de uma cobrança para este pedido. Entre em contato com o suporte antes de tentar novamente.", true);
+        return matches.Length == 0 ? null : paymentMethod == "pix" ? ParsePix(matches[0]) : ParseSubscription(matches[0]);
+    }
+
     public async Task SetRenewalAsync(string id, bool enabled, CancellationToken ct)
-        => _ = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { status = enabled ? "authorized" : "paused" }, null, ct);
+    {
+        var expected = enabled ? "authorized" : "paused";
+        var response = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { status = expected }, null, ct);
+        if (Text(response, "status") != expected) throw new BillingException("O provedor não confirmou a alteração da renovação.", true);
+    }
 
     public async Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset nextPaymentAt, CancellationToken ct)
-        => _ = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new
+    {
+        var response = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new
         {
             reason = plan.Name,
             auto_recurring = new { transaction_amount = plan.Amount, currency_id = "BRL", frequency = plan.Months, frequency_type = "months" }
         }, null, ct);
+        var remote = ParseSubscription(response);
+        if (remote.Amount != plan.Amount || remote.Months != plan.Months || remote.Currency != "BRL")
+            throw new BillingException("O provedor não confirmou a alteração. Consulte o suporte antes de tentar novamente.", true);
+    }
 
     public async Task ChangeCardAsync(string id, string cardToken, CancellationToken ct)
         => _ = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { card_token_id = cardToken }, null, ct);

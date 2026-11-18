@@ -27,8 +27,11 @@ public static class BillingEndpoints
             if (string.IsNullOrWhiteSpace(gateway.PublicKey) || string.IsNullOrWhiteSpace(options.Value.WebhookSecret))
                 return Results.Json(new { message = "O checkout está temporariamente indisponível." }, statusCode: 503);
             var local = await billing.PrepareAsync(user, input.PlanCode, input.BillingInterval, ct);
+            var pix = local.PaymentMethod == "pix" && local.ProviderSubscriptionId is not null
+                ? await gateway.GetPixAsync(local.ProviderSubscriptionId, ct) : null;
             return Results.Ok(new { provider = gateway.Provider, publicKey = gateway.PublicKey, checkoutId = local.Id,
-                amount = BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount, email = user.Email });
+                amount = BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount, email = user.Email,
+                submitted = local.PaymentAttemptedAt is not null, pix });
         });
 
         group.MapPost("/checkout/confirm-subscription", async (HttpRequest http, PaymentRequest input, LumaDbContext db,

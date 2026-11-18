@@ -4,6 +4,8 @@ export type CheckoutConfiguration = {
   checkoutId: string;
   amount: number;
   email: string;
+  submitted?: boolean;
+  pix?: { qrCode: string; qrCodeBase64: string; expiresAt?: string };
 };
 
 export type BrickSubmission = { token?: string; payer?: { email?: string } };
