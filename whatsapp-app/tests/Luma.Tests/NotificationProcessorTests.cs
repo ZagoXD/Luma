@@ -10,6 +10,28 @@ namespace Luma.Tests;
 public sealed class NotificationProcessorTests
 {
     [Theory]
+    [InlineData(180, true)]
+    [InlineData(30, false)]
+    public async Task Missing_callbacks_are_reconciled_by_reading_the_provider_without_resending(int ageSeconds, bool reconciles)
+    {
+        await using var db = CreateDbContext();
+        var now = DateTimeOffset.Parse("2026-05-10T12:00:00Z");
+        var user = await AddDailyCheckinAsync(db, now);
+        db.NotificationPreferences.Single().SymptomCheckinEnabled = false;
+        var sid = "MM" + new string('1', 32);
+        var delivery = new NotificationDelivery { UserId = user.Id, Type = NotificationTypes.SymptomCheckin,
+            Status = NotificationDeliveryStatuses.Submitted, ProviderMessageId = sid,
+            ScheduledFor = now.AddSeconds(-ageSeconds), UpdatedAt = now.AddSeconds(-ageSeconds) };
+        db.NotificationDeliveries.Add(delivery);
+        await db.SaveChangesAsync();
+        var sender = new CapturingNotificationSender { ProviderStatus = new NotificationProviderStatus(sid, "read", null) };
+        await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+        Assert.Empty(sender.Messages);
+        Assert.Equal(reconciles ? NotificationDeliveryStatuses.Read : NotificationDeliveryStatuses.Submitted, delivery.Status);
+        Assert.Equal(reconciles ? 1 : 0, sender.StatusLookups);
+    }
+
+    [Theory]
     [InlineData("2026-05-11T02:30:00Z", "America/Sao_Paulo", 23, 30, "2026-05-10")]
     [InlineData("2026-05-10T10:30:00Z", "Pacific/Kiritimati", 0, 30, "2026-05-11")]
     public async Task Reminders_and_deduplication_use_the_users_local_date(string utc, string zone, int hour, int minute, string date)
@@ -287,6 +309,13 @@ public sealed class NotificationProcessorTests
     private sealed class CapturingNotificationSender : IWhatsAppNotificationSender
     {
         public Queue<NotificationSendResult> Results { get; } = new();
+        public NotificationProviderStatus? ProviderStatus { get; init; }
+        public int StatusLookups { get; private set; }
+        public Task<NotificationProviderStatus?> GetMessageStatusAsync(string messageSid, CancellationToken cancellationToken = default)
+        {
+            StatusLookups++;
+            return Task.FromResult(ProviderStatus);
+        }
         public List<CapturedMessage> Messages { get; } = [];
 
         public Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default)

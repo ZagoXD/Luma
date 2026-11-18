@@ -7,21 +7,23 @@ namespace Luma.Tests;
 
 public sealed class NotificationStatusServiceTests
 {
-    [Fact]
-    public async Task Callback_confirms_delivery_and_cannot_regress_to_queued_or_failed()
+    [Theory]
+    [InlineData("SMtest")]
+    [InlineData("MMtest")]
+    public async Task Callback_confirms_delivery_and_cannot_regress_to_queued_or_failed(string messageSid)
     {
         await using var db = CreateDb();
-        var delivery = new NotificationDelivery { UserId = Guid.NewGuid(), ProviderMessageId = "SMtest", Status = NotificationDeliveryStatuses.Submitted };
+        var delivery = new NotificationDelivery { UserId = Guid.NewGuid(), ProviderMessageId = messageSid, Status = NotificationDeliveryStatuses.Submitted };
         db.NotificationDeliveries.Add(delivery);
         await db.SaveChangesAsync();
         var service = new NotificationStatusService(db);
-        Assert.True(await service.ApplyAsync(delivery.Id, "SMtest", "delivered", null));
+        Assert.True(await service.ApplyAsync(delivery.Id, messageSid, "delivered", null));
         Assert.Equal(NotificationDeliveryStatuses.Delivered, delivery.Status);
         Assert.NotNull(delivery.SentAt);
-        await service.ApplyAsync(delivery.Id, "SMtest", "queued", null);
-        await service.ApplyAsync(delivery.Id, "SMtest", "undelivered", "63016");
+        await service.ApplyAsync(delivery.Id, messageSid, "queued", null);
+        await service.ApplyAsync(delivery.Id, messageSid, "undelivered", "63016");
         Assert.Equal(NotificationDeliveryStatuses.Delivered, delivery.Status);
-        await service.ApplyAsync(delivery.Id, "SMtest", "read", null);
+        await service.ApplyAsync(delivery.Id, messageSid, "read", null);
         Assert.Equal(NotificationDeliveryStatuses.Read, delivery.Status);
     }
 

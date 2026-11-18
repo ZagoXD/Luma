@@ -25,6 +25,8 @@ Estados registrados: `pending` (reserva), `submitted` (Twilio aceitou), `sent`, 
 
 Cada mensagem recebe callback em `/webhooks/twilio/notifications/status/{deliveryId}`. O backend valida assinatura, URL pública exata, Account SID e remetente WhatsApp. Eventos repetidos ou fora de ordem não rebaixam uma entrega já confirmada. Um callback que chega antes da resposta do envio não é sobrescrito. Não é necessário cadastrar manualmente esse callback no painel: ele é informado na requisição de cada envio.
 
+Os identificadores de mensagens podem começar com `SM` ou `MM`, ambos suportados. Se o callback não atualizar uma submissão conhecida por dois minutos, o worker consulta o status com GET na API da Twilio, sem enviar outra mensagem. A reconciliação é limitada a 20 registros por ciclo e a submissões das últimas 24 horas. Não tenta adivinhar o resultado de envios sem Message SID.
+
 ## Templates de Produção
 
 | Tipo | Content SID | Variáveis |

@@ -17,7 +17,8 @@ public sealed class NotificationStatusService(LumaDbContext db)
             "failed" or "undelivered" or "canceled" => NotificationDeliveryStatuses.Failed,
             _ => null
         };
-        if (status is null || !messageSid.StartsWith("SM", StringComparison.Ordinal) || messageSid.Length > 128) return false;
+        if (status is null || !(messageSid.StartsWith("SM", StringComparison.Ordinal)
+            || messageSid.StartsWith("MM", StringComparison.Ordinal)) || messageSid.Length > 128) return false;
         var delivery = await db.NotificationDeliveries.FindAsync([deliveryId], cancellationToken);
         if (delivery is null || (delivery.ProviderMessageId is not null && delivery.ProviderMessageId != messageSid)) return false;
         if (Rank(status) < Rank(delivery.Status)) return true;

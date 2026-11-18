@@ -9,6 +9,18 @@ namespace Luma.Tests;
 public sealed class TwilioNotificationSenderTests
 {
     [Fact]
+    public async Task Reconciliation_only_reads_message_status_and_never_posts_another_message()
+    {
+        var sid = "MM" + new string('1', 32);
+        var handler = new Handler(200, "{\"sid\":\"" + sid + "\",\"status\":\"read\",\"error_code\":null}");
+        var status = await Create(handler).GetMessageStatusAsync(sid);
+        Assert.Equal(HttpMethod.Get, handler.Method);
+        Assert.Equal("read", status!.Status);
+        Assert.Equal(sid, status.MessageSid);
+        Assert.Equal("", handler.Body);
+    }
+
+    [Fact]
     public async Task Rate_limit_preserves_the_providers_retry_after_hint()
     {
         var result = await Create(new Handler(429, "{}", 180)).SendTemplateAsync("+5511999990001",
@@ -61,9 +73,11 @@ public sealed class TwilioNotificationSenderTests
     private sealed class Handler(int status, string content, int? retryAfter = null) : HttpMessageHandler
     {
         public string Body { get; private set; } = "";
+        public HttpMethod? Method { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Method = request.Method;
+            Body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
             var response = new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(content) };
             if (retryAfter is not null) response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfter.Value));
             return response;

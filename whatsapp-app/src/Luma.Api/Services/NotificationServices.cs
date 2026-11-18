@@ -42,6 +42,7 @@ public sealed record NotificationPreferenceUpdate(
 
 public sealed record NotificationSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage,
     bool Retryable = false, bool DeliveryUnknown = false, TimeSpan? RetryAfter = null);
+public sealed record NotificationProviderStatus(string MessageSid, string Status, string? ErrorCode);
 
 public sealed record TwilioVerifySendResult(bool Success, string? VerificationSid, string? Status, string? ErrorMessage);
 
@@ -150,6 +151,8 @@ public sealed class NotificationPreferenceService(LumaDbContext db)
 
 public interface IWhatsAppNotificationSender
 {
+    Task<NotificationProviderStatus?> GetMessageStatusAsync(string messageSid, CancellationToken cancellationToken = default)
+        => Task.FromResult<NotificationProviderStatus?>(null);
     Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default);
     Task<NotificationSendResult> SendScheduledTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables,
         Guid deliveryId, CancellationToken cancellationToken = default) => SendTemplateAsync(to, templateKey, variables, cancellationToken);
@@ -263,6 +266,22 @@ public sealed class TwilioVerifyClient(HttpClient http, IConfiguration configura
 
 public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfiguration configuration, ILogger<TwilioWhatsAppNotificationSender> logger) : IWhatsAppNotificationSender
 {
+    public async Task<NotificationProviderStatus?> GetMessageStatusAsync(string messageSid, CancellationToken cancellationToken = default)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(messageSid, "^(SM|MM)[0-9a-fA-F]{32}$")) return null;
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.twilio.com/2010-04-01/Accounts/{_options.AccountSid}/Messages/{messageSid}.json");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic",
+            Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.AccountSid}:{_options.AuthToken}")));
+        using var response = await http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (document.RootElement.GetProperty("sid").GetString() != messageSid) return null;
+        var status = document.RootElement.GetProperty("status").GetString();
+        var error = document.RootElement.TryGetProperty("error_code", out var code) && code.ValueKind != JsonValueKind.Null ? code.ToString() : null;
+        return status is null ? null : new NotificationProviderStatus(messageSid, status, error);
+    }
+
     private readonly TwilioOptions _options = new()
     {
         AccountSid = configuration.GetValue<string>("Twilio:AccountSid") ?? string.Empty,
@@ -538,6 +557,7 @@ public sealed class NotificationProcessor(
     public async Task<int> RunDueNotificationsAsync(CancellationToken cancellationToken = default)
     {
         var now = dateProvider.UtcNow;
+        await ReconcileDeliveryStatusesAsync(now, cancellationToken);
         var preferences = await db.NotificationPreferences
             .Include(preference => preference.User)
             .Where(preference => preference.PeriodReminderEnabled || preference.ContraceptiveReminderEnabled || preference.SymptomCheckinEnabled)
@@ -567,6 +587,30 @@ public sealed class NotificationProcessor(
         }
 
         return processed;
+    }
+
+    private async Task ReconcileDeliveryStatusesAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var cutoff = now.AddMinutes(-2);
+        var oldest = now.AddDays(-1);
+        var unsettled = await db.NotificationDeliveries.Where(item => item.ProviderMessageId != null
+            && (item.Status == NotificationDeliveryStatuses.Submitted || item.Status == NotificationDeliveryStatuses.Sent
+                || item.Status == NotificationDeliveryStatuses.Unknown)
+            && item.UpdatedAt <= cutoff && item.ScheduledFor >= oldest)
+            .OrderBy(item => item.UpdatedAt).Take(20).ToListAsync(cancellationToken);
+        var statuses = new NotificationStatusService(db);
+        foreach (var delivery in unsettled)
+        {
+            try
+            {
+                var status = await sender.GetMessageStatusAsync(delivery.ProviderMessageId!, cancellationToken);
+                if (status is not null) await statuses.ApplyAsync(delivery.Id, status.MessageSid, status.Status, status.ErrorCode, cancellationToken);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or JsonException || ex is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Could not reconcile notification status for {DeliveryId}.", delivery.Id);
+            }
+        }
     }
 
     private async Task<int> ProcessUserAsync(NotificationPreference preference, DateTimeOffset now, CancellationToken cancellationToken)
