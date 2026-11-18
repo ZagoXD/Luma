@@ -20,6 +20,9 @@ def probe(base, sha, environment, fetch=fetch_json):
             return False
         health = fetch(base.rstrip("/") + "/health?check=" + check)
         return health.get("status") == "ok" and health.get("database") == "connected"
+    except urllib.error.HTTPError as error:
+        error.close()
+        return False
     except (OSError, ValueError, urllib.error.URLError):
         return False
 

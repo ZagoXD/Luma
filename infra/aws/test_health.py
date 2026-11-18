@@ -1,15 +1,18 @@
 import unittest
+import io
 import urllib.error
 from health import probe
 
 
 class HealthTests(unittest.TestCase):
     def test_matching_revision_does_not_hide_a_failed_api_health_check(self):
+        response = io.BytesIO()
         def fetch(url):
             if "/deployment" in url:
                 return {"sha": "a" * 40, "environment": "dev"}
-            raise urllib.error.HTTPError(url, 404, "Propagation in progress", {}, None)
+            raise urllib.error.HTTPError(url, 404, "Propagation in progress", {}, response)
         self.assertFalse(probe("https://example.invalid", "a" * 40, "dev", fetch))
+        self.assertTrue(response.closed)
 
     def test_rejects_the_other_environment_even_with_same_images(self):
         self.assertFalse(probe("https://example.invalid", "a" * 40, "dev",

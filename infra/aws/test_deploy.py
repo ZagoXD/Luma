@@ -1,10 +1,23 @@
 import unittest
 import json
+import io
+import tempfile
+import urllib.error
+from unittest.mock import patch
 from pathlib import Path
-from deploy import validate_manifest, render_environment, verification_key_path, runtime_file_mode
+from deploy import validate_manifest, render_environment, verification_key_path, runtime_file_mode, install
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_channel_checks_bypass_stale_redirects_and_close_missing_responses(self):
+        response = io.BytesIO()
+        error = urllib.error.HTTPError("https://example.invalid", 404, "Not published", {}, response)
+        with tempfile.TemporaryDirectory() as directory, patch("deploy.ROOT", Path(directory)):
+            with patch("deploy.fetch", side_effect=error) as fetch:
+                install("dev")
+                self.assertIn("?check=", fetch.call_args.args[0])
+                self.assertTrue(response.closed)
+
     def test_redis_config_is_readable_inside_container_but_other_secret_files_stay_private(self):
         self.assertEqual(runtime_file_mode("redis.conf"), 0o644)
         for name in ("api.env", "web.env", "postgres.env", ".env"):

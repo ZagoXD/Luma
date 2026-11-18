@@ -144,10 +144,12 @@ def install(environment):
         temporary = Path(directory)
         base = f"https://github.com/{REPO}/releases/download/aws-channel-{environment}"
         manifest, signature = temporary / "manifest.json", temporary / "manifest.sig"
+        check = str(time.time_ns())
         try:
-            fetch(base + "/manifest.json", manifest)
-            fetch(base + "/manifest.sig", signature)
+            fetch(base + "/manifest.json?check=" + check, manifest)
+            fetch(base + "/manifest.sig?check=" + check, signature)
         except urllib.error.HTTPError as error:
+            error.close()
             if error.code == 404:
                 return
             raise
