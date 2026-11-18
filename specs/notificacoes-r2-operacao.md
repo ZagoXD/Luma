@@ -19,7 +19,7 @@ O lembrete é apoio de organização, não recomendação de dose ou garantia de
 
 O processador consulta preferências a cada 60 segundos. A janela padrão é de cinco minutos após o horário escolhido. Uma chave Redis por tentativa e a restrição única do PostgreSQL impedem duplicações. O banco também faz a reserva atômica de retentativas, inclusive se o Redis estiver indisponível.
 
-Rejeições transitórias explícitas (HTTP 429 e 5xx) permitem até três tentativas, com espera progressiva de 60 e 120 segundos, dentro da janela. Erros permanentes não são repetidos. Timeout, conexão perdida ou resposta de sucesso sem Message SID têm resultado desconhecido e não são reenviados automaticamente, pois a Twilio pode já ter aceitado a mensagem.
+Rejeições transitórias explícitas (HTTP 429 e 5xx) permitem até três tentativas, com espera progressiva de 60 e 120 segundos, dentro da janela, respeitando também o `Retry-After` do provedor. Erros permanentes não são repetidos. Timeout, conexão perdida ou resposta de sucesso sem Message SID têm resultado desconhecido e não são reenviados automaticamente, pois a Twilio pode já ter aceitado a mensagem.
 
 Estados registrados: `pending` (reserva), `submitted` (Twilio aceitou), `sent`, `delivered`, `read`, `failed` e `unknown`. Um aceite HTTP não é tratado como confirmação de entrega.
 

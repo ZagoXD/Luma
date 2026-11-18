@@ -41,7 +41,7 @@ public sealed record NotificationPreferenceUpdate(
     string? TimeZone);
 
 public sealed record NotificationSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage,
-    bool Retryable = false, bool DeliveryUnknown = false);
+    bool Retryable = false, bool DeliveryUnknown = false, TimeSpan? RetryAfter = null);
 
 public sealed record TwilioVerifySendResult(bool Success, string? VerificationSid, string? Status, string? ErrorMessage);
 
@@ -321,7 +321,9 @@ public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfigura
                 if (error.RootElement.TryGetProperty("code", out var value) && value.TryGetInt32(out var number)) code += $"_{number}";
             }
             catch (JsonException) { }
-            return new NotificationSendResult(false, null, code, Retryable: retryable);
+            var retryAfter = response.Headers.RetryAfter?.Delta
+                ?? (response.Headers.RetryAfter?.Date is { } date ? date - DateTimeOffset.UtcNow : (TimeSpan?)null);
+            return new NotificationSendResult(false, null, code, Retryable: retryable, RetryAfter: retryAfter);
         }
 
         using var document = JsonDocument.Parse(content);
@@ -708,7 +710,8 @@ public sealed class NotificationProcessor(
                 delivery.ProviderMessageId = result.ProviderMessageId;
                 delivery.ErrorMessage = result.ErrorMessage;
                 delivery.NextAttemptAt = !result.Success && result.Retryable && !result.DeliveryUnknown && delivery.Attempts < maxAttempts
-                    ? now.AddSeconds(Math.Clamp(_options.RetryDelaySeconds, 30, 300) * delivery.Attempts) : null;
+                    ? now.AddSeconds(Math.Max(Math.Clamp(_options.RetryDelaySeconds, 30, 300) * Math.Pow(2, delivery.Attempts - 1),
+                        Math.Clamp(result.RetryAfter?.TotalSeconds ?? 0, 0, 86400))) : null;
                 delivery.UpdatedAt = now;
                 if (db.Database.IsRelational())
                 {

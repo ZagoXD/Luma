@@ -8,6 +8,14 @@ namespace Luma.Tests;
 
 public sealed class TwilioNotificationSenderTests
 {
+    [Fact]
+    public async Task Rate_limit_preserves_the_providers_retry_after_hint()
+    {
+        var result = await Create(new Handler(429, "{}", 180)).SendTemplateAsync("+5511999990001",
+            NotificationTypes.ContraceptiveDaily, new Dictionary<string, string>());
+        Assert.Equal(TimeSpan.FromSeconds(180), result.RetryAfter);
+    }
+
     [Theory]
     [InlineData(429, true)]
     [InlineData(503, true)]
@@ -50,13 +58,15 @@ public sealed class TwilioNotificationSenderTests
             ["Twilio:TemplateContraceptiveDaily"] = "HXpill", ["Twilio:NotificationStatusCallbackBaseUrl"] = "https://api.ia-luma.com.br/webhooks/twilio/notifications/status"
         }).Build(), NullLogger<TwilioWhatsAppNotificationSender>.Instance);
 
-    private sealed class Handler(int status, string content) : HttpMessageHandler
+    private sealed class Handler(int status, string content, int? retryAfter = null) : HttpMessageHandler
     {
         public string Body { get; private set; } = "";
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
-            return new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(content) };
+            var response = new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(content) };
+            if (retryAfter is not null) response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfter.Value));
+            return response;
         }
     }
 }
