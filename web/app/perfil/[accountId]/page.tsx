@@ -8,8 +8,8 @@ type ProfileAccountPageProps = {
 export default async function ProfileAccountPage({ params }: ProfileAccountPageProps) {
   const { accountId } = await params;
   const host = (await headers()).get("host")?.toLowerCase();
-  const sandboxNumber = host && host === process.env.LUMA_SANDBOX_HOST
+  const sandboxNumber = process.env.LUMA_WHATSAPP_NUMBER || (host && host === process.env.LUMA_SANDBOX_HOST
     ? process.env.LUMA_SANDBOX_WHATSAPP_FROM?.replace(/^whatsapp:/, "")
-    : undefined;
+    : undefined);
   return <ProfilePageTemplate accountId={accountId} whatsappNumber={sandboxNumber} />;
 }

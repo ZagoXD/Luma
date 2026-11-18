@@ -13,6 +13,7 @@ namespace Luma.Api.Services.Assistant;
 public sealed class RagOptions
 {
     public bool Enabled { get; set; }
+    public bool AllowEmbeddingGeneration { get; set; } = true;
     public string EmbeddingModel { get; set; } = "text-embedding-3-small";
     public int Dimensions { get; set; } = 512;
     public string CorpusPath { get; set; } = "Knowledge/corpus.json";
@@ -136,6 +137,8 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
                 return version;
             }
         }
+        if (!_options.AllowEmbeddingGeneration)
+            throw new InvalidOperationException("Importe os vetores do acervo antes de iniciar este ambiente; geração automática de embeddings desativada.");
         var vectors = await embeddings.EmbedAsync(documents.Select(document => document.Title + "\n" + document.Content).ToArray(), ct);
         for (var index = 0; index < documents.Count; index++)
         {

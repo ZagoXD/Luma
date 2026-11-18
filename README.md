@@ -6,6 +6,12 @@ Ela não faz diagnósticos, não confirma gravidez, não substitui orientação 
 
 ## Estado Atual
 
+### Hospedagem e deploy
+
+A implantação AWS usa dev e produção isolados em Docker, com PostgreSQL/pgvector e Redis próprios, segredos no AWS Secrets Manager, acesso HTTPS pelo Cloudflare Tunnel e backups privados. O CI da `main` libera o deploy automático de dev; produção é promovida manualmente com as mesmas imagens validadas.
+
+Consulte [Operação e migração AWS](specs/deploy-aws-luma.md) para arquitetura, custos do plano FREE, deploy, rollback, retorno ao computador e credenciais pendentes. A branch `backup/local-cloudflared` preserva o ambiente local; seus volumes permanecem no computador.
+
 Implementado:
 
 - Bot WhatsApp via Twilio.
@@ -40,10 +46,11 @@ Pendente para produção completa:
 - Criar/aprovar templates Twilio/Meta.
 - Ativar worker de notificações.
 - Configurar WhatsApp Business real fora do Sandbox.
-- Configurar Stripe em modo produção.
+- Validar a operação comercial Stripe live; catálogo e configuração estão separados de dev.
 - Configurar domínio customizado para mídia do R2.
 - Publicar termos e política de privacidade.
-- Definir rotina formal de backup e rotação futura de chaves de privacidade.
+- Recuperar as credenciais de ElevenLabs, Resend, R2 e Twilio Verify no ambiente restaurado.
+- Validar restauração dos backups e definir rotação futura de chaves de privacidade.
 
 ## Planos
 

@@ -18,6 +18,28 @@ public sealed class PostgresFactAttribute : FactAttribute
 public sealed class PostgresKnowledgeTests
 {
     [PostgresFact]
+    public async Task Startup_can_require_imported_vectors_without_generating_paid_embeddings()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "luma-import-only-" + Guid.NewGuid() + ".json");
+        try
+        {
+            var documents = new[] { new KnowledgeDocument("import-only", "Ciclo", "Informação revisada sobre ciclo.",
+                "https://www.gov.br/saude", Guid.NewGuid().ToString(), "approved") };
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(documents));
+            var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+                ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("LUMA_INTEGRATION_DATABASE") }).Build();
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var embedding = new CountingEmbedding();
+            var store = new KnowledgeStore(config, Options.Create(new RagOptions {
+                Enabled = true, Dimensions = 3, CorpusPath = path, AllowEmbeddingGeneration = false }),
+                embedding, cache, NullLogger<KnowledgeStore>.Instance);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => store.PublishAsync());
+            Assert.Equal(0, embedding.Calls);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [PostgresFact]
     public async Task Published_corpus_passes_retrieval_evaluations_without_model_or_embedding_cost()
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {

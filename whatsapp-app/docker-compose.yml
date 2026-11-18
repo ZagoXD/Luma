@@ -83,6 +83,7 @@ services:
       Assistant__MaxToolCalls: ${LUMA_ASSISTANT_MAX_TOOL_CALLS:-5}
       Assistant__TimeoutSeconds: ${LUMA_ASSISTANT_TIMEOUT_SECONDS:-10}
       Rag__Enabled: ${LUMA_RAG_ENABLED:-false}
+      Rag__AllowEmbeddingGeneration: ${LUMA_RAG_ALLOW_EMBEDDING_GENERATION:-true}
       Rag__EmbeddingModel: ${LUMA_RAG_EMBEDDING_MODEL:-text-embedding-3-small}
       Rag__Dimensions: ${LUMA_RAG_DIMENSIONS:-512}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
