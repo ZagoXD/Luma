@@ -113,6 +113,7 @@ app.UseCors();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<LumaDbContext>();
+    await using var startupLock = await DatabaseStartupLock.AcquireAsync(db);
     await db.Database.EnsureCreatedAsync();
     await EnsureRuntimeSchemaAsync(db);
     await db.Database.ExecuteSqlRawAsync("""
@@ -645,6 +646,12 @@ app.MapPost("/checkout/confirm-subscription", async (
     if (stripeSubscription.CustomerId != account.StripeCustomerId)
     {
         return Results.Unauthorized();
+    }
+
+    var purchasedPriceId = stripeSubscription.Items?.Data?.FirstOrDefault()?.Price?.Id;
+    if (!StripeSubscriptionPolicy.MatchesPurchasedPrice(purchasedPriceId, plan, billingInterval, stripeOptions))
+    {
+        return Results.BadRequest(new { message = "O plano ou ciclo informado não corresponde à assinatura na Stripe." });
     }
 
     await UpdateStripeCustomerBillingDetailsAsync(account, request.CardholderName, request.BillingCpf);
@@ -1704,7 +1711,8 @@ static async Task SyncStripeSubscriptionAsync(
     localSubscription.StripePriceId = resolved.PriceId ?? localSubscription.StripePriceId;
     localSubscription.Status = StripeStatusToLocalStatus(stripeSubscription);
     localSubscription.CurrentPeriodEndsAt = GetStripePeriodEnd(stripeSubscription) ?? localSubscription.CurrentPeriodEndsAt;
-    if (localSubscription.Status == LumaSubscriptionStatuses.Canceled && previousStatus != LumaSubscriptionStatuses.Active)
+    if (localSubscription.Status == LumaSubscriptionStatuses.Canceled
+        && StripeSubscriptionPolicy.ShouldExpireCanceledSubscription(previousStatus))
     {
         localSubscription.Status = LumaSubscriptionStatuses.Pending;
         localSubscription.CurrentPeriodEndsAt = now.AddSeconds(-1);
