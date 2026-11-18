@@ -23,6 +23,7 @@ public sealed record PixDetails(string QrCode, string QrCodeBase64, DateTimeOffs
 public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOptions> options) : ISubscriptionGateway
 {
     private readonly MercadoPagoOptions settings = options.Value;
+    private bool sellerVerified;
     public string Provider => "mercadopago";
     public string PublicKey => settings.PublicKey;
     public bool SupportsPix => settings.PixEnabled && (!settings.TestMode
@@ -87,12 +88,16 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     }
 
     public async Task<ProviderSubscription> GetAsync(string id, CancellationToken ct)
-        => id.StartsWith("pix:", StringComparison.Ordinal)
-            ? ParsePix(await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true))
-            : ParseSubscription(await SendAsync(HttpMethod.Get, "preapproval/" + Resource(id), null, null, ct));
+    {
+        if (id.StartsWith("pix:", StringComparison.Ordinal))
+            return ParsePix(await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true));
+        await ValidateSellerAsync(ct);
+        return ParseSubscription(await SendAsync(HttpMethod.Get, "preapproval/" + Resource(id), null, null, ct));
+    }
 
     public async Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct)
     {
+        if (paymentMethod != "pix") await ValidateSellerAsync(ct);
         var path = paymentMethod == "pix" ? "v1/payments/search" : "preapproval/search";
         var results = await SendAsync(HttpMethod.Get, $"{path}?external_reference={reference:N}", null, null, ct, pix: paymentMethod == "pix");
         if (!results.TryGetProperty("results", out var items)) return null;
@@ -103,6 +108,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     public async Task SetRenewalAsync(string id, bool enabled, CancellationToken ct)
     {
+        await ValidateSellerAsync(ct);
         var expected = enabled ? "authorized" : "paused";
         var response = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { status = expected }, null, ct);
         if (Text(response, "status") != expected) throw new BillingException("O provedor não confirmou a alteração da renovação.", true);
@@ -110,6 +116,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     public async Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset nextPaymentAt, CancellationToken ct)
     {
+        await ValidateSellerAsync(ct);
         var response = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new
         {
             reason = plan.Name,
@@ -121,7 +128,10 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     }
 
     public async Task ChangeCardAsync(string id, string cardToken, CancellationToken ct)
-        => _ = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { card_token_id = cardToken }, null, ct);
+    {
+        await ValidateSellerAsync(ct);
+        _ = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { card_token_id = cardToken }, null, ct);
+    }
 
     public async Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string id, CancellationToken ct)
     {
@@ -132,6 +142,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             return [ParsePayment(payment, id)];
         }
         var payments = new List<ProviderPayment>();
+        await ValidateSellerAsync(ct);
         for (var offset = 0; offset < 1200; offset += 100)
         {
             var page = await SendAsync(HttpMethod.Get, $"authorized_payments/search?preapproval_id={Resource(id)}&limit=100&offset={offset}", null, null, ct);
@@ -163,6 +174,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             try { payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct); }
             catch (BillingException) when (SupportsPix && !string.IsNullOrWhiteSpace(settings.PixAccessToken))
             { payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct, pix: true); }
+            if (Text(payment, "payment_method_id") != "pix") await ValidateSellerAsync(ct);
             ValidatePayment(payment);
             if (Text(payment, "payment_method_id") == "pix") return "pix:" + Resource(id);
             var invoices = await SendAsync(HttpMethod.Get, "authorized_payments/search?payment_id=" + Resource(id), null, null, ct);
@@ -173,18 +185,25 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     private void ValidatePayment(JsonElement data)
     {
-        var seller = Text(data, "payment_method_id") == "pix" && !string.IsNullOrWhiteSpace(settings.PixSellerId) ? settings.PixSellerId : settings.SellerId;
+        var pix = Text(data, "payment_method_id") == "pix";
+        var seller = pix && !string.IsNullOrWhiteSpace(settings.PixSellerId) ? settings.PixSellerId : settings.SellerId;
         if (Text(data, "collector_id") != seller
-            || !data.TryGetProperty("live_mode", out var live) || live.GetBoolean() == settings.TestMode)
+            || !data.TryGetProperty("live_mode", out var live)
+            || (!settings.TestMode && !live.GetBoolean())
+            || (settings.TestMode && pix && live.GetBoolean())
+            || (settings.TestMode && !pix && !sellerVerified))
             throw new BillingException("O pagamento não pertence ao ambiente ou vendedor configurado.");
     }
 
     private async Task ValidateSellerAsync(CancellationToken ct)
     {
+        if (sellerVerified) return;
         var seller = await SendAsync(HttpMethod.Get, "users/me", null, null, ct);
         var testUser = seller.TryGetProperty("tags", out var tags) && tags.EnumerateArray().Any(tag => tag.GetString() == "test_user");
         if (Text(seller, "id") != settings.SellerId || testUser != settings.TestMode || Text(seller, "site_id") != "MLB")
             throw new BillingException("As credenciais não correspondem ao vendedor ou ambiente configurado.");
+        // Subscription sandbox uses a test seller's APP_USR token; its fake payments may report live_mode=true.
+        sellerVerified = true;
     }
 
     private ProviderSubscription ParseSubscription(JsonElement data)

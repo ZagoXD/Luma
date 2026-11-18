@@ -48,8 +48,17 @@ public sealed class MercadoPagoGatewayTests
     [InlineData(123, true)]
     public async Task ForeignSellerOrLivePaymentCannotBeAcceptedInTest(int seller, bool live)
     {
-        var gateway = Create(_ => Task.FromResult(Json($$$"""{"collector_id":{{{seller}}},"live_mode":{{{live.ToString().ToLowerInvariant()}}}} """)));
+        var gateway = Create(_ => Task.FromResult(Json($$$"""{"collector_id":{{{seller}}},"payment_method_id":"pix","live_mode":{{{live.ToString().ToLowerInvariant()}}}} """)));
         await Assert.ThrowsAsync<BillingException>(() => gateway.GetPaymentsAsync("pix:123", default));
+    }
+
+    [Fact]
+    public async Task SubscriptionSandboxAcceptsLiveFlagOnlyWithVerifiedTestSeller()
+    {
+        var gateway = Create(request => Task.FromResult(request.RequestUri!.AbsolutePath.Contains("authorized_payments")
+            ? Json("{\"results\":[{\"preapproval_id\":\"sub\",\"payment\":{\"id\":123}}]}")
+            : Json("{\"id\":123,\"collector_id\":123,\"live_mode\":true,\"payment_method_id\":\"master\",\"status\":\"approved\",\"transaction_amount\":11,\"currency_id\":\"BRL\",\"date_approved\":\"2026-11-18T20:00:00Z\"}")));
+        Assert.Single(await gateway.GetPaymentsAsync("sub", default));
     }
 
     [Fact]
