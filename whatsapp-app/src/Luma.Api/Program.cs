@@ -53,6 +53,7 @@ builder.Services.AddHttpClient<IEmbeddingClient, OpenAiEmbeddingClient>(http => 
 builder.Services.AddScoped<AssistantOrchestrator>();
 builder.Services.AddScoped<KnowledgeStore>();
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
+builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection("Notifications"));
 builder.Services.Configure<ElevenLabsOptions>(builder.Configuration.GetSection("ElevenLabs"));
 builder.Services.Configure<StripeBillingOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
@@ -96,8 +97,10 @@ builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<SupportRequestService>();
 builder.Services.AddScoped<NotificationPreferenceService>();
 builder.Services.AddScoped<NotificationProcessor>();
+builder.Services.AddScoped<NotificationStatusService>();
 builder.Services.AddScoped<CycleCalendarService>();
 builder.Services.AddHostedService<NotificationWorker>();
+NotificationConfiguration.Validate(builder.Configuration);
 builder.Services.AddHostedService<BabyImageWorker>();
 
 builder.Services.AddSingleton<IDateProvider, SystemDateProvider>();
@@ -1044,6 +1047,24 @@ app.MapPost("/webhooks/stripe", async (HttpRequest request, LumaDbContext db, IC
 .WithName("StripeWebhook")
 .WithOpenApi();
 
+app.MapPost("/webhooks/twilio/notifications/status/{deliveryId:guid}", async (
+    Guid deliveryId, HttpRequest request, NotificationStatusService statuses, IConfiguration configuration) =>
+{
+    if (!request.HasFormContentType) return Results.BadRequest();
+    var callbackBase = configuration["Twilio:NotificationStatusCallbackBaseUrl"];
+    var token = configuration["Twilio:AuthToken"];
+    var account = configuration["Twilio:AccountSid"];
+    var sender = configuration["Twilio:WhatsAppFrom"];
+    if (string.IsNullOrWhiteSpace(callbackBase) || string.IsNullOrWhiteSpace(token)
+        || string.IsNullOrWhiteSpace(account) || string.IsNullOrWhiteSpace(sender)) return Results.StatusCode(503);
+    var form = await request.ReadFormAsync(request.HttpContext.RequestAborted);
+    if (!TwilioWebhookAuthentication.IsValidNotificationStatus($"{callbackBase.TrimEnd('/')}/{deliveryId:D}", token,
+        account, sender, form, request.Headers["X-Twilio-Signature"].ToString(), request.QueryString.HasValue)) return Results.StatusCode(403);
+    await statuses.ApplyAsync(deliveryId, form["MessageSid"].ToString(), form["MessageStatus"].ToString(),
+        form["ErrorCode"].ToString(), request.HttpContext.RequestAborted);
+    return Results.NoContent();
+}).DisableAntiforgery();
+
 app.MapPost("/webhooks/twilio/whatsapp", async (
     HttpRequest request,
     ConversationService conversations,
@@ -1456,6 +1477,8 @@ CREATE TABLE IF NOT EXISTS notification_deliveries (
     "UpdatedAt" timestamp with time zone NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_notification_deliveries_UserId_Type_ScheduledForDate" ON notification_deliveries ("UserId", "Type", "ScheduledForDate");
+ALTER TABLE notification_deliveries ADD COLUMN IF NOT EXISTS "Attempts" integer NOT NULL DEFAULT 0;
+ALTER TABLE notification_deliveries ADD COLUMN IF NOT EXISTS "NextAttemptAt" timestamp with time zone;
 CREATE TABLE IF NOT EXISTS blocked_conversations (
     "Id" uuid PRIMARY KEY,
     "Provider" character varying(32) NOT NULL,

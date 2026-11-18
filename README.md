@@ -43,17 +43,17 @@ Implementado:
 
 Pendente para produção completa:
 
-- Criar/aprovar templates Twilio/Meta.
-- Ativar worker de notificações.
 - Validar entrega no WhatsApp Business e participação no Sandbox, além da configuração dos números.
 - Validar a operação comercial Stripe live; catálogo e configuração estão separados de dev.
 - Configurar domínio customizado para mídia do R2.
 - Publicar termos e política de privacidade.
-- Recuperar as credenciais R2 no ambiente restaurado e validar a transcrição real da ElevenLabs.
-- Concluir a entrega e confirmação real do SMS Twilio Verify; a solicitação foi aceita, mas o código não chegou no teste.
+- Validar a transcrição real da ElevenLabs.
+- Concluir o teste completo de confirmação do cadastro por SMS; o titular já confirmou a entrega do código, com atraso.
 - Ensaiar periodicamente a restauração dos backups e definir rotação futura de chaves de privacidade.
 
 ## Planos
+
+Notificações e armazenamento de imagens estão descritos em [Notificações e R2](specs/notificacoes-r2-operacao.md), incluindo templates, retentativas, fusos, callbacks de entrega e limpeza automática no bucket.
 
 ### Básico
 

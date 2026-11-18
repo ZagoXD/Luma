@@ -9,6 +9,103 @@ namespace Luma.Tests;
 
 public sealed class NotificationProcessorTests
 {
+    [Theory]
+    [InlineData("2026-05-11T02:30:00Z", "America/Sao_Paulo", 23, 30, "2026-05-10")]
+    [InlineData("2026-05-10T10:30:00Z", "Pacific/Kiritimati", 0, 30, "2026-05-11")]
+    public async Task Reminders_and_deduplication_use_the_users_local_date(string utc, string zone, int hour, int minute, string date)
+    {
+        await using var db = CreateDbContext();
+        var now = DateTimeOffset.Parse(utc);
+        var day = DateOnly.Parse(date);
+        var user = await CreateEssentialUserAsync(db, "+5511999990001", "Teste", now);
+        db.UserPreferences.Add(new UserPreference { UserId = user.Id, LastPeriodStartDate = day.AddDays(1 - 29), AverageCycleLength = 29 });
+        db.NotificationPreferences.Add(new NotificationPreference { UserId = user.Id, User = user,
+            PeriodReminderEnabled = true, PeriodReminderTime = new TimeOnly(hour, minute), TimeZone = zone });
+        await db.SaveChangesAsync();
+        var sender = new CapturingNotificationSender();
+        await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+        Assert.Equal(NotificationTypes.PeriodExpectedTomorrow, Assert.Single(sender.Messages).TemplateKey);
+        Assert.Equal(day, Assert.Single(db.NotificationDeliveries).ScheduledForDate);
+    }
+
+    [Fact]
+    public async Task Transient_failure_retries_with_backoff_without_creating_duplicate_delivery()
+    {
+        await using var db = CreateDbContext();
+        var now = DateTimeOffset.Parse("2026-05-10T12:00:00Z");
+        await AddDailyCheckinAsync(db, now);
+        var sender = new CapturingNotificationSender();
+        sender.Results.Enqueue(new NotificationSendResult(false, null, "rate_limited", Retryable: true));
+        await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+        await CreateProcessor(db, sender, now.AddSeconds(30)).RunDueNotificationsAsync();
+        Assert.Single(sender.Messages);
+        await CreateProcessor(db, sender, now.AddMinutes(1)).RunDueNotificationsAsync();
+        await CreateProcessor(db, sender, now.AddMinutes(2)).RunDueNotificationsAsync();
+        Assert.Equal(2, sender.Messages.Count);
+        var delivery = Assert.Single(db.NotificationDeliveries);
+        Assert.Equal(2, delivery.Attempts);
+        Assert.Equal(NotificationDeliveryStatuses.Submitted, delivery.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Permanent_or_ambiguous_failures_are_not_blindly_retried(bool unknown)
+    {
+        await using var db = CreateDbContext();
+        var now = DateTimeOffset.Parse("2026-05-10T12:00:00Z");
+        await AddDailyCheckinAsync(db, now);
+        var sender = new CapturingNotificationSender();
+        sender.Results.Enqueue(new NotificationSendResult(false, null, "test_error", DeliveryUnknown: unknown));
+        await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+        await CreateProcessor(db, sender, now.AddMinutes(1)).RunDueNotificationsAsync();
+        Assert.Single(sender.Messages);
+        Assert.Equal(unknown ? NotificationDeliveryStatuses.Unknown : NotificationDeliveryStatuses.Failed, db.NotificationDeliveries.Single().Status);
+    }
+
+    [Fact]
+    public async Task Retries_stop_after_three_attempts()
+    {
+        await using var db = CreateDbContext();
+        var now = DateTimeOffset.Parse("2026-05-10T12:00:00Z");
+        await AddDailyCheckinAsync(db, now);
+        var sender = new CapturingNotificationSender();
+        for (var i = 0; i < 5; i++) sender.Results.Enqueue(new NotificationSendResult(false, null, "rate_limited", Retryable: true));
+        foreach (var minute in new[] { 0, 1, 3, 4 }) await CreateProcessor(db, sender, now.AddMinutes(minute)).RunDueNotificationsAsync();
+        Assert.Equal(3, sender.Messages.Count);
+        Assert.Equal(NotificationDeliveryStatuses.Failed, Assert.Single(db.NotificationDeliveries).Status);
+    }
+
+    [Theory]
+    [InlineData("basic")]
+    [InlineData("expired")]
+    [InlineData("no_consent")]
+    [InlineData("pregnant")]
+    [InlineData("disabled")]
+    public async Task Ineligible_users_do_not_receive_notifications(string reason)
+    {
+        await using var db = CreateDbContext();
+        var now = DateTimeOffset.Parse("2026-05-10T12:00:00Z");
+        var user = await AddDailyCheckinAsync(db, now);
+        if (reason == "basic") db.AccountSubscriptions.Single().PlanCode = "basico";
+        if (reason == "expired") db.AccountSubscriptions.Single().CurrentPeriodEndsAt = now.AddSeconds(-1);
+        if (reason == "no_consent") user.ConsentAcceptedAt = null;
+        if (reason == "disabled") db.NotificationPreferences.Single().SymptomCheckinEnabled = false;
+        if (reason == "pregnant") db.Pregnancies.Add(new Pregnancy { UserId = user.Id, Status = PregnancyStatus.Active });
+        await db.SaveChangesAsync();
+        var sender = new CapturingNotificationSender();
+        await CreateProcessor(db, sender, now).RunDueNotificationsAsync();
+        Assert.Empty(sender.Messages);
+    }
+
+    private static async Task<LumaUser> AddDailyCheckinAsync(LumaDbContext db, DateTimeOffset now)
+    {
+        var user = await CreateEssentialUserAsync(db, "+5511999990001", "Teste", now);
+        db.NotificationPreferences.Add(new NotificationPreference { UserId = user.Id, User = user,
+            SymptomCheckinEnabled = true, SymptomCheckinTime = new TimeOnly(9, 0), TimeZone = "America/Sao_Paulo" });
+        await db.SaveChangesAsync();
+        return user;
+    }
     [Fact]
     public async Task RunDueNotificationsAsync_SendsContraceptiveTemplateWithConfiguredReminderTime()
     {
@@ -189,11 +286,13 @@ public sealed class NotificationProcessorTests
 
     private sealed class CapturingNotificationSender : IWhatsAppNotificationSender
     {
+        public Queue<NotificationSendResult> Results { get; } = new();
         public List<CapturedMessage> Messages { get; } = [];
 
         public Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default)
         {
             Messages.Add(new CapturedMessage(to, templateKey, variables.ToDictionary()));
+            if (Results.TryDequeue(out var result)) return Task.FromResult(result);
             return Task.FromResult(new NotificationSendResult(true, $"SM{Guid.NewGuid():N}", null));
         }
     }

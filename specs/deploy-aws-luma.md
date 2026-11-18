@@ -37,7 +37,7 @@ Os dados que forem gravados na AWS depois da migração não retornam automatica
 
 As credenciais OpenAI podem ser iguais nos dois ambientes; a memória conversacional e os dados pessoais não são compartilhados. O RAG é copiado com os vetores existentes. `Rag__AllowEmbeddingGeneration=false` impede geração automática de embeddings na inicialização; se o acervo mudar, deve existir um processo explícito de atualização antes do deploy.
 
-Notificações ficam desativadas até recuperar as credenciais e validar os templates. A configuração da Stripe é separada por ambiente; nenhuma chave live é aceita em dev pelo serviço de deploy.
+Notificações usam worker de produção e templates aprovados; dev e Docker local mantêm o worker desativado. Consulte [Notificações e R2](notificacoes-r2-operacao.md) para horários, retentativas e callbacks. A configuração da Stripe é separada por ambiente; nenhuma chave live é aceita em dev pelo serviço de deploy.
 
 ## CI e deploy
 
@@ -79,16 +79,16 @@ O backend informa o canal e o resultado reais da solicitação. A interface pres
 
 Validação de 18/11/2026: boas-vindas, recuperação de senha e suporte (administrador e confirmação da usuária) entregues pelo Resend, com variáveis renderizadas. Recuperação de senha testada com login após troca e recusa de reutilização do token. Anexo PNG aceito e `.exe` recusado. Os cinco templates publicados correspondem aos tipos enviados pelo código; `expiresInMinutes` permanece numérico e `ATTACHMENT_COUNT`, string. Webhook Resend não é necessário para esses envios; callbacks de eventos podem ser adicionados futuramente.
 
-A tentativa real de SMS foi aceita pelo Twilio, mas ficou `UNCONFIRMED` e o titular informou não ter recebido. Não considerar a entrega nem a confirmação do celular validadas. Não fazer reenvios automáticos de teste.
+A tentativa real de SMS chegou com atraso e o titular confirmou o recebimento. Ainda falta testar a confirmação completa de um novo cadastro com código dentro da validade. O nome do serviço Verify foi ajustado para Luma; o Sender ID personalizado depende da aprovação da Twilio.
 
 ## Pendências e localização das credenciais
 
 As chaves recebidas ficam no `.env` ignorado pelo Git e nos segredos AWS, nunca nos arquivos versionados:
 
 - **ElevenLabs:** chave configurada; Developers → API Keys para manutenção. Exige Speech to Text. Uma consulta de perfil retornou falta da permissão `user_read`, não chave inválida; não ampliar permissões só para ler o perfil. A transcrição paga não foi executada nesta validação.
-- **Resend:** configurado e envios reais validados. API Keys, Domains e Templates no painel. Aliases: `welcome_email`, `subscription_created_email`, `password_reset_email`, `support_request_admin_email`, `support_request_user_confirmation_email`. Campos `Resend__ApiKey` e `Email__Templates__*`. O suporte administrativo usa `Email__SupportTo` (padrão `lumasuporte.ia@gmail.com`).
-- **Cloudflare R2:** R2 → Manage R2 API Tokens → Account API Tokens; permissão Object Read & Write limitada ao bucket `luma`. Recuperar Access Key ID e Secret Access Key, não o token da API Cloudflare. Campos `R2__AccessKeyId`, `R2__SecretAccessKey`, endpoint e domínio público de mídia.
-- **Twilio Verify:** Service SID configurado; Console → Verify → Services. Campo `Twilio__VerifyServiceSid`, canal `sms`. Falta validar entrega real. Não assumir que WhatsApp Verify funciona só porque o WhatsApp Sender está online: o canal Verify precisa de configuração própria.
-- **Notificações:** Messaging → Content Template Builder; recuperar os Content SIDs (`HX…`) aprovados e preencher `Twilio__TemplatePeriodTomorrow`, `Twilio__TemplatePeriodToday`, `Twilio__TemplateContraceptiveDaily` e `Twilio__TemplateSymptomCheckin`. Só então validar e ativar `Notifications__WorkerEnabled`.
+- **Resend:** configurado e envios reais validados. API Keys, Domains e Templates no painel. Aliases: `welcome_email`, `subscription_created_email`, `password_reset_email`, `support_request_admin_email`, `support_request_user_confirmation_email`. Campos `Resend__ApiKey` e `Email__Templates__*`. O destinatário administrativo foi alterado para o Gmail do titular via `Email__SupportTo` e a entrega foi confirmada.
+- **Cloudflare R2:** credenciais S3 atualizadas e verificadas com upload/download; Lifecycle Rule de um dia aplicada ao prefixo de imagens. R2 → Manage R2 API Tokens → Account API Tokens para manutenção, permissão Object Read & Write limitada ao bucket `luma`. Campos `R2__AccessKeyId`, `R2__SecretAccessKey`, endpoint e domínio público de mídia. O token de gerenciamento Cloudflare não é usado pelo aplicativo.
+- **Twilio Verify:** Service SID configurado; Console → Verify → Services. Campo `Twilio__VerifyServiceSid`, canal `sms`. Entrega confirmada pelo titular, pendente confirmação completa de novo cadastro. Não assumir que WhatsApp Verify funciona só porque o WhatsApp Sender está online: o canal Verify precisa de configuração própria.
+- **Notificações:** quatro templates aprovados configurados. Worker ativado somente em produção; operação e teste de entrega em [Notificações e R2](notificacoes-r2-operacao.md).
 
 Foi solicitada uma tentativa real de SMS com autorização do titular, além dos e-mails de teste. Não foram feitas chamadas pagas de teste de OpenAI ou ElevenLabs. A migração não substitui a revisão das dependências npm, dos termos de uso, da política de privacidade ou dos fluxos fiscais, estornos e disputas antes de um lançamento comercial amplo.

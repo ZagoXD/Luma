@@ -31,6 +31,8 @@ public sealed class NotificationDelivery
     public string? Provider { get; set; }
     public string? ProviderMessageId { get; set; }
     public string? ErrorMessage { get; set; }
+    public int Attempts { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -58,6 +60,10 @@ public static class NotificationTypes
 public static class NotificationDeliveryStatuses
 {
     public const string Pending = "pending";
+    public const string Submitted = "submitted";
+    public const string Unknown = "unknown";
+    public const string Delivered = "delivered";
+    public const string Read = "read";
     public const string Sent = "sent";
     public const string Failed = "failed";
     public const string Skipped = "skipped";

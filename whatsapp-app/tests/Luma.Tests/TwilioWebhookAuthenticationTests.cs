@@ -9,6 +9,25 @@ namespace Luma.Tests;
 public sealed class TwilioWebhookAuthenticationTests
 {
     [Theory]
+    [InlineData("ACtest", "whatsapp:+16204008668", false, true)]
+    [InlineData("ACwrong", "whatsapp:+16204008668", false, false)]
+    [InlineData("ACtest", "whatsapp:+14155238886", false, false)]
+    [InlineData("ACtest", "whatsapp:+16204008668", true, false)]
+    public void Notification_callback_validates_the_signed_url_account_and_sender(string account, string sender, bool query, bool expected)
+    {
+        const string url = "https://api.ia-luma.com.br/webhooks/twilio/notifications/status/11111111-1111-1111-1111-111111111111";
+        var fields = new Dictionary<string, string> {
+            ["AccountSid"] = "ACtest", ["From"] = "whatsapp:+16204008668", ["To"] = "whatsapp:+5511999990001",
+            ["MessageSid"] = "SMtest", ["MessageStatus"] = "delivered"
+        };
+        var form = new FormCollection(fields.ToDictionary(x => x.Key, x => new StringValues(x.Value)));
+        var payload = url + string.Concat(fields.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + x.Value));
+        var signature = Convert.ToBase64String(HMACSHA1.HashData(Encoding.UTF8.GetBytes("token"), Encoding.UTF8.GetBytes(payload)));
+        Assert.Equal(expected, TwilioWebhookAuthentication.IsValidNotificationStatus(url, "token", account, sender, form, signature, query));
+        Assert.False(TwilioWebhookAuthentication.IsValidNotificationStatus(url + "/changed", "token", account, sender, form, signature, query));
+    }
+
+    [Theory]
     [InlineData("https://dev.ia-luma.com.br", "ACsandbox", "whatsapp:+14155238886", false, true)]
     [InlineData("https://ia-luma.com.br", "ACsandbox", "whatsapp:+14155238886", false, false)]
     [InlineData("https://dev.ia-luma.com.br", "ACother", "whatsapp:+14155238886", false, false)]

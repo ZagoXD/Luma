@@ -34,6 +34,7 @@ for (const environment of ['dev', 'production']) {
     Rag__AllowEmbeddingGeneration: 'false',
     Notifications__WorkerEnabled: 'false',
     Twilio__VerifyChannel: 'sms',
+    Twilio__NotificationStatusCallbackBaseUrl: (environment === 'production' ? 'https://api.ia-luma.com.br' : domain) + '/webhooks/twilio/notifications/status',
     DOTNET_GCHeapHardLimit: '0xC000000'
   });
   if (environment === 'dev') {

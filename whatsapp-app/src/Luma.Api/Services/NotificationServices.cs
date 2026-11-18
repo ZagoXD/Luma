@@ -3,6 +3,7 @@ using System.Text.Json;
 using Luma.Api.Data;
 using Luma.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace Luma.Api.Services;
@@ -25,6 +26,8 @@ public sealed class NotificationOptions
     public bool WorkerEnabled { get; set; }
     public int WorkerIntervalSeconds { get; set; } = 60;
     public int DueWindowMinutes { get; set; } = 5;
+    public int MaxSendAttempts { get; set; } = 3;
+    public int RetryDelaySeconds { get; set; } = 60;
 }
 
 public sealed record NotificationPreferenceUpdate(
@@ -37,7 +40,8 @@ public sealed record NotificationPreferenceUpdate(
     string? SymptomCheckinTime,
     string? TimeZone);
 
-public sealed record NotificationSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage);
+public sealed record NotificationSendResult(bool Success, string? ProviderMessageId, string? ErrorMessage,
+    bool Retryable = false, bool DeliveryUnknown = false);
 
 public sealed record TwilioVerifySendResult(bool Success, string? VerificationSid, string? Status, string? ErrorMessage);
 
@@ -147,6 +151,8 @@ public sealed class NotificationPreferenceService(LumaDbContext db)
 public interface IWhatsAppNotificationSender
 {
     Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default);
+    Task<NotificationSendResult> SendScheduledTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables,
+        Guid deliveryId, CancellationToken cancellationToken = default) => SendTemplateAsync(to, templateKey, variables, cancellationToken);
 }
 
 public interface IWhatsAppTextSender
@@ -269,6 +275,13 @@ public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfigura
     };
 
     public async Task<NotificationSendResult> SendTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables, CancellationToken cancellationToken = default)
+        => await SendCoreAsync(to, templateKey, variables, null, cancellationToken);
+
+    public Task<NotificationSendResult> SendScheduledTemplateAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables,
+        Guid deliveryId, CancellationToken cancellationToken = default) => SendCoreAsync(to, templateKey, variables, deliveryId, cancellationToken);
+
+    private async Task<NotificationSendResult> SendCoreAsync(string to, string templateKey, IReadOnlyDictionary<string, string> variables,
+        Guid? deliveryId, CancellationToken cancellationToken)
     {
         var templateSid = ResolveTemplate(templateKey);
         if (string.IsNullOrWhiteSpace(_options.AccountSid)
@@ -284,19 +297,31 @@ public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfigura
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         var auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.AccountSid}:{_options.AuthToken}"));
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", auth);
-        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        var fields = new Dictionary<string, string>
         {
             ["From"] = _options.WhatsAppFrom,
             ["To"] = to.StartsWith("whatsapp:", StringComparison.OrdinalIgnoreCase) ? to : $"whatsapp:{to}",
             ["ContentSid"] = templateSid,
             ["ContentVariables"] = JsonSerializer.Serialize(variables)
-        });
+        };
+        var callbackBase = configuration["Twilio:NotificationStatusCallbackBaseUrl"];
+        if (deliveryId is not null && !string.IsNullOrWhiteSpace(callbackBase))
+            fields["StatusCallback"] = $"{callbackBase.TrimEnd('/')}/{deliveryId:D}";
+        request.Content = new FormUrlEncodedContent(fields);
 
-        var response = await http.SendAsync(request, cancellationToken);
+        using var response = await http.SendAsync(request, cancellationToken);
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            return new NotificationSendResult(false, null, content.Length > 512 ? content[..512] : content);
+            var retryable = (int)response.StatusCode == 429 || (int)response.StatusCode >= 500;
+            string code = $"twilio_http_{(int)response.StatusCode}";
+            try
+            {
+                using var error = JsonDocument.Parse(content);
+                if (error.RootElement.TryGetProperty("code", out var value) && value.TryGetInt32(out var number)) code += $"_{number}";
+            }
+            catch (JsonException) { }
+            return new NotificationSendResult(false, null, code, Retryable: retryable);
         }
 
         using var document = JsonDocument.Parse(content);
@@ -304,7 +329,9 @@ public sealed class TwilioWhatsAppNotificationSender(HttpClient http, IConfigura
             ? sidProperty.GetString()
             : null;
 
-        return new NotificationSendResult(true, sid, null);
+        return string.IsNullOrWhiteSpace(sid)
+            ? new NotificationSendResult(false, null, "missing_message_sid", DeliveryUnknown: true)
+            : new NotificationSendResult(true, sid, null);
     }
 
     private string ResolveTemplate(string templateKey)
@@ -502,8 +529,10 @@ public sealed class NotificationProcessor(
     RedisConnectionProvider redis,
     IWhatsAppNotificationSender sender,
     IDateProvider dateProvider,
-    ILogger<NotificationProcessor> logger)
+    ILogger<NotificationProcessor> logger,
+    IOptions<NotificationOptions>? options = null)
 {
+    private readonly NotificationOptions _options = options?.Value ?? new();
     public async Task<int> RunDueNotificationsAsync(CancellationToken cancellationToken = default)
     {
         var now = dateProvider.UtcNow;
@@ -520,7 +549,14 @@ public sealed class NotificationProcessor(
                 continue;
             }
 
-            processed += await ProcessUserAsync(preference, now, cancellationToken);
+            try
+            {
+                processed += await ProcessUserAsync(preference, now, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Notification processing failed for user {UserId}.", preference.UserId);
+            }
         }
 
         if (processed > 0)
@@ -534,6 +570,7 @@ public sealed class NotificationProcessor(
     private async Task<int> ProcessUserAsync(NotificationPreference preference, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var user = preference.User!;
+        if (user.ConsentAcceptedAt is null || user.OnboardingStep != OnboardingSteps.Completed) return 0;
         var phoneHash = PrivacyRuntime.LookupHash(user.PhoneNumber, "account.phone");
         var subscription = await db.AccountSubscriptions
             .Where(subscription => subscription.PhoneHash == phoneHash
@@ -554,7 +591,7 @@ public sealed class NotificationProcessor(
         }
 
         var count = 0;
-        var today = DateOnly.FromDateTime(now.Date);
+        var today = DateOnly.FromDateTime(LocalNow(preference, now).Date);
         var userPreference = await db.UserPreferences.FirstOrDefaultAsync(item => item.UserId == user.Id, cancellationToken);
 
         if (preference.PeriodReminderEnabled
@@ -591,42 +628,110 @@ public sealed class NotificationProcessor(
     {
         var user = preference.User!;
         var lockKey = $"luma:notification-lock:{user.Id}:{type}:{date:yyyyMMdd}";
-        var connection = await redis.GetConnectionAsync();
-        if (connection is not null)
+        var lockToken = Guid.NewGuid().ToString("N");
+        IDatabase? lockDatabase = null;
+        try
         {
-            var acquired = await connection.GetDatabase().StringSetAsync(lockKey, "1", TimeSpan.FromHours(24), When.NotExists);
-            if (!acquired)
+            var connection = await redis.GetConnectionAsync();
+            if (connection is not null)
             {
-                return 0;
+                lockDatabase = connection.GetDatabase();
+                if (!await lockDatabase.StringSetAsync(lockKey, lockToken, TimeSpan.FromMinutes(2), When.NotExists)) return 0;
             }
         }
-
-        if (await db.NotificationDeliveries.AnyAsync(delivery => delivery.UserId == user.Id && delivery.Type == type && delivery.ScheduledForDate == date, cancellationToken))
+        catch (RedisException ex)
         {
-            return 0;
+            lockDatabase = null;
+            logger.LogWarning(ex, "Redis notification lock unavailable; using database claim.");
         }
-
-        var delivery = new NotificationDelivery
+        try
         {
-            UserId = user.Id,
-            AccountSubscriptionId = subscriptionId,
-            Type = type,
-            ScheduledForDate = date,
-            ScheduledFor = now,
-            Provider = "twilio"
-        };
-        db.NotificationDeliveries.Add(delivery);
-        await db.SaveChangesAsync(cancellationToken);
+            var delivery = await db.NotificationDeliveries.SingleOrDefaultAsync(item => item.UserId == user.Id
+                && item.Type == type && item.ScheduledForDate == date, cancellationToken);
+            var maxAttempts = Math.Clamp(_options.MaxSendAttempts, 1, 5);
+            if (delivery is null)
+            {
+                delivery = new NotificationDelivery { UserId = user.Id, AccountSubscriptionId = subscriptionId,
+                    Type = type, ScheduledForDate = date, ScheduledFor = now, Provider = "twilio", Attempts = 1,
+                    CreatedAt = now, UpdatedAt = now };
+                db.NotificationDeliveries.Add(delivery);
+                try { await db.SaveChangesAsync(cancellationToken); }
+                catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+                {
+                    db.Entry(delivery).State = EntityState.Detached;
+                    return 0;
+                }
+            }
+            else
+            {
+                if (delivery.Status != NotificationDeliveryStatuses.Failed || delivery.NextAttemptAt is null
+                    || delivery.NextAttemptAt > now || delivery.Attempts >= maxAttempts) return 0;
+                var previousAttempts = delivery.Attempts;
+                if (db.Database.IsRelational())
+                {
+                    var claimed = await db.NotificationDeliveries.Where(item => item.Id == delivery.Id
+                        && item.Status == NotificationDeliveryStatuses.Failed && item.Attempts == previousAttempts
+                        && item.NextAttemptAt != null && item.NextAttemptAt <= now)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.Status, NotificationDeliveryStatuses.Pending)
+                            .SetProperty(item => item.Attempts, previousAttempts + 1)
+                            .SetProperty(item => item.NextAttemptAt, (DateTimeOffset?)null)
+                            .SetProperty(item => item.UpdatedAt, now), cancellationToken);
+                    if (claimed == 0) return 0;
+                    await db.Entry(delivery).ReloadAsync(cancellationToken);
+                }
+                else
+                {
+                    delivery.Attempts++;
+                    delivery.Status = NotificationDeliveryStatuses.Pending;
+                    delivery.NextAttemptAt = null;
+                    delivery.UpdatedAt = now;
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+            }
 
-        var result = await sender.SendTemplateAsync(user.PhoneNumber, type, BuildVariables(preference, type), cancellationToken);
-        delivery.Status = result.Success ? NotificationDeliveryStatuses.Sent : NotificationDeliveryStatuses.Failed;
-        delivery.SentAt = result.Success ? now : null;
-        delivery.ProviderMessageId = result.ProviderMessageId;
-        delivery.ErrorMessage = result.ErrorMessage;
-        delivery.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(cancellationToken);
-
-        return 1;
+            NotificationSendResult result;
+            try
+            {
+                result = await sender.SendScheduledTemplateAsync(user.PhoneNumber, type, BuildVariables(preference, type), delivery.Id, cancellationToken);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+            {
+                // A timeout can happen after provider acceptance. Never resend an ambiguous attempt automatically.
+                logger.LogWarning(ex, "Notification submission outcome unknown for {DeliveryId}.", delivery.Id);
+                result = new NotificationSendResult(false, null, "submission_outcome_unknown", DeliveryUnknown: true);
+            }
+            if (db.Database.IsRelational()) await db.Entry(delivery).ReloadAsync(CancellationToken.None);
+            if (delivery.Status == NotificationDeliveryStatuses.Pending)
+            {
+                delivery.Status = result.Success ? NotificationDeliveryStatuses.Submitted
+                    : result.DeliveryUnknown ? NotificationDeliveryStatuses.Unknown : NotificationDeliveryStatuses.Failed;
+                delivery.ProviderMessageId = result.ProviderMessageId;
+                delivery.ErrorMessage = result.ErrorMessage;
+                delivery.NextAttemptAt = !result.Success && result.Retryable && !result.DeliveryUnknown && delivery.Attempts < maxAttempts
+                    ? now.AddSeconds(Math.Clamp(_options.RetryDelaySeconds, 30, 300) * delivery.Attempts) : null;
+                delivery.UpdatedAt = now;
+                if (db.Database.IsRelational())
+                {
+                    await db.NotificationDeliveries.Where(item => item.Id == delivery.Id && item.Status == NotificationDeliveryStatuses.Pending)
+                        .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.Status, delivery.Status)
+                            .SetProperty(item => item.ProviderMessageId, delivery.ProviderMessageId)
+                            .SetProperty(item => item.ErrorMessage, delivery.ErrorMessage)
+                            .SetProperty(item => item.NextAttemptAt, delivery.NextAttemptAt)
+                            .SetProperty(item => item.UpdatedAt, now), CancellationToken.None);
+                    await db.Entry(delivery).ReloadAsync(CancellationToken.None);
+                }
+                else await db.SaveChangesAsync(CancellationToken.None);
+            }
+            return 1;
+        }
+        finally
+        {
+            if (lockDatabase is not null)
+            {
+                try { await lockDatabase.ScriptEvaluateAsync("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", [new RedisKey(lockKey)], [new RedisValue(lockToken)]); }
+                catch (RedisException ex) { logger.LogWarning(ex, "Could not release notification lock."); }
+            }
+        }
     }
 
     private static Dictionary<string, string> BuildVariables(NotificationPreference preference, string type)
@@ -638,9 +743,16 @@ public sealed class NotificationProcessor(
             : new Dictionary<string, string> { ["1"] = name };
     }
 
-    private static bool IsDueNow(NotificationPreference preference, TimeOnly reminderTime, DateTimeOffset utcNow)
+    private bool IsDueNow(NotificationPreference preference, TimeOnly reminderTime, DateTimeOffset utcNow)
     {
-        const int dueWindowMinutes = 5;
+        var localNow = LocalNow(preference, utcNow);
+        var scheduledToday = new DateTimeOffset(localNow.Year, localNow.Month, localNow.Day,
+            reminderTime.Hour, reminderTime.Minute, 0, localNow.Offset);
+        return localNow >= scheduledToday && localNow < scheduledToday.AddMinutes(Math.Clamp(_options.DueWindowMinutes, 1, 30));
+    }
+
+    private static DateTimeOffset LocalNow(NotificationPreference preference, DateTimeOffset utcNow)
+    {
         TimeZoneInfo timeZone;
         try
         {
@@ -651,17 +763,7 @@ public sealed class NotificationProcessor(
             timeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
         }
 
-        var localNow = TimeZoneInfo.ConvertTime(utcNow, timeZone);
-        var scheduledToday = new DateTimeOffset(
-            localNow.Year,
-            localNow.Month,
-            localNow.Day,
-            reminderTime.Hour,
-            reminderTime.Minute,
-            0,
-            localNow.Offset);
-
-        return localNow >= scheduledToday && localNow < scheduledToday.AddMinutes(dueWindowMinutes);
+        return TimeZoneInfo.ConvertTime(utcNow, timeZone);
     }
 }
 

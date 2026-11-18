@@ -4,6 +4,15 @@ namespace Luma.Api.Services;
 
 public static class TwilioWebhookAuthentication
 {
+    public static bool IsValidNotificationStatus(string url, string token, string accountSid, string sender,
+        IFormCollection form, string signature, bool hasQuery)
+    {
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(sender)
+            || !string.Equals(form["From"].ToString(), sender, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(form["To"].ToString())) return false;
+        return IsValid(url, token, accountSid, form["To"].ToString(), form, signature, hasQuery);
+    }
+
     public static bool IsValid(string url, string token, string accountSid, string recipient,
         IFormCollection form, string signature, bool hasQuery)
     {
