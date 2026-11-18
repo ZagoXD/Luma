@@ -166,7 +166,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
     try {
       await cancelScheduledSubscription(profile.pendingCheckout.id);
       setProfile(await getAccountProfile());
-      setStatus("Troca cancelada. Seu acesso atual permanece até o fim do período pago. A renovação antiga continua desativada; você pode retomá-la no perfil.");
+      setStatus("Contratação pendente interrompida. Se já houve pagamento, o período confirmado continua disponível. Uma renovação anterior não será retomada automaticamente.");
     } catch (error) { setStatus(error instanceof Error ? error.message : "Não consegui cancelar a troca."); }
     finally { setBillingAction(""); }
   }
@@ -400,6 +400,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
               <>
                 <p>Você ainda não tem um plano ativo. Escolha um plano para liberar a Luma no WhatsApp.</p>
                 {profile?.pendingCheckout && <p className="account-status info">Existe um pagamento aguardando confirmação. <Link href={`/checkout/${profile.pendingCheckout.planCode}?billing=${profile.pendingCheckout.billingInterval}${profile.pendingCheckout.replacesSubscriptionId ? `&replace=${profile.pendingCheckout.replacesSubscriptionId}` : ""}`}>Acompanhar pagamento</Link></p>}
+                {profile?.pendingCheckout && <button type="button" className="account-secondary" onClick={handleCancelScheduled} disabled={billingAction === "scheduled"}>Cancelar contratação pendente</button>}
                 <div className="profile-plan-actions">
                   <Link className="account-primary as-link" href="/checkout/basico?billing=annual">Básico anual</Link>
                   <Link className="account-secondary billing-button" href="/checkout/basico?billing=monthly">Básico mensal</Link>

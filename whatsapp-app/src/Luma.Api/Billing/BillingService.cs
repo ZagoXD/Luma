@@ -171,13 +171,25 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
     {
         await using var transaction = await LockAsync(userId, ct);
         var scheduled = await OwnedAsync(userId, id, ct);
-        if (scheduled.ReplacesSubscriptionId is not Guid previousId || scheduled.StartsAt <= DateTimeOffset.UtcNow
-            || scheduled.ProviderSubscriptionId is null || scheduled.Status != "pending")
-            throw new BillingException("Nenhuma troca futura disponível para cancelar.");
-        await gateway.SetRenewalAsync(scheduled.ProviderSubscriptionId, false, ct);
-        scheduled.Status = "failed";
-        var previous = await db.AccountSubscriptions.SingleAsync(s => s.Id == previousId && s.AccountUserId == userId, ct);
-        previous.ReplacedBySubscriptionId = null;
+        if (scheduled.Status != "pending") throw new BillingException("O pagamento já mudou de situação. Atualize seu perfil antes de continuar.");
+        if (scheduled.ProviderSubscriptionId is null && scheduled.PaymentAttemptedAt is not null)
+        {
+            var remote = await gateway.FindAsync(scheduled.Id, scheduled.PaymentMethod, ct);
+            if (remote is null) throw new BillingException("A tentativa ainda não foi confirmada pelo provedor. Tente novamente em instantes.");
+            if (!BillingPolicy.Matches(scheduled, remote)) throw new BillingException("Cobrança incompatível com o pedido.");
+            scheduled.ProviderSubscriptionId = remote.Id;
+        }
+        if (scheduled.ProviderSubscriptionId is not null)
+        {
+            await gateway.CancelPendingAsync(scheduled.ProviderSubscriptionId, ct);
+            await SyncAsync(scheduled, ct);
+        }
+        if (scheduled.Status == "pending") scheduled.Status = "failed";
+        if (scheduled.ReplacesSubscriptionId is Guid previousId)
+        {
+            var previous = await db.AccountSubscriptions.SingleAsync(s => s.Id == previousId && s.AccountUserId == userId, ct);
+            previous.ReplacedBySubscriptionId = null;
+        }
         await db.SaveChangesAsync(ct);
         if (transaction is not null) await transaction.CommitAsync(ct);
     }

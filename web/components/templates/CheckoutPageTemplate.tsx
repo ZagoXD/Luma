@@ -80,7 +80,7 @@ export function CheckoutPageTemplate({ planCode, billingInterval, replacesSubscr
           <div className="account-heading"><span className="account-kicker">Pagamento seguro</span><h2>Concluir assinatura</h2></div>
           {status && <p role="alert" className="account-status error">{status}</p>}
           {!checkout && !status && <p role="status">Preparando checkout seguro...</p>}
-          {checkout && !waiting && !pix && <>
+          {checkout && !waiting && !pix && !checkout.submitted && <>
             <div className="checkout-billing-switch" role="group" aria-label="Forma de pagamento">
               <button type="button" className={method === "card" ? "active" : ""} onClick={() => setMethod("card")}>Cartão</button>
               {!replacesSubscriptionId && checkout.pixAvailable && <button type="button" className={method === "pix" ? "active" : ""} onClick={() => setMethod("pix")}>Pix</button>}
@@ -88,6 +88,7 @@ export function CheckoutPageTemplate({ planCode, billingInterval, replacesSubscr
             {method === "card" ? <PaymentCardForm publicKey={checkout.publicKey} amount={checkout.amount} email={checkout.email}
               onSubmit={async form => {
                 const result = await submitCheckout(paymentRequest(checkout.checkoutId, form));
+                setCheckout(current => current && { ...current, submitted: true });
                 if (result.subscription.scheduled) setScheduled(true);
                 else if (result.subscription.status !== "pending") setSuccess(true);
                 else setWaiting(true);

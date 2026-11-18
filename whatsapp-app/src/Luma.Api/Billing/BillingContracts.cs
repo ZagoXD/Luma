@@ -44,6 +44,7 @@ public interface ISubscriptionGateway
     Task SetRenewalAsync(string id, bool enabled, CancellationToken ct);
     Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset nextPaymentAt, CancellationToken ct);
     Task ChangeCardAsync(string id, string cardToken, CancellationToken ct);
+    Task CancelPendingAsync(string id, CancellationToken ct);
     Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string subscriptionId, CancellationToken ct);
     Task<string?> ResolveSubscriptionAsync(string topic, string resourceId, CancellationToken ct);
     bool VerifyWebhook(string resourceId, string requestId, string signature, DateTimeOffset now);

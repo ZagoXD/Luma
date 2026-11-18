@@ -169,6 +169,17 @@ public sealed class BillingServiceTests
     }
 
     [Fact]
+    public async Task PendingAuthorizationCanBeStoppedBeforeFirstCharge()
+    {
+        var pending = await Prepare();
+        await Service.SubmitAsync(account, pending.Id, "token", "card", null, default);
+        await Service.CancelScheduledAsync(account.Id, pending.Id, default);
+        Assert.Equal("failed", pending.Status);
+        Assert.Equal("paused", gateway.Remote!.Status);
+        Assert.Empty(db.BillingPayments);
+    }
+
+    [Fact]
     public async Task AmountManipulationCannotGrantAccess()
     {
         var pending = await Prepare();
@@ -202,6 +213,7 @@ public sealed class BillingServiceTests
         public Task SetRenewalAsync(string id, bool enabled, CancellationToken ct) { Remote = Remote! with { Status = enabled ? "authorized" : "paused" }; return Task.CompletedTask; }
         public Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset date, CancellationToken ct) { Remote = Remote! with { Amount = plan.Amount, Months = plan.Months }; return Task.CompletedTask; }
         public Task ChangeCardAsync(string id, string token, CancellationToken ct) => Task.CompletedTask;
+        public Task CancelPendingAsync(string id, CancellationToken ct) => SetRenewalAsync(id, false, ct);
         public Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string id, CancellationToken ct)
             => Task.FromResult<IReadOnlyList<ProviderPayment>>([new("payment", id, PaymentStatus, PaymentAmount, "BRL", DateTimeOffset.UtcNow)]);
         public Task<string?> ResolveSubscriptionAsync(string topic, string resource, CancellationToken ct) => Task.FromResult<string?>("remote");

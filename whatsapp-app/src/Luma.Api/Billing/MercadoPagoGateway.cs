@@ -135,6 +135,13 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
         _ = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { card_token_id = cardToken }, null, ct);
     }
 
+    public async Task CancelPendingAsync(string id, CancellationToken ct)
+    {
+        if (id.StartsWith("pix:", StringComparison.Ordinal))
+            _ = await SendAsync(HttpMethod.Put, "v1/payments/" + Resource(id[4..]), new { status = "cancelled" }, null, ct, pix: true);
+        else await SetRenewalAsync(id, false, ct);
+    }
+
     public async Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string id, CancellationToken ct)
     {
         if (id.StartsWith("pix:", StringComparison.Ordinal))
