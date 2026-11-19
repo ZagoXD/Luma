@@ -223,5 +223,5 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     private static string Text(JsonElement data, string key)
         => data.TryGetProperty(key, out var value) && value.ValueKind != JsonValueKind.Null ? value.ToString() : "";
     private static DateTimeOffset? Date(JsonElement data, string key)
-        => DateTimeOffset.TryParse(Text(data, key), out var date) ? date : null;
+        => DateTimeOffset.TryParse(Text(data, key), out var date) ? date.ToUniversalTime() : null;
 }
