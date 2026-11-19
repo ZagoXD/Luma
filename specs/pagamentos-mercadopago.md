@@ -79,6 +79,10 @@ O token `APP_USR` de testes de **Assinaturas** pertence ao vendedor de testes. N
 
 A consulta real de faturas revelou `Invalid value for limit` para páginas de 100 e de 20. O adaptador usa dez, aceito pelo endpoint, com teste de regressão. A busca de assinatura usa `q` e exige igualdade da referência no resultado; `external_reference` era ignorado como filtro pelo endpoint de pesquisa de assinaturas.
 
+Validação real em dev em 19/11/2026: primeira cobrança aprovada e registrada no PostgreSQL; renovação desligada preservando o período pago e retomada; troca de plano sem antecipar benefícios; troca de cartão; migração mensal/anual agendada e seu cancelamento; bloqueio de consulta a pedido de outra conta; cancelamento imediato terminal, sem reativação por refresh; exclusão por senha com cancelamento remoto e rejeição da sessão antiga. Datas do provedor com offset são normalizadas para UTC antes de persistir no PostgreSQL.
+
+**Pendência externa de reembolso:** a chamada real de sandbox a `POST /v1/payments/{id}/refunds` retornou `401 Unauthorized use of live credentials`, embora compra, consulta e cancelamento funcionem com o mesmo vendedor de testes. O pedido de arrependimento permanece registrado e não é marcado como concluído. É necessário confirmar a permissão/compatibilidade do token de testes com esse endpoint junto ao Mercado Pago e repetir o ensaio. Não foi usado token de produção para contornar o bloqueio e não se afirma que o estorno real passou. Reembolsos integrais e suas retentativas estão cobertos por testes automatizados; a devolução das tarifas do vendedor continua dependendo da política comercial do provedor.
+
 Trocar a frequência mensal/anual não usa um update não suportado pelo provedor. O checkout solicita nova autorização com início na data final do período já pago e valida essa data no retorno. Após confirmar a nova autorização, a renovação antiga é pausada. O perfil mostra a troca agendada e permite cancelá-la; a renovação anterior permanece desativada até a usuária retomá-la explicitamente. Para segurança, a troca não é iniciada nas duas horas anteriores ao vencimento.
 
 ## Testar Sem Cobrança Real
