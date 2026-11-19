@@ -9,7 +9,8 @@ public sealed class AccountDeletionService(LumaDbContext db, BillingService bill
     public async Task RequestAsync(Guid accountId, string password, CancellationToken ct)
     {
         var account = await db.AccountUsers.SingleAsync(a => a.Id == accountId, ct);
-        if (!AccountSecurity.VerifyPassword(password, account.PasswordHash)) throw new BillingException("Confirme sua senha atual para excluir a conta.");
+        if (string.IsNullOrWhiteSpace(password) || password.Length > 1024 || !AccountSecurity.VerifyPassword(password, account.PasswordHash))
+            throw new BillingException("Confirme sua senha atual para excluir a conta.");
         await using (var transaction = db.Database.IsNpgsql() ? await db.Database.BeginTransactionAsync(ct) : null)
         {
             if (transaction is not null) await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({accountId.ToString()}, 0))", ct);
