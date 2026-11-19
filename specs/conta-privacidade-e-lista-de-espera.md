@@ -36,3 +36,9 @@ O Supabase antigo foi consultado com as credenciais fornecidas e a tabela `waitl
 Para consultar contatos da lista nova, exporte `encrypted_contact` via D1 autenticado e use `infra/waitlist/export.cjs` localmente. A exportação contém dados pessoais: manter em local protegido e remover quando não for necessária. Exclusão de um lead pode ser solicitada pelo contato público e executada pelo seu hash, sem tornar o banco público.
 
 Não pausar AWS automaticamente. Antes de suspender: verificar assinantes, interromper vendas e renovações que não poderão ser atendidas, validar backups, ajustar o domínio principal e comunicar a manutenção. Parar EC2 não elimina despesas de volumes, segredos e armazenamento.
+
+## Verificação da entrega
+
+Os testes reais de dev validaram cobrança de teste, renovação, troca de cartão, mudança anual agendada, cancelamento imediato e exclusão por senha. Não houve cobrança real nem chamadas conversacionais pagas para esses testes. O reembolso real de sandbox está pendente de autorização do Mercado Pago, conforme o documento de pagamentos; não confundir pedido persistido com dinheiro devolvido.
+
+A lista de espera foi validada em navegador nas larguras de 390 e 1440 pixels: contraste dos textos, consentimento, botão, ausência de overflow horizontal e envio real ao D1 criptografado. O contato exclusivo desse ensaio foi removido depois da validação. Login, cadastro e checkout retornam 404 na publicação isolada do Pages. O Worker provisório redundante foi removido; a Pages Function e o D1 ativos foram preservados.
