@@ -19,13 +19,18 @@ public static class PrivacyRuntime
     private static byte[]? _encryptionKey;
     private static byte[]? _lookupPepper;
 
-    public static void Configure(PrivacyOptions options)
+    public static void Configure(PrivacyOptions options, bool requireEncryption = false)
     {
+        var encryptionKey = TryDecodeKey(options.EncryptionKey, 32);
+        var lookupPepper = TryDecodeKey(options.LookupPepper, 32);
+        if ((requireEncryption || options.EncryptionEnabled) && (!options.EncryptionEnabled || encryptionKey is null || lookupPepper is null
+            || string.IsNullOrWhiteSpace(options.ActiveKeyId)))
+            throw new InvalidOperationException("A criptografia exige chave e pepper base64 de 32 bytes e um identificador de chave. A aplicação não foi iniciada.");
         lock (Gate)
         {
             _options = options;
-            _encryptionKey = TryDecodeKey(options.EncryptionKey, 32);
-            _lookupPepper = TryDecodeKey(options.LookupPepper, 32) ?? Encoding.UTF8.GetBytes("luma-local-lookup-pepper-change-before-production");
+            _encryptionKey = encryptionKey;
+            _lookupPepper = lookupPepper ?? Encoding.UTF8.GetBytes("luma-local-lookup-pepper-change-before-production");
         }
     }
 

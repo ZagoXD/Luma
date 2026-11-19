@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isIndexableSite, isPrivatePath, productionOrigin } from "./lib/seo";
+import { cookieNames, trustedMutation } from "./lib/session-policy";
 
 const protectedRoutes = ["/perfil", "/checkout"];
 
 export function proxy(request: NextRequest) {
+  const secure = process.env.LUMA_COOKIE_SECURE === "true";
+  if (request.nextUrl.pathname.startsWith("/api/") && !trustedMutation(request.method,
+    request.headers.get("host") || request.nextUrl.host, request.headers.get("origin"), request.headers.get("sec-fetch-site"), secure))
+    return NextResponse.json({ message: "Origem da solicitação inválida." }, { status: 403 });
   if (process.env.NEXT_PUBLIC_LUMA_SITE_MODE === "waitlist") {
     const path = request.nextUrl.pathname;
     if (["/api/auth", "/api/account", "/api/checkout", "/api/support"].some(prefix => path === prefix || path.startsWith(prefix + "/")))
@@ -22,7 +27,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
   const isProtected = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route));
-  if (!isProtected || request.cookies.has("luma_session")) {
+  const names = cookieNames(secure);
+  if (!isProtected || request.cookies.has(names.access) || request.cookies.has(names.refresh)) {
     return annotate(NextResponse.next());
   }
 

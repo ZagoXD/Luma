@@ -17,14 +17,15 @@ O SEO técnico, os ícones e a separação de indexação entre produção/dev e
 Implementado:
 
 - Bot WhatsApp via Twilio.
-- API em ASP.NET Core 8.
+- API em ASP.NET Core 10 LTS, com EF Core/Npgsql 10.
 - Web em Next.js.
 - PostgreSQL.
 - Redis para rate limit, deduplicação, cooldown e locks.
 - OpenAI como motor de IA, tools e respostas humanizadas.
 - ElevenLabs para transcrição de áudio no WhatsApp.
 - Mercado Pago com Checkout Bricks.
-- Cadastro web com autenticação JWT/cookie.
+- Cadastro web com JWT de dez minutos, refresh de trinta dias, cookies HttpOnly e sessões revogáveis.
+- Limites persistentes no backend para autenticação, recuperação e envio de códigos.
 - Checkbox de consentimento LGPD no cadastro web.
 - Perfil da usuária.
 - Validação de assinatura antes de responder no WhatsApp.
@@ -43,15 +44,14 @@ Implementado:
 - Estrutura de notificações do plano Essencial.
 - Criptografia de dados reais da usuária em repouso, com AES-GCM e hashes HMAC para busca.
 
-Pendente para produção completa:
+Pendências externas para encerrar esta etapa:
 
-- Validar entrega no WhatsApp Business e participação no Sandbox, além da configuração dos números.
-- Validar a operação comercial Mercado Pago live; catálogo e configuração estão separados de dev.
-- Configurar domínio customizado para mídia do R2.
-- Publicar termos e política de privacidade.
-- Validar a transcrição real da ElevenLabs.
-- Concluir o teste completo de confirmação do cadastro por SMS; o titular já confirmou a entrega do código, com atraso.
-- Ensaiar periodicamente a restauração dos backups e definir rotação futura de chaves de privacidade.
+- Aprovação do Sender alfanumérico da Twilio, ainda em análise.
+- Confirmação do reembolso integral no Mercado Pago: o teste de sandbox retornou HTTP 401 e depende da autorização do provedor.
+
+O responsável confirmou testes básicos de assinaturas, conversas, e-mails, aceites e SMS, e revisou os termos e a privacidade em 19/11/2026. Isso registra sua aprovação, não uma certificação jurídica ou médica. A próxima etapa é a homologação controlada com pessoas reais. Restauração periódica de backups, monitoramento, validação de áudio/imagens com os provedores reais e rotação planejada de segredos continuam como rotinas de operação, não como testes pagos realizados automaticamente nesta entrega.
+
+Consulte [Sessões e segurança de produção](specs/seguranca-producao-dotnet10.md). Após a migração de sessões, é necessário entrar novamente; planos e registros não são apagados.
 
 ## Planos
 

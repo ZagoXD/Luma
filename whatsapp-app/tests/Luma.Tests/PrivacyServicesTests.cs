@@ -5,6 +5,37 @@ namespace Luma.Tests;
 public sealed class PrivacyServicesTests
 {
     [Fact]
+    public void Production_requires_encryption_even_if_it_was_explicitly_disabled()
+    {
+        var options = TestOptions();
+        options.EncryptionEnabled = false;
+        Assert.Throws<InvalidOperationException>(() => PrivacyRuntime.Configure(options, requireEncryption: true));
+        PrivacyRuntime.Reset();
+    }
+
+    [Theory]
+    [InlineData("invalid", true)]
+    [InlineData("", true)]
+    [InlineData("AAAA", true)]
+    public void Enabled_encryption_rejects_invalid_keys(string key, bool enabled)
+    {
+        var options = TestOptions();
+        options.EncryptionEnabled = enabled;
+        options.EncryptionKey = key;
+        Assert.Throws<InvalidOperationException>(() => PrivacyRuntime.Configure(options));
+        PrivacyRuntime.Reset();
+    }
+
+    [Fact]
+    public void Enabled_encryption_rejects_invalid_lookup_pepper()
+    {
+        var options = TestOptions();
+        options.LookupPepper = "invalid";
+        Assert.Throws<InvalidOperationException>(() => PrivacyRuntime.Configure(options));
+        PrivacyRuntime.Reset();
+    }
+
+    [Fact]
     public void Field_encryption_roundtrip_does_not_store_plaintext()
     {
         var options = TestOptions();

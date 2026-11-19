@@ -17,6 +17,7 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
     public DbSet<AccountUser> AccountUsers => Set<AccountUser>();
     public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
+    public DbSet<AuthRateLimit> AuthRateLimits => Set<AuthRateLimit>();
     public DbSet<AccountPhoneVerificationCode> AccountPhoneVerificationCodes => Set<AccountPhoneVerificationCode>();
     public DbSet<AccountSubscription> AccountSubscriptions => Set<AccountSubscription>();
     public DbSet<BillingPayment> BillingPayments => Set<BillingPayment>();
@@ -43,6 +44,10 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AuthRateLimit>(entity => {
+            entity.ToTable("auth_rate_limits"); entity.HasKey(x => x.Key);
+            entity.Property(x => x.Key).HasMaxLength(128); entity.HasIndex(x => x.ExpiresAt);
+        });
         modelBuilder.Entity<BillingPayment>(entity =>
         {
             entity.ToTable("billing_payments");

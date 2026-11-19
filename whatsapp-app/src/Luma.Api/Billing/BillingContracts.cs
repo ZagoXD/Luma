@@ -52,6 +52,10 @@ public interface ISubscriptionGateway
 
 public static class BillingPolicy
 {
+    public static bool HasAccess(AccountSubscription? subscription, DateTimeOffset now, string? plan = null)
+        => subscription is not null && subscription.TerminatedAt is null && subscription.CurrentPeriodEndsAt > now
+            && (subscription.Status is SubscriptionStatuses.Active or SubscriptionStatuses.Canceled)
+            && (plan is null || subscription.PlanCode == plan);
     public static bool Matches(AccountSubscription local, ProviderSubscription remote)
     {
         var plan = BillingCatalog.Get(local.PlanCode, local.BillingInterval);

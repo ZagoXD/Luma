@@ -8,6 +8,20 @@ namespace Luma.Tests;
 
 public sealed class AccountPhoneVerificationServiceTests
 {
+    [Fact]
+    public async Task Resend_cooldown_is_enforced_before_a_second_provider_call()
+    {
+        await using var db = CreateDbContext();
+        var account = CreateAccount("+5516992330309");
+        db.AccountUsers.Add(account);
+        await db.SaveChangesAsync();
+        var verify = new CapturingVerifyClient();
+        var service = CreateService(db, verify);
+        await service.SendCurrentPhoneCodeAsync(account);
+        await Assert.ThrowsAnyAsync<Exception>(() => service.SendCurrentPhoneCodeAsync(account));
+        Assert.Single(verify.SentPhones);
+    }
+
     [Theory]
     [InlineData("sms", "SMS")]
     [InlineData("whatsapp", "WhatsApp")]

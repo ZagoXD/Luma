@@ -1,6 +1,6 @@
 # Conta, privacidade e lista de espera
 
-Atualização: 19/11/2026. Documentos jurídicos publicados com a versão imutável `2026-11-18`; recomenda-se revisão jurídica profissional antes da abertura comercial.
+Atualização: 19/11/2026. Documentos jurídicos publicados com a versão imutável `2026-11-18`, revisados e aprovados pelo responsável em 19/11/2026. Essa aprovação não equivale a uma certificação jurídica independente. Não há nova pendência de revisão de textos nesta etapa.
 
 ## Cadastro e documentos
 

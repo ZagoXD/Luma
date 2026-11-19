@@ -16,12 +16,12 @@ public static class AccountInputNormalizer
         string fullName,
         string password)
     {
-        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var normalizedEmail = (email ?? string.Empty).Trim().ToLowerInvariant();
         var normalizedCpf = OnlyDigits(cpf);
         var normalizedPhone = NormalizeBrazilPhone(phoneNumber);
-        var normalizedName = fullName.Trim();
+        var normalizedName = (fullName ?? string.Empty).Trim();
 
-        if (string.IsNullOrWhiteSpace(normalizedEmail) || !normalizedEmail.Contains('@', StringComparison.Ordinal))
+        if (normalizedEmail.Length > 254 || !System.Net.Mail.MailAddress.TryCreate(normalizedEmail, out var address) || address.Address != normalizedEmail)
         {
             return Invalid(normalizedEmail, normalizedCpf, normalizedPhone, normalizedName, "Informe um e-mail válido.");
         }
@@ -36,12 +36,12 @@ public static class AccountInputNormalizer
             return Invalid(normalizedEmail, normalizedCpf, string.Empty, normalizedName, "Informe um celular válido com DDD.");
         }
 
-        if (string.IsNullOrWhiteSpace(normalizedName))
+        if (string.IsNullOrWhiteSpace(normalizedName) || normalizedName.Length > 200)
         {
             return Invalid(normalizedEmail, normalizedCpf, normalizedPhone, normalizedName, "Informe seu nome completo.");
         }
 
-        if (password.Length < 8)
+        if (string.IsNullOrEmpty(password) || password.Length is < 8 or > 1024)
         {
             return Invalid(normalizedEmail, normalizedCpf, normalizedPhone, normalizedName, "A senha precisa ter pelo menos 8 caracteres.");
         }
@@ -97,7 +97,7 @@ public static class AccountInputNormalizer
 
     public static string OnlyDigits(string value)
     {
-        return new string(value.Where(char.IsDigit).ToArray());
+        return new string((value ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
     }
 
     private static NormalizedAccountInput Invalid(string email, string cpf, string? phone, string fullName, string error)
