@@ -43,7 +43,7 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-luma};Username=${POSTGRES_USER:-luma};Password=${POSTGRES_PASSWORD:-luma_dev_password}
       Luma__StoreMessageBodies: ${LUMA_STORE_MESSAGE_BODIES:-false}
       Luma__RequireActiveSubscription: ${LUMA_REQUIRE_ACTIVE_SUBSCRIPTION:-true}
-      Luma__JwtSigningKey: ${LUMA_JWT_SIGNING_KEY:-luma-dev-jwt-signing-key-change-me-please}
+      Luma__JwtSigningKey: ${LUMA_JWT_SIGNING_KEY:?Defina uma chave JWT aleatoria com pelo menos 32 bytes}
       Luma__WebBaseUrl: ${LUMA_WEB_BASE_URL:-http://localhost:3000}
       Luma__RateLimit__WindowSeconds: ${LUMA_RATE_LIMIT_WINDOW_SECONDS:-30}
       Luma__RateLimit__MaxMessages: ${LUMA_RATE_LIMIT_MAX_MESSAGES:-5}

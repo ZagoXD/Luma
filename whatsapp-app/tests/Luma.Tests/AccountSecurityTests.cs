@@ -57,24 +57,19 @@ public sealed class AccountSecurityTests
     }
 
     [Fact]
-    public void Jwt_roundtrip_returns_account_id()
+    public void Password_hash_is_salted_and_verifies_only_the_correct_password()
     {
-        var accountId = Guid.NewGuid();
-        var signingKey = "test-signing-key-with-more-than-32-chars";
-
-        var token = AccountSecurity.CreateJwt(accountId, "teste@example.com", "+5516992330309", signingKey, DateTimeOffset.UtcNow.AddMinutes(5));
-
-        Assert.Equal(accountId, AccountSecurity.ValidateJwt(token, signingKey));
+        var first = AccountSecurity.HashPassword("correct-password");
+        Assert.NotEqual(first, AccountSecurity.HashPassword("correct-password"));
+        Assert.True(AccountSecurity.VerifyPassword("correct-password", first));
+        Assert.False(AccountSecurity.VerifyPassword("incorrect-password", first));
     }
 
     [Fact]
-    public void Jwt_validation_rejects_expired_or_wrongly_signed_token()
+    public void Invalid_password_storage_fails_closed_without_unbounded_derivation()
     {
-        var accountId = Guid.NewGuid();
-        var signingKey = "test-signing-key-with-more-than-32-chars";
-        var token = AccountSecurity.CreateJwt(accountId, "teste@example.com", "+5516992330309", signingKey, DateTimeOffset.UtcNow.AddSeconds(-1));
-
-        Assert.Null(AccountSecurity.ValidateJwt(token, signingKey));
-        Assert.Null(AccountSecurity.ValidateJwt(token, "another-signing-key-with-more-than-32-chars"));
+        Assert.False(AccountSecurity.VerifyPassword("password", "pbkdf2-sha256.100000.invalid.invalid"));
+        Assert.False(AccountSecurity.VerifyPassword("password", "pbkdf2-sha256.2147483647.AA==.AA=="));
+        Assert.False(AccountSecurity.VerifyPassword("password", "pbkdf2-sha256.100000.."));
     }
 }

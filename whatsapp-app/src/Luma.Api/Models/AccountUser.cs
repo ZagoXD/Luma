@@ -9,6 +9,7 @@ public sealed class AccountUser
     public string CpfHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    public int SessionVersion { get; set; }
     public string PhoneNumber { get; set; } = string.Empty;
     public string PhoneHash { get; set; } = string.Empty;
     public DateTimeOffset? PhoneVerifiedAt { get; set; }
@@ -49,6 +50,10 @@ public sealed class AccountSession
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid AccountUserId { get; set; }
     public string TokenHash { get; set; } = string.Empty;
+    public int AccountVersion { get; set; }
+    public long RefreshGeneration { get; set; }
+    public DateTimeOffset? PreviousValidUntil { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -110,6 +115,7 @@ public sealed class PasswordResetToken
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid AccountUserId { get; set; }
     public string TokenHash { get; set; } = string.Empty;
+    public int AccountVersion { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? UsedAt { get; set; }
     public string? RequestIp { get; set; }

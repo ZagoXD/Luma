@@ -34,16 +34,17 @@ if (args.Length == 4 && args[0] == "--ingest-knowledge")
 }
 
 var builder = WebApplication.CreateBuilder(args);
-PrivacyRuntime.Configure(builder.Configuration.GetSection("Privacy").Get<PrivacyOptions>() ?? new PrivacyOptions());
+PrivacyRuntime.Configure(builder.Configuration.GetSection("Privacy").Get<PrivacyOptions>() ?? new PrivacyOptions(), builder.Environment.IsProduction());
+AccountSessionService.ValidateConfiguration(builder.Configuration);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod());
+    options.AddDefaultPolicy(policy => {
+        var origin = builder.Configuration["Luma:WebBaseUrl"] ?? "http://localhost:3000";
+        policy.WithOrigins(origin.TrimEnd('/')).AllowAnyHeader().AllowAnyMethod();
+    });
 });
 builder.Services.AddDbContext<LumaDbContext>(options =>
 {
@@ -105,6 +106,9 @@ else
 builder.Services.AddSingleton<BabyImageJobQueue>();
 builder.Services.AddSingleton<IBabyImageJobQueue>(provider => provider.GetRequiredService<BabyImageJobQueue>());
 builder.Services.AddScoped<AccountPhoneVerificationService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IAccountRequestLimiter, AccountRequestLimiter>();
+builder.Services.AddScoped<AccountSessionService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<SupportRequestService>();
 builder.Services.AddScoped<NotificationPreferenceService>();
@@ -127,6 +131,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseMiddleware<AuthRequestProtection>();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -157,6 +162,8 @@ app.MapPost("/account/register", async (
     AccountRegisterRequest request,
     LumaDbContext db,
     AccountPhoneVerificationService phoneVerification,
+    AccountSessionService sessions,
+    IAccountRequestLimiter limiter,
     IEmailService emailService,
     ILogger<Program> logger) =>
 {
@@ -178,6 +185,7 @@ app.MapPost("/account/register", async (
     {
         return Results.BadRequest(new { message = normalized.Error });
     }
+    if (!await limiter.AllowAsync("registration.email", normalized.Email, 5, TimeSpan.FromHours(1))) throw new AuthRateLimitException(3600);
 
     var emailHash = PrivacyRuntime.LookupHash(normalized.Email, "account.email");
     var cpfHash = PrivacyRuntime.LookupHash(normalized.Cpf, "account.cpf");
@@ -210,10 +218,9 @@ app.MapPost("/account/register", async (
         logger.LogWarning("welcome_email_failed for account {AccountId}: {Error}", account.Id, welcomeEmail.ErrorMessage);
     }
 
-    return Results.Ok(BuildAccountAuthResponse(account, builder.Configuration, verification.Message));
+    return Results.Ok(await BuildAccountAuthResponse(account, sessions, verification.Message));
 })
-.WithName("RegisterAccount")
-.WithOpenApi();
+.WithName("RegisterAccount");
 
 app.MapPost("/auth/forgot-password", async (
     ForgotPasswordRequest request,
@@ -228,8 +235,7 @@ app.MapPost("/auth/forgot-password", async (
 
     return Results.Ok(new { message = result.Message });
 })
-.WithName("ForgotPassword")
-.WithOpenApi();
+.WithName("ForgotPassword");
 
 app.MapPost("/auth/reset-password", async (
     ResetPasswordRequest request,
@@ -240,8 +246,7 @@ app.MapPost("/auth/reset-password", async (
         ? Results.Ok(new { message = result.Message })
         : Results.BadRequest(new { message = result.Message });
 })
-.WithName("ResetPassword")
-.WithOpenApi();
+.WithName("ResetPassword");
 
 app.MapPost("/support/requests", async (
     HttpRequest request,
@@ -295,8 +300,7 @@ app.MapPost("/support/requests", async (
         : Results.BadRequest(new { message = result.Message });
 })
 .DisableAntiforgery()
-.WithName("CreateSupportRequest")
-.WithOpenApi();
+.WithName("CreateSupportRequest");
 
 static string FormatSupportAttachmentSize(long bytes)
 {
@@ -304,9 +308,12 @@ static string FormatSupportAttachmentSize(long bytes)
     return megabytes >= 1 ? $"{megabytes:0.#} MB" : $"{bytes} bytes";
 }
 
-app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext db) =>
+app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext db, AccountSessionService sessions, IAccountRequestLimiter limiter) =>
 {
+    if (string.IsNullOrWhiteSpace(request.Email) || request.Email.Length > 254 || string.IsNullOrEmpty(request.Password) || request.Password.Length > 1024)
+        return Results.BadRequest(new { message = "Informe um e-mail e uma senha válidos." });
     var email = request.Email.Trim().ToLowerInvariant();
+    if (!await limiter.AllowAsync("login.email", email, 5, TimeSpan.FromMinutes(5))) throw new AuthRateLimitException(300);
     var emailHash = PrivacyRuntime.LookupHash(email, "account.email");
     var account = await db.AccountUsers.FirstOrDefaultAsync(user => user.EmailHash == emailHash);
     if (account is null || account.DeletionRequestedAt != null || !AccountSecurity.VerifyPassword(request.Password, account.PasswordHash))
@@ -314,10 +321,22 @@ app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext 
         return Results.Unauthorized();
     }
 
-    return Results.Ok(BuildAccountAuthResponse(account, builder.Configuration));
+    return Results.Ok(await BuildAccountAuthResponse(account, sessions));
 })
-.WithName("LoginAccount")
-.WithOpenApi();
+.WithName("LoginAccount");
+
+app.MapPost("/account/refresh", async (RefreshAccountRequest input, AccountSessionService sessions, CancellationToken ct) =>
+{
+    var tokens = await sessions.RefreshAsync(input.RefreshToken, ct);
+    return tokens is null ? Results.Unauthorized() : Results.Ok(tokens);
+});
+app.MapPost("/account/logout", async (RefreshAccountRequest input, HttpRequest request, AccountSessionService sessions, CancellationToken ct) =>
+{
+    var authorization = request.Headers.Authorization.ToString();
+    if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) await sessions.RevokeAccessAsync(authorization[7..].Trim(), ct);
+    await sessions.RevokeAsync(input.RefreshToken, ct);
+    return Results.Ok(new { ok = true });
+});
 
 app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db, ISubscriptionGateway gateway) =>
 {
@@ -356,8 +375,7 @@ app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db, ISubscri
             }
     });
 })
-.WithName("GetAccountProfile")
-.WithOpenApi();
+.WithName("GetAccountProfile");
 
 app.MapPost("/account/phone-verification/send", async (
     HttpRequest request,
@@ -375,8 +393,7 @@ app.MapPost("/account/phone-verification/send", async (
         ? Results.Ok(new { message = result.Message })
         : Results.BadRequest(new { message = result.Message });
 })
-.WithName("SendAccountPhoneVerification")
-.WithOpenApi();
+.WithName("SendAccountPhoneVerification");
 
 app.MapPost("/account/phone-verification/confirm", async (
     HttpRequest request,
@@ -395,8 +412,7 @@ app.MapPost("/account/phone-verification/confirm", async (
         ? Results.Ok(new { message = result.Message, user = BuildAccountUserResponse(account) })
         : Results.BadRequest(new { message = result.Message });
 })
-.WithName("ConfirmAccountPhoneVerification")
-.WithOpenApi();
+.WithName("ConfirmAccountPhoneVerification");
 
 app.MapPost("/account/phone-change/request", async (
     HttpRequest request,
@@ -415,8 +431,7 @@ app.MapPost("/account/phone-change/request", async (
         ? Results.Ok(new { message = result.Message })
         : Results.BadRequest(new { message = result.Message });
 })
-.WithName("RequestAccountPhoneChange")
-.WithOpenApi();
+.WithName("RequestAccountPhoneChange");
 
 app.MapPost("/account/phone-change/confirm", async (
     HttpRequest request,
@@ -435,8 +450,7 @@ app.MapPost("/account/phone-change/confirm", async (
         ? Results.Ok(new { message = result.Message, user = BuildAccountUserResponse(account) })
         : Results.BadRequest(new { message = result.Message });
 })
-.WithName("ConfirmAccountPhoneChange")
-.WithOpenApi();
+.WithName("ConfirmAccountPhoneChange");
 
 app.MapGet("/account/calendar", async (
     HttpRequest request,
@@ -468,8 +482,7 @@ app.MapGet("/account/calendar", async (
         ? Results.NotFound(new { message = "Calendário não encontrado." })
         : Results.Ok(BuildCalendarResponse(calendar));
 })
-.WithName("GetAccountCalendar")
-.WithOpenApi();
+.WithName("GetAccountCalendar");
 
 app.MapGet("/account/notifications/preferences", async (HttpRequest request, LumaDbContext db) =>
 {
@@ -502,8 +515,7 @@ app.MapGet("/account/notifications/preferences", async (HttpRequest request, Lum
         preference = BuildNotificationPreferenceResponse(preference)
     });
 })
-.WithName("GetNotificationPreferences")
-.WithOpenApi();
+.WithName("GetNotificationPreferences");
 
 app.MapPost("/account/notifications/preferences", async (
     HttpRequest request,
@@ -518,9 +530,9 @@ app.MapPost("/account/notifications/preferences", async (
     }
 
     var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
-    if (subscription is null || subscription.PlanCode != "essencial" || subscription.Status != LumaSubscriptionStatuses.Active)
+    if (!BillingPolicy.HasAccess(subscription, DateTimeOffset.UtcNow, "essencial"))
     {
-        return Results.Forbid();
+        return Results.Json(new { message = "Seu plano não permite configurar notificações. Consulte os planos no seu perfil." }, statusCode: 403);
     }
 
     if (!IsValidNotificationTime(update.ReminderTime)
@@ -540,8 +552,7 @@ app.MapPost("/account/notifications/preferences", async (
     var saved = await preferences.UpsertAsync(lumaUser.Id, update);
     return Results.Ok(new { preference = BuildNotificationPreferenceResponse(saved) });
 })
-.WithName("UpdateNotificationPreferences")
-.WithOpenApi();
+.WithName("UpdateNotificationPreferences");
 
 app.MapBilling(GetAuthenticatedAccountAsync);
 app.MapPost("/account/delete", async (HttpRequest request, DeleteAccountRequest input, LumaDbContext db, AccountDeletionService deletion, CancellationToken ct) =>
@@ -678,8 +689,7 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
 
     return TwilioXmlReply(reply.Body, reply.MediaUrl);
 })
-.WithName("TwilioWhatsAppWebhook")
-.WithOpenApi();
+.WithName("TwilioWhatsAppWebhook");
 
 app.MapPost("/dev/messages", async (DevIncomingMessage message, ConversationService conversations) =>
 {
@@ -691,16 +701,14 @@ app.MapPost("/dev/messages", async (DevIncomingMessage message, ConversationServ
 
     return Results.Ok(new { reply });
 })
-.WithName("DevIncomingMessage")
-.WithOpenApi();
+.WithName("DevIncomingMessage");
 
 app.MapPost("/dev/notifications/run", async (NotificationProcessor processor) =>
 {
     var processed = await processor.RunDueNotificationsAsync();
     return Results.Ok(new { processed });
 })
-.WithName("RunDueNotifications")
-.WithOpenApi();
+.WithName("RunDueNotifications");
 
 app.MapGet("/admin/users", async (LumaDbContext db) =>
 {
@@ -733,8 +741,7 @@ app.MapGet("/admin/users", async (LumaDbContext db) =>
 
     return Results.Ok(users);
 })
-.WithName("AdminUsers")
-.WithOpenApi();
+.WithName("AdminUsers");
 
 app.MapGet("/admin/users/{id:guid}/events", async (Guid id, LumaDbContext db) =>
 {
@@ -756,8 +763,7 @@ app.MapGet("/admin/users/{id:guid}/events", async (Guid id, LumaDbContext db) =>
 
     return Results.Ok(events);
 })
-.WithName("AdminUserEvents")
-.WithOpenApi();
+.WithName("AdminUserEvents");
 
 app.Run();
 
@@ -1041,6 +1047,7 @@ WHERE "PhoneNumber" ~ '^\+[1-9][0-9]{{9,10}}$' AND "PhoneNumber" NOT LIKE '+55%'
 """);
 
     await BillingSchema.EnsureAsync(db);
+    await AuthSecuritySchema.EnsureAsync(db);
     await BackfillPrivacyIndexesAsync(db);
 }
 
@@ -1108,17 +1115,7 @@ static async Task<AccountUser?> GetAuthenticatedAccountAsync(HttpRequest request
         return null;
     }
 
-    var signingKey = request.HttpContext.RequestServices
-        .GetRequiredService<IConfiguration>()
-        .GetValue<string>("Luma:JwtSigningKey")
-        ?? "luma-dev-jwt-signing-key-change-me-please";
-    var accountId = AccountSecurity.ValidateJwt(token, signingKey);
-    if (accountId is null)
-    {
-        return null;
-    }
-
-    return await db.AccountUsers.FirstOrDefaultAsync(account => account.Id == accountId.Value && account.DeletionRequestedAt == null);
+    return await request.HttpContext.RequestServices.GetRequiredService<AccountSessionService>().AuthenticateAsync(token, request.HttpContext.RequestAborted);
 }
 
 static async Task<AccountSubscription?> GetVisibleSubscriptionAsync(LumaDbContext db, string phoneNumber)
@@ -1133,20 +1130,13 @@ static async Task<AccountSubscription?> GetVisibleSubscriptionAsync(LumaDbContex
         .FirstOrDefaultAsync();
 }
 
-static object BuildAccountAuthResponse(AccountUser account, IConfiguration configuration, string? phoneVerificationMessage = null)
+static async Task<object> BuildAccountAuthResponse(AccountUser account, AccountSessionService sessions, string? phoneVerificationMessage = null)
 {
-    var signingKey = configuration.GetValue<string>("Luma:JwtSigningKey")
-        ?? "luma-dev-jwt-signing-key-change-me-please";
-    var token = AccountSecurity.CreateJwt(
-        account.Id,
-        account.Email,
-        account.PhoneNumber,
-        signingKey,
-        DateTimeOffset.UtcNow.AddDays(30));
+    var tokens = await sessions.IssueAsync(account);
 
     return new
     {
-        token,
+        tokens.Token, tokens.RefreshToken, tokens.AccessExpiresAt, tokens.RefreshExpiresAt,
         user = BuildAccountUserResponse(account),
         phoneVerificationRequired = account.PhoneVerifiedAt is null,
         phoneVerificationMessage
@@ -1219,11 +1209,14 @@ public sealed record DevIncomingMessage(string From, string Body);
 public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber, bool DataConsentAccepted, bool TermsAccepted = false, string? LegalVersion = null);
 public sealed record DeleteAccountRequest(string Password);
 public sealed record AccountLoginRequest(string Email, string Password);
+public sealed record RefreshAccountRequest(string? RefreshToken);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(string Token, string NewPassword);
 public sealed record PhoneVerificationConfirmRequest(string Code);
 public sealed record PhoneChangeRequest(string PhoneNumber);
 public sealed record PhoneChangeConfirmRequest(string PhoneNumber, string Code);
+
+public partial class Program { }
 
 
 

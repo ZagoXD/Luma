@@ -69,7 +69,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore backend
         run: dotnet restore Luma.sln
@@ -108,6 +108,9 @@ jobs:
 
       - name: Lint frontend
         run: npm run lint
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Test frontend SEO policy
         run: npm test

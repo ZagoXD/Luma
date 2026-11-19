@@ -630,7 +630,7 @@ public sealed class ConversationServiceTests
 
         Assert.Equal(new DateOnly(2026, 4, 24), cycle.StartDate);
         Assert.Contains(events, ev => ev.Type == CycleEventTypes.PeriodStart && ev.Date == new DateOnly(2026, 4, 24));
-        var flow = Assert.Single(events.Where(ev => ev.Type == CycleEventTypes.FlowUpdate));
+        var flow = Assert.Single(events, ev => ev.Type == CycleEventTypes.FlowUpdate);
         Assert.Equal("intense", JsonDocument.Parse(flow.MetadataJson).RootElement.GetProperty("flow_intensity").GetString());
         Assert.Contains("fluxo intenso", MessageText.Normalize(reply));
     }

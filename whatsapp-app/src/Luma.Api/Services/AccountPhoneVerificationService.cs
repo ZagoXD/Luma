@@ -15,7 +15,8 @@ public sealed record AccountPhoneVerificationResult(bool Success, string Message
 public sealed class AccountPhoneVerificationService(
     LumaDbContext db,
     ITwilioVerifyClient verifyClient,
-    ILogger<AccountPhoneVerificationService> logger)
+    ILogger<AccountPhoneVerificationService> logger,
+    IAccountRequestLimiter? limiter = null)
 {
     private static readonly TimeSpan CodeTtl = TimeSpan.FromMinutes(10);
     private const int MaxAttempts = 5;
@@ -99,6 +100,12 @@ public sealed class AccountPhoneVerificationService(
 
     private async Task<AccountPhoneVerificationResult> CreateAndSendCodeAsync(AccountUser account, string phoneNumber, string purpose, CancellationToken cancellationToken)
     {
+        var guard = limiter ?? new AccountRequestLimiter(db);
+        if (!await guard.AllowAsync("sms.cooldown", phoneNumber, 1, TimeSpan.FromSeconds(30), cancellationToken))
+            throw new AuthRateLimitException(30);
+        if (!await guard.AllowAsync("sms.destination", phoneNumber, 5, TimeSpan.FromHours(1), cancellationToken)
+            || !await guard.AllowAsync("sms.account", account.Id.ToString(), 8, TimeSpan.FromHours(1), cancellationToken))
+            throw new AuthRateLimitException(3600);
         var now = DateTimeOffset.UtcNow;
         var phoneHash = PrivacyRuntime.LookupHash(phoneNumber, "account.phone");
 

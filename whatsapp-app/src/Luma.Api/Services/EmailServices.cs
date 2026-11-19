@@ -403,7 +403,8 @@ public sealed class PasswordResetService(
     LumaDbContext db,
     IEmailService emailService,
     IOptions<EmailOptions> emailOptions,
-    ILogger<PasswordResetService> logger)
+    ILogger<PasswordResetService> logger,
+    IAccountRequestLimiter? limiter = null)
 {
     public const string GenericForgotPasswordMessage = "Se existir uma conta vinculada a este e-mail, enviaremos instruções para redefinir sua senha.";
     private const int TokenBytes = 32;
@@ -419,9 +420,11 @@ public sealed class PasswordResetService(
         {
             return new PasswordResetRequestResult(true, GenericForgotPasswordMessage);
         }
+        if (!await (limiter ?? new AccountRequestLimiter(db)).AllowAsync("reset.email", normalizedEmail, 3, TimeSpan.FromMinutes(15), cancellationToken))
+            return new PasswordResetRequestResult(true, GenericForgotPasswordMessage);
 
         var emailHash = PrivacyRuntime.LookupHash(normalizedEmail, "account.email");
-        var account = await db.AccountUsers.FirstOrDefaultAsync(user => user.EmailHash == emailHash, cancellationToken);
+        var account = await db.AccountUsers.FirstOrDefaultAsync(user => user.EmailHash == emailHash && user.DeletionRequestedAt == null, cancellationToken);
         if (account is null)
         {
             return new PasswordResetRequestResult(true, GenericForgotPasswordMessage);
@@ -441,6 +444,7 @@ public sealed class PasswordResetService(
         {
             AccountUserId = account.Id,
             TokenHash = AccountSecurity.HashToken(rawToken),
+            AccountVersion = account.SessionVersion,
             ExpiresAt = now.AddMinutes(Math.Max(5, emailOptions.Value.PasswordResetExpirationMinutes)),
             RequestIp = requestIp,
             UserAgent = userAgent,
@@ -467,12 +471,17 @@ public sealed class PasswordResetService(
 
     public async Task<PasswordResetRequestResult> ResetPasswordAsync(string token, string newPassword, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(token) || newPassword.Length < 8)
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 256 || string.IsNullOrEmpty(newPassword) || newPassword.Length is < 8 or > 1024)
         {
             return new PasswordResetRequestResult(false, "Link de recuperação inválido ou expirado.");
         }
 
         var tokenHash = AccountSecurity.HashToken(token);
+        var owner = await db.PasswordResetTokens.AsNoTracking().Where(item => item.TokenHash == tokenHash)
+            .Select(item => (Guid?)item.AccountUserId).FirstOrDefaultAsync(cancellationToken);
+        if (owner is null) return new PasswordResetRequestResult(false, "Link de recuperação inválido ou expirado.");
+        await using var transaction = db.Database.IsNpgsql() ? await db.Database.BeginTransactionAsync(cancellationToken) : null;
+        if (transaction is not null) await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"password-reset:" + owner}, 0))", cancellationToken);
         var resetToken = await db.PasswordResetTokens
             .Include(item => item.AccountUser)
             .Where(item => item.TokenHash == tokenHash)
@@ -480,20 +489,27 @@ public sealed class PasswordResetService(
             .FirstOrDefaultAsync(cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        if (resetToken?.AccountUser is null || resetToken.UsedAt is not null || resetToken.ExpiresAt < now)
+        if (resetToken?.AccountUser is null || resetToken.AccountUser.DeletionRequestedAt is not null
+            || resetToken.AccountVersion != resetToken.AccountUser.SessionVersion || resetToken.UsedAt is not null || resetToken.ExpiresAt < now)
         {
             return new PasswordResetRequestResult(false, "Link de recuperação inválido ou expirado.");
         }
 
         resetToken.AccountUser.PasswordHash = AccountSecurity.HashPassword(newPassword);
+        resetToken.AccountUser.SessionVersion++;
+        foreach (var session in await db.AccountSessions.Where(s => s.AccountUserId == resetToken.AccountUserId && s.RevokedAt == null).ToListAsync(cancellationToken))
+            session.RevokedAt = now;
         resetToken.AccountUser.UpdatedAt = now;
-        resetToken.UsedAt = now;
+        foreach (var pending in await db.PasswordResetTokens.Where(item => item.AccountUserId == resetToken.AccountUserId && item.UsedAt == null).ToListAsync(cancellationToken))
+            pending.UsedAt = now;
         await db.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return new PasswordResetRequestResult(true, "Senha redefinida com sucesso.");
     }
 
     private static string? NormalizeEmail(string email)
     {
+        if (string.IsNullOrWhiteSpace(email) || email.Length > 254) return null;
         var normalized = email.Trim().ToLowerInvariant();
         return normalized.Contains('@', StringComparison.Ordinal) ? normalized : null;
     }

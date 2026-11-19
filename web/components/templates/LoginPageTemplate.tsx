@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, LogIn, UserPlus } from "lucide-react";
 import { confirmPhoneVerificationCode, loginAccount, registerAccount, resendPhoneVerificationCode, type AccountUser } from "@/lib/luma-api";
 import { formatBrazilPhone, formatCpf, isValidBrazilPhone, isValidCpf } from "@/lib/account-format";
+import { safeReturnPath } from "@/lib/session-policy";
 
 type Mode = "login" | "register";
 
@@ -19,7 +20,7 @@ export function LoginPageTemplate() {
   const [mode, setMode] = useState<Mode>("login");
   const [redirectTo] = useState(() => {
     if (typeof window === "undefined") return "/perfil";
-    return new URLSearchParams(window.location.search).get("redirect") || "/perfil";
+    return safeReturnPath(new URLSearchParams(window.location.search).get("redirect"));
   });
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);

@@ -8,6 +8,22 @@ namespace Luma.Tests;
 public class BillingPolicyTests
 {
     [Theory]
+    [InlineData("active", "essencial", 1, true)]
+    [InlineData("canceled", "essencial", 1, true)]
+    [InlineData("pending", "essencial", 1, false)]
+    [InlineData("terminated", "essencial", 1, false)]
+    [InlineData("active", "basico", 1, false)]
+    [InlineData("active", "essencial", -1, false)]
+    public void Essential_entitlement_depends_on_paid_validity_not_automatic_renewal(string status, string plan, int days, bool expected)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var subscription = new AccountSubscription { Status = status, PlanCode = plan, CurrentPeriodEndsAt = now.AddDays(days) };
+        Assert.Equal(expected, BillingPolicy.HasAccess(subscription, now, "essencial"));
+        subscription.TerminatedAt = now;
+        Assert.False(BillingPolicy.HasAccess(subscription, now, "essencial"));
+    }
+
+    [Theory]
     [InlineData("basico", "monthly", 11)]
     [InlineData("basico", "annual", 70.80)]
     [InlineData("essencial", "monthly", 20)]

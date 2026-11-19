@@ -17,7 +17,9 @@ export async function POST(request: Request) {
   const data = await apiResponse.json().catch(() => ({}));
 
   if (!apiResponse.ok || !data.token) {
-    return NextResponse.json(data, { status: apiResponse.status });
+    return NextResponse.json(data, { status: apiResponse.status, headers: {
+      "Cache-Control": "no-store", ...(apiResponse.headers.get("Retry-After") ? { "Retry-After": apiResponse.headers.get("Retry-After")! } : {}),
+    } });
   }
 
   const response = NextResponse.json({
@@ -25,6 +27,6 @@ export async function POST(request: Request) {
     phoneVerificationRequired: data.phoneVerificationRequired,
     phoneVerificationMessage: data.phoneVerificationMessage,
   });
-  setSessionCookie(response, data.token);
+  setSessionCookie(response, data);
   return response;
 }

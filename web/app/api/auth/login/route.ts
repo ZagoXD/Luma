@@ -21,10 +21,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "E-mail ou senha inválidos." }, { status: 400 });
     }
 
-    return NextResponse.json(data, { status: apiResponse.status });
+    return NextResponse.json(data, { status: apiResponse.status, headers: {
+      "Cache-Control": "no-store", ...(apiResponse.headers.get("Retry-After") ? { "Retry-After": apiResponse.headers.get("Retry-After")! } : {}),
+    } });
   }
 
   const response = NextResponse.json({ user: data.user });
-  setSessionCookie(response, data.token);
+  setSessionCookie(response, data);
   return response;
 }
