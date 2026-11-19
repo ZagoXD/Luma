@@ -79,6 +79,7 @@ services:
       MercadoPago__WebhookSecret: ${MERCADOPAGO_WEBHOOK_SECRET:-}
       MercadoPago__SellerId: ${MERCADOPAGO_SELLER_ID:-}
       MercadoPago__TestMode: ${MERCADOPAGO_TEST_MODE:-true}
+      MercadoPago__TestBuyerEmail: ${MERCADOPAGO_TEST_BUYER_EMAIL:-}
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
       Assistant__Enabled: ${LUMA_ASSISTANT_ENABLED:-false}
       Assistant__MaxModelTurns: ${LUMA_ASSISTANT_MAX_MODEL_TURNS:-3}

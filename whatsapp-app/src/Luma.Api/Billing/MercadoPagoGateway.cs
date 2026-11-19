@@ -12,6 +12,7 @@ public sealed class MercadoPagoOptions
     public string WebhookSecret { get; set; } = "";
     public string SellerId { get; set; } = "";
     public bool TestMode { get; set; } = true;
+    public string TestBuyerEmail { get; set; } = "";
 }
 
 public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOptions> options) : ISubscriptionGateway
@@ -20,6 +21,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     private bool sellerVerified;
     public string Provider => "mercadopago";
     public string PublicKey => settings.PublicKey;
+    public string CheckoutEmail(string accountEmail) => settings.TestMode && !string.IsNullOrWhiteSpace(settings.TestBuyerEmail) ? settings.TestBuyerEmail : accountEmail;
     public bool IsReady => !string.IsNullOrWhiteSpace(settings.PublicKey) && !string.IsNullOrWhiteSpace(settings.AccessToken)
         && !string.IsNullOrWhiteSpace(settings.SellerId) && !string.IsNullOrWhiteSpace(settings.WebhookSecret);
     public bool VerifyWebhook(string resourceId, string requestId, string signature, DateTimeOffset now)

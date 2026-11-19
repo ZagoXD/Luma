@@ -35,6 +35,7 @@ public interface ISubscriptionGateway
     string Provider { get; }
     string PublicKey { get; }
     bool IsReady { get; }
+    string CheckoutEmail(string accountEmail);
     Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string cardToken, CancellationToken ct);
     Task<ProviderSubscription> GetAsync(string id, CancellationToken ct);
     Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct);

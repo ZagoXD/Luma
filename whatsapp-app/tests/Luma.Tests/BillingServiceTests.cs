@@ -273,6 +273,7 @@ public sealed class BillingServiceTests
         public string Provider => "mercadopago";
         public string PublicKey => "public";
         public bool IsReady => true;
+        public string CheckoutEmail(string accountEmail) => accountEmail;
         public ProviderSubscription? Remote;
         public int Creates;
         public int Refunds;

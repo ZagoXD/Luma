@@ -8,6 +8,14 @@ namespace Luma.Tests;
 
 public sealed class MercadoPagoGatewayTests
 {
+    [Theory]
+    [InlineData(true, "buyer@testuser.com")]
+    [InlineData(false, "customer@example.com")]
+    public void SandboxEmailNeverOverridesProductionIdentity(bool test, string expected)
+    {
+        var gateway = new MercadoPagoGateway(new HttpClient(), Options.Create(new MercadoPagoOptions { TestMode=test, TestBuyerEmail="buyer@testuser.com" }));
+        Assert.Equal(expected, gateway.CheckoutEmail("customer@example.com"));
+    }
     [Fact]
     public async Task FullRefundUsesOriginalPaymentAndStableIdempotencyKey()
     {

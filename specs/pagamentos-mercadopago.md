@@ -61,6 +61,8 @@ Docker local: equivalentes `MERCADOPAGO_PUBLIC_KEY`, `MERCADOPAGO_ACCESS_TOKEN`,
 
 Public Key e Access Token devem pertencer ao mesmo vendedor/ambiente. Ambos podem começar por `APP_USR`: o prefixo não distingue teste de produção. A integração valida o vendedor brasileiro e a classificação de conta de testes antes de criar cobranças.
 
+Em dev, `MERCADOPAGO_TEST_BUYER_EMAIL` (`MercadoPago__TestBuyerEmail` na API) pode preencher o Brick com o e-mail oficial de um comprador de testes. A configuração é ignorada em produção. O cadastro da Luma continua usando o e-mail escolhido pela usuária; a identidade do pagador de sandbox é separada e não é uma credencial de acesso à conta.
+
 Webhooks no painel Suas integrações → aplicação → Webhooks:
 
 - Teste: `https://dev.ia-luma.com.br/webhooks/mercadopago`.
