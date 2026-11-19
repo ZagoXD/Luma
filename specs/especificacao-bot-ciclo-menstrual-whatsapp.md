@@ -152,7 +152,7 @@ Implementado:
   - Luma Básico: R$ 5,90/mês.
   - Luma Essencial: R$ 9,90/mês.
 - Webhooks Mercado Pago para sincronizar assinatura.
-- Cancelamento no fim do período.
+- Renovação automática pode ser desligada mantendo o período pago. Cancelamento imediato encerra o acesso. Arrependimento e reembolso têm fluxo separado nas Configurações da conta; consultar `conta-privacidade-e-lista-de-espera.md`.
 - Retomada de assinatura.
 - Troca de plano.
 - Troca de cartão.

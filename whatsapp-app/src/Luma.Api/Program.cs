@@ -65,6 +65,8 @@ builder.Services.Configure<ElevenLabsOptions>(builder.Configuration.GetSection("
 builder.Services.Configure<MercadoPagoOptions>(builder.Configuration.GetSection("MercadoPago"));
 builder.Services.AddHttpClient<ISubscriptionGateway, MercadoPagoGateway>(http => http.Timeout = TimeSpan.FromSeconds(25));
 builder.Services.AddScoped<BillingService>();
+builder.Services.AddScoped<AccountDeletionService>();
+builder.Services.AddScoped<IUserImageDeletion, R2UserDataDeletion>();
 builder.Services.AddHostedService<BillingReconciliationWorker>();
 builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Resend"));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
@@ -162,6 +164,8 @@ app.MapPost("/account/register", async (
     {
         return Results.BadRequest(new { message = consentError });
     }
+    if (LegalConsent.Validate(request.TermsAccepted, request.LegalVersion) is { } legalError)
+        return Results.BadRequest(new { message = legalError });
 
     var normalized = AccountInputNormalizer.NormalizeRegistration(
         request.Email,
@@ -192,7 +196,9 @@ app.MapPost("/account/register", async (
         Cpf = normalized.Cpf,
         FullName = normalized.FullName,
         PhoneNumber = normalized.PhoneNumber,
-        PasswordHash = AccountSecurity.HashPassword(request.Password)
+        PasswordHash = AccountSecurity.HashPassword(request.Password),
+        TermsVersion = LegalConsent.Version, PrivacyVersion = LegalConsent.Version,
+        TermsAcceptedAt = DateTimeOffset.UtcNow, HealthConsentAcceptedAt = DateTimeOffset.UtcNow
     };
 
     db.AccountUsers.Add(account);
@@ -303,7 +309,7 @@ app.MapPost("/account/login", async (AccountLoginRequest request, LumaDbContext 
     var email = request.Email.Trim().ToLowerInvariant();
     var emailHash = PrivacyRuntime.LookupHash(email, "account.email");
     var account = await db.AccountUsers.FirstOrDefaultAsync(user => user.EmailHash == emailHash);
-    if (account is null || !AccountSecurity.VerifyPassword(request.Password, account.PasswordHash))
+    if (account is null || account.DeletionRequestedAt != null || !AccountSecurity.VerifyPassword(request.Password, account.PasswordHash))
     {
         return Results.Unauthorized();
     }
@@ -538,6 +544,16 @@ app.MapPost("/account/notifications/preferences", async (
 .WithOpenApi();
 
 app.MapBilling(GetAuthenticatedAccountAsync);
+app.MapPost("/account/delete", async (HttpRequest request, DeleteAccountRequest input, LumaDbContext db, AccountDeletionService deletion, CancellationToken ct) =>
+{
+    var account = await GetAuthenticatedAccountAsync(request, db);
+    if (account is null) return Results.Unauthorized();
+    try { await deletion.RequestAsync(account.Id, input.Password, ct); return Results.Ok(new { message = "Conta excluída. As cobranças foram interrompidas. Backups expiram conforme a política de privacidade." }); }
+    catch (BillingException ex) { return account.DeletionRequestedAt is not null
+        ? Results.Json(new { pending = true, message = "Exclusão registrada. O acesso foi bloqueado. A interrupção externa das cobranças aguarda confirmação; contate o suporte para acompanhar." }, statusCode: 202)
+        : Results.BadRequest(new { message = ex.Message }); }
+    catch (HttpRequestException) { return Results.Json(new { message = "Exclusão registrada. Seu acesso foi bloqueado; a interrupção das cobranças será tentada novamente. Contate o suporte para acompanhar." }, statusCode: 202); }
+});
 
 app.MapPost("/webhooks/twilio/notifications/status/{deliveryId:guid}", async (
     Guid deliveryId, HttpRequest request, NotificationStatusService statuses, IConfiguration configuration) =>
@@ -1102,7 +1118,7 @@ static async Task<AccountUser?> GetAuthenticatedAccountAsync(HttpRequest request
         return null;
     }
 
-    return await db.AccountUsers.FirstOrDefaultAsync(account => account.Id == accountId.Value);
+    return await db.AccountUsers.FirstOrDefaultAsync(account => account.Id == accountId.Value && account.DeletionRequestedAt == null);
 }
 
 static async Task<AccountSubscription?> GetVisibleSubscriptionAsync(LumaDbContext db, string phoneNumber)
@@ -1200,7 +1216,8 @@ static bool IsValidNotificationTime(string? value)
 }
 
 public sealed record DevIncomingMessage(string From, string Body);
-public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber, bool DataConsentAccepted);
+public sealed record AccountRegisterRequest(string Email, string Cpf, string FullName, string Password, string PhoneNumber, bool DataConsentAccepted, bool TermsAccepted = false, string? LegalVersion = null);
+public sealed record DeleteAccountRequest(string Password);
 public sealed record AccountLoginRequest(string Email, string Password);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(string Token, string NewPassword);

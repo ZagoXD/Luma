@@ -14,6 +14,16 @@ ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ReplacedBySubscripti
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ReplacementConfirmedAt" timestamptz;
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingPlanCode" varchar(32);
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingBillingInterval" varchar(32);
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "TerminatedAt" timestamptz;
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "TerminationConfirmedAt" timestamptz;
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "WithdrawalRequestedAt" timestamptz;
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "WithdrawalCompletedAt" timestamptz;
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "TermsVersion" text;
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "TermsAcceptedAt" timestamptz;
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "PrivacyVersion" text;
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "HealthConsentAcceptedAt" timestamptz;
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "DeletionRequestedAt" timestamptz;
+ALTER TABLE account_users ADD COLUMN IF NOT EXISTS "DeletionCompletedAt" timestamptz;
 CREATE TABLE IF NOT EXISTS billing_payments (
     "Id" varchar(160) PRIMARY KEY,
     "AccountSubscriptionId" uuid NOT NULL REFERENCES account_subscriptions ("Id") ON DELETE CASCADE,

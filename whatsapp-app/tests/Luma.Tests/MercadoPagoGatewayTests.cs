@@ -9,6 +9,18 @@ namespace Luma.Tests;
 public sealed class MercadoPagoGatewayTests
 {
     [Fact]
+    public async Task FullRefundUsesOriginalPaymentAndStableIdempotencyKey()
+    {
+        var gateway = Create(request =>
+        {
+            if (request.Method == HttpMethod.Get) return Task.FromResult(Json("""{"id":"123","collector_id":123,"live_mode":true,"payment_method_id":"master","status":"approved","transaction_amount":20}"""));
+            Assert.Equal("/v1/payments/123/refunds", request.RequestUri!.AbsolutePath);
+            Assert.Equal("stable-key", request.Headers.GetValues("X-Idempotency-Key").Single());
+            return Task.FromResult(Json("""{"id":321,"status":"approved","amount":20}"""));
+        });
+        await gateway.RefundAsync("123", "stable-key", default);
+    }
+    [Fact]
     public async Task SubscriptionUsesServerPriceAndTokenWithoutRawCardData()
     {
         var id = Guid.NewGuid();
@@ -45,11 +57,13 @@ public sealed class MercadoPagoGatewayTests
 
     [Theory]
     [InlineData(999, false)]
-    [InlineData(123, true)]
-    public async Task ForeignSellerOrLivePaymentCannotBeAcceptedInTest(int seller, bool live)
+    [InlineData(999, true)]
+    public async Task ForeignSellerPaymentCannotBeAcceptedInTest(int seller, bool live)
     {
-        var gateway = Create(_ => Task.FromResult(Json($$$"""{"collector_id":{{{seller}}},"payment_method_id":"pix","live_mode":{{{live.ToString().ToLowerInvariant()}}}} """)));
-        await Assert.ThrowsAsync<BillingException>(() => gateway.GetPaymentsAsync("pix:123", default));
+        var gateway = Create(request => Task.FromResult(request.RequestUri!.AbsolutePath.Contains("authorized_payments")
+            ? Json("""{"results":[{"preapproval_id":"sub","payment":{"id":123}}]}""")
+            : Json($$$"""{"collector_id":{{{seller}}},"payment_method_id":"master","live_mode":{{{live.ToString().ToLowerInvariant()}}}}""")));
+        await Assert.ThrowsAsync<BillingException>(() => gateway.GetPaymentsAsync("sub", default));
     }
 
     [Fact]
@@ -59,6 +73,16 @@ public sealed class MercadoPagoGatewayTests
             ? Json("{\"results\":[{\"preapproval_id\":\"sub\",\"payment\":{\"id\":123}}]}")
             : Json("{\"id\":123,\"collector_id\":123,\"live_mode\":true,\"payment_method_id\":\"master\",\"status\":\"approved\",\"transaction_amount\":11,\"currency_id\":\"BRL\",\"date_approved\":\"2026-11-18T20:00:00Z\"}")));
         Assert.Single(await gateway.GetPaymentsAsync("sub", default));
+    }
+
+    [Fact]
+    public async Task InvoiceSearchUsesTheProvidersSupportedPageSize()
+    {
+        var gateway = Create(request => {
+            Assert.Contains("limit=10", request.RequestUri!.Query);
+            return Task.FromResult(Json("{\"results\":[]}"));
+        });
+        Assert.Empty(await gateway.GetPaymentsAsync("sub", default));
     }
 
     [Fact]

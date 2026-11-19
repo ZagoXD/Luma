@@ -1,4 +1,5 @@
 "use client";
+import { legalVersion } from "@/lib/legal";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -87,6 +88,7 @@ export function LoginPageTemplate() {
             phoneNumber,
             password: String(form.get("password") || ""),
             dataConsentAccepted: true,
+            termsAccepted: form.get("termsAccepted") === "on", legalVersion,
           });
 
       if (!result.user.phoneVerifiedAt) {
@@ -253,10 +255,15 @@ export function LoginPageTemplate() {
 
             {mode === "register" && (
               <label className="account-consent">
+                <input name="termsAccepted" type="checkbox" required />
+                <span>Li e aceito os <Link href="/termos" target="_blank">Termos de Uso</Link> e li a <Link href="/privacidade" target="_blank">Política de Privacidade</Link>. Confirmo que tenho 18 anos ou mais.</span>
+              </label>
+            )}
+            {mode === "register" && (
+              <label className="account-consent">
                 <input name="dataConsentAccepted" type="checkbox" required />
                 <span>
-                  Confirmo que autorizo a coleta e o tratamento dos dados necessários para minha conta, ciclo,
-                  saúde menstrual, gravidez e uso da Luma, conforme a política de privacidade.
+                  Autorizo especificamente o tratamento dos dados sensíveis de saúde e vida sexual que eu informar, para histórico, calendário e acompanhamento do ciclo e da gravidez, conforme a <Link href="/privacidade" target="_blank">Política de Privacidade</Link>. Posso revogar essa autorização.
                 </span>
               </label>
             )}

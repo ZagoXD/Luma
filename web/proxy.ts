@@ -4,6 +4,13 @@ import { isIndexableSite, isPrivatePath, productionOrigin } from "./lib/seo";
 const protectedRoutes = ["/perfil", "/checkout"];
 
 export function proxy(request: NextRequest) {
+  if (process.env.NEXT_PUBLIC_LUMA_SITE_MODE === "waitlist") {
+    const path = request.nextUrl.pathname;
+    if (["/api/auth", "/api/account", "/api/checkout", "/api/support"].some(prefix => path === prefix || path.startsWith(prefix + "/")))
+      return NextResponse.json({ message: "A Luma está em lista de espera." }, { status: 404 });
+    if (["/perfil", "/checkout", "/login", "/forgot-password", "/reset-password", "/suporte"].some(prefix => path === prefix || path.startsWith(prefix + "/")))
+      return NextResponse.redirect(new URL("/#lista", request.url));
+  }
   const annotate = (response: NextResponse) => {
     if (!isIndexableSite() || isPrivatePath(request.nextUrl.pathname)) response.headers.set("X-Robots-Tag", "noindex, nofollow");
     return response;

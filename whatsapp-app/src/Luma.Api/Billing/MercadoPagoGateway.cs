@@ -12,13 +12,7 @@ public sealed class MercadoPagoOptions
     public string WebhookSecret { get; set; } = "";
     public string SellerId { get; set; } = "";
     public bool TestMode { get; set; } = true;
-    public bool PixEnabled { get; set; }
-    public string PixAccessToken { get; set; } = "";
-    public string PixSellerId { get; set; } = "";
-    public string PixWebhookSecret { get; set; } = "";
 }
-
-public sealed record PixDetails(string QrCode, string QrCodeBase64, DateTimeOffset? ExpiresAt);
 
 public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOptions> options) : ISubscriptionGateway
 {
@@ -28,11 +22,8 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
     public string PublicKey => settings.PublicKey;
     public bool IsReady => !string.IsNullOrWhiteSpace(settings.PublicKey) && !string.IsNullOrWhiteSpace(settings.AccessToken)
         && !string.IsNullOrWhiteSpace(settings.SellerId) && !string.IsNullOrWhiteSpace(settings.WebhookSecret);
-    public bool SupportsPix => settings.PixEnabled && (!settings.TestMode
-        || (settings.PixAccessToken.StartsWith("TEST-", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(settings.PixSellerId)));
     public bool VerifyWebhook(string resourceId, string requestId, string signature, DateTimeOffset now)
-        => MercadoPagoWebhook.Verify(settings.WebhookSecret, resourceId, requestId, signature, now)
-            || (SupportsPix && MercadoPagoWebhook.Verify(settings.PixWebhookSecret, resourceId, requestId, signature, now));
+        => MercadoPagoWebhook.Verify(settings.WebhookSecret, resourceId, requestId, signature, now);
 
     public async Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string cardToken, CancellationToken ct)
     {
@@ -62,50 +53,21 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
         return created;
     }
 
-    public async Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct)
-    {
-        if (!SupportsPix) throw new BillingException("Pix ainda não está disponível neste ambiente. Você pode usar cartão.");
-        if (!settings.TestMode) await ValidateSellerAsync(ct);
-        var existing = await FindAsync(order.Id, "pix", ct);
-        if (existing is not null) return existing;
-        var data = await SendAsync(HttpMethod.Post, "v1/payments", new
-        {
-            transaction_amount = order.Plan.Amount,
-            description = order.Plan.Name,
-            external_reference = order.Id.ToString("N"),
-            payment_method_id = "pix",
-            payer = new { email = order.Email, first_name = name, identification = new { type = "CPF", number = cpf } },
-            metadata = new { billing_interval = order.Plan.Interval },
-            date_of_expiration = DateTimeOffset.UtcNow.AddMinutes(30).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz")
-        }, order.Id.ToString("N"), ct, pix: true);
-        return ParsePix(data);
-    }
-
-    public async Task<PixDetails> GetPixAsync(string id, CancellationToken ct)
-    {
-        var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true);
-        ValidatePayment(payment);
-        var transaction = payment.GetProperty("point_of_interaction").GetProperty("transaction_data");
-        return new(Text(transaction, "qr_code"), Text(transaction, "qr_code_base64"), Date(payment, "date_of_expiration"));
-    }
-
     public async Task<ProviderSubscription> GetAsync(string id, CancellationToken ct)
     {
-        if (id.StartsWith("pix:", StringComparison.Ordinal))
-            return ParsePix(await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true));
         await ValidateSellerAsync(ct);
         return ParseSubscription(await SendAsync(HttpMethod.Get, "preapproval/" + Resource(id), null, null, ct));
     }
 
     public async Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct)
     {
-        if (paymentMethod != "pix") await ValidateSellerAsync(ct);
-        var path = paymentMethod == "pix" ? "v1/payments/search" : "preapproval/search";
-        var results = await SendAsync(HttpMethod.Get, $"{path}?external_reference={reference:N}", null, null, ct, pix: paymentMethod == "pix");
+        if (paymentMethod != "card") throw new BillingException("Forma de pagamento não suportada.");
+        await ValidateSellerAsync(ct);
+        var results = await SendAsync(HttpMethod.Get, $"preapproval/search?q={reference:N}", null, null, ct);
         if (!results.TryGetProperty("results", out var items)) return null;
         var matches = items.EnumerateArray().Where(item => Text(item, "external_reference") == reference.ToString("N")).ToArray();
         if (matches.Length > 1) throw new BillingException("Existe mais de uma cobrança para este pedido. Entre em contato com o suporte antes de tentar novamente.", true);
-        return matches.Length == 0 ? null : paymentMethod == "pix" ? ParsePix(matches[0]) : ParseSubscription(matches[0]);
+        return matches.Length == 0 ? null : ParseSubscription(matches[0]);
     }
 
     public async Task SetRenewalAsync(string id, bool enabled, CancellationToken ct)
@@ -137,24 +99,38 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     public async Task CancelPendingAsync(string id, CancellationToken ct)
     {
-        if (id.StartsWith("pix:", StringComparison.Ordinal))
-            _ = await SendAsync(HttpMethod.Put, "v1/payments/" + Resource(id[4..]), new { status = "cancelled" }, null, ct, pix: true);
-        else await SetRenewalAsync(id, false, ct);
+        await TerminateAsync(id, ct);
+    }
+
+    public async Task TerminateAsync(string id, CancellationToken ct)
+    {
+        await ValidateSellerAsync(ct);
+        var current = await GetAsync(id, ct);
+        if (current.Status == "cancelled") return;
+        var result = await SendAsync(HttpMethod.Put, "preapproval/" + Resource(id), new { status = "cancelled" }, null, ct);
+        if (Text(result, "status") != "cancelled") throw new BillingException("O cancelamento ainda não foi confirmado pelo provedor.", true);
+    }
+
+    public async Task RefundAsync(string paymentId, string idempotencyKey, CancellationToken ct)
+    {
+        await ValidateSellerAsync(ct);
+        var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(paymentId), null, null, ct);
+        ValidatePayment(payment);
+        if (Text(payment, "status") == "refunded") return;
+        if (Text(payment, "status") != "approved") throw new BillingException("Pagamento indisponível para reembolso. O pedido foi preservado para análise.");
+        var result = await SendAsync(HttpMethod.Post, "v1/payments/" + Resource(paymentId) + "/refunds", new { }, idempotencyKey, ct);
+        if (Text(result, "status") != "approved" || !result.TryGetProperty("amount", out var refunded) || refunded.GetDecimal() != Amount(payment))
+            throw new BillingException("O reembolso integral ainda não foi confirmado. O pedido permanece registrado.", true);
     }
 
     public async Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string id, CancellationToken ct)
     {
-        if (id.StartsWith("pix:", StringComparison.Ordinal))
-        {
-            var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id[4..]), null, null, ct, pix: true);
-            ValidatePayment(payment);
-            return [ParsePayment(payment, id)];
-        }
         var payments = new List<ProviderPayment>();
         await ValidateSellerAsync(ct);
-        for (var offset = 0; offset < 1200; offset += 100)
+        // The live subscriptions endpoint rejects limit=20 despite the documentation example; ten is accepted.
+        for (var offset = 0; offset < 1200; offset += 10)
         {
-            var page = await SendAsync(HttpMethod.Get, $"authorized_payments/search?preapproval_id={Resource(id)}&limit=100&offset={offset}", null, null, ct);
+            var page = await SendAsync(HttpMethod.Get, $"authorized_payments/search?preapproval_id={Resource(id)}&limit=10&offset={offset}", null, null, ct);
             if (!page.TryGetProperty("results", out var items)) break;
             var count = 0;
             foreach (var invoice in items.EnumerateArray())
@@ -167,7 +143,7 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
                 ValidatePayment(payment);
                 payments.Add(ParsePayment(payment, id));
             }
-            if (count < 100) break;
+            if (count < 10) break;
         }
         return payments;
     }
@@ -179,13 +155,9 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
             return Text(await SendAsync(HttpMethod.Get, "authorized_payments/" + Resource(id), null, null, ct), "preapproval_id");
         if (topic == "payment")
         {
-            JsonElement payment;
-            try { payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct); }
-            catch (BillingException) when (SupportsPix && !string.IsNullOrWhiteSpace(settings.PixAccessToken))
-            { payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct, pix: true); }
-            if (Text(payment, "payment_method_id") != "pix") await ValidateSellerAsync(ct);
+            var payment = await SendAsync(HttpMethod.Get, "v1/payments/" + Resource(id), null, null, ct);
+            await ValidateSellerAsync(ct);
             ValidatePayment(payment);
-            if (Text(payment, "payment_method_id") == "pix") return "pix:" + Resource(id);
             var invoices = await SendAsync(HttpMethod.Get, "authorized_payments/search?payment_id=" + Resource(id), null, null, ct);
             return invoices.GetProperty("results").EnumerateArray().Select(item => Text(item, "preapproval_id")).FirstOrDefault();
         }
@@ -194,13 +166,10 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
 
     private void ValidatePayment(JsonElement data)
     {
-        var pix = Text(data, "payment_method_id") == "pix";
-        var seller = pix && !string.IsNullOrWhiteSpace(settings.PixSellerId) ? settings.PixSellerId : settings.SellerId;
-        if (Text(data, "collector_id") != seller
+        if (Text(data, "collector_id") != settings.SellerId
             || !data.TryGetProperty("live_mode", out var live)
             || (!settings.TestMode && !live.GetBoolean())
-            || (settings.TestMode && pix && live.GetBoolean())
-            || (settings.TestMode && !pix && !sellerVerified))
+            || (settings.TestMode && !sellerVerified))
             throw new BillingException("O pagamento não pertence ao ambiente ou vendedor configurado.");
     }
 
@@ -224,25 +193,18 @@ public sealed class MercadoPagoGateway(HttpClient http, IOptions<MercadoPagoOpti
         return new(Text(data, "id"), Text(data, "external_reference"), Text(data, "status"), Amount(recurring), Text(recurring, "currency_id"), recurring.GetProperty("frequency").GetInt32(), Date(data, "next_payment_date"), Date(recurring, "start_date"));
     }
 
-    private ProviderSubscription ParsePix(JsonElement payment)
-    {
-        ValidatePayment(payment);
-        var interval = Text(payment.GetProperty("metadata"), "billing_interval");
-        return new("pix:" + Text(payment, "id"), Text(payment, "external_reference"), Text(payment, "status") == "approved" ? "manual" : Text(payment, "status"), Amount(payment), Text(payment, "currency_id"), interval == "annual" ? 12 : 1, null);
-    }
-
     private static ProviderPayment ParsePayment(JsonElement data, string subscriptionId)
         => new(Text(data, "id"), subscriptionId, Text(data, "status"), Amount(data), Text(data, "currency_id"), Date(data, "date_approved") ?? DateTimeOffset.MinValue);
 
     private static decimal Amount(JsonElement data)
         => decimal.Parse(Text(data, "transaction_amount"), System.Globalization.CultureInfo.InvariantCulture);
 
-    private async Task<JsonElement> SendAsync(HttpMethod method, string path, object? body, string? idempotency, CancellationToken ct, bool pix = false)
+    private async Task<JsonElement> SendAsync(HttpMethod method, string path, object? body, string? idempotency, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(settings.AccessToken) || string.IsNullOrWhiteSpace(settings.SellerId))
             throw new BillingException("Pagamentos temporariamente indisponíveis. Tente novamente mais tarde.");
         using var request = new HttpRequestMessage(method, "https://api.mercadopago.com/" + path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pix && !string.IsNullOrWhiteSpace(settings.PixAccessToken) ? settings.PixAccessToken : settings.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AccessToken);
         if (idempotency is not null) request.Headers.Add("X-Idempotency-Key", idempotency);
         if (body is not null) request.Content = JsonContent.Create(body);
         using var response = await http.SendAsync(request, ct);

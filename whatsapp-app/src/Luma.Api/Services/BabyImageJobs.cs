@@ -80,11 +80,21 @@ public sealed class BabyImageWorker(
             logger.LogInformation("Baby image job skipped because user {UserId} no longer exists.", job.UserId);
             return;
         }
+        var phoneHash = PrivacyRuntime.LookupHash(job.PhoneNumber, "account.phone");
+        async Task<bool> HasAccess() => await db.AccountSubscriptions.AsNoTracking().AnyAsync(s => s.PhoneHash == phoneHash
+            && s.PlanCode == "essencial" && s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow
+            && (s.Status == SubscriptionStatuses.Active || s.Status == SubscriptionStatuses.Canceled), cancellationToken);
+        if (!await HasAccess()) return;
 
         var result = await imageService.GenerateAsync(development, job.UserId, cancellationToken);
         if (result.PublicUrl is null)
         {
             logger.LogWarning("Baby image was not generated for user {UserId}: {Message}", job.UserId, result.Message);
+            return;
+        }
+        if (!await HasAccess() || !await db.Users.AsNoTracking().AnyAsync(u => u.Id == job.UserId, cancellationToken))
+        {
+            await scope.ServiceProvider.GetRequiredService<IUserImageDeletion>().DeleteAsync(job.UserId, cancellationToken);
             return;
         }
 

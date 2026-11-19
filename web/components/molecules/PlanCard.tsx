@@ -2,6 +2,7 @@
 
 import { Check, Minus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { isWaitlist, purchasePath } from "@/lib/site-mode";
 
 type PlanCardProps = {
   badge: string;
@@ -55,15 +56,15 @@ export function PlanCard({
           </li>
         ))}
       </ul>
-      <button className={`plan-cta ${ctaClass}`} onClick={() => router.push(`/checkout/${planValue}?billing=annual`)}>
-        {cta}
+      <button className={`plan-cta ${ctaClass}`} onClick={() => router.push(purchasePath(planValue, "annual"))}>
+        {isWaitlist ? "Quero esse plano no lançamento" : cta}
       </button>
-      {secondaryCta && (
+      {secondaryCta && !isWaitlist && (
         <button className="plan-cta secondary-plan-cta" onClick={() => router.push(`/checkout/${planValue}?billing=monthly`)}>
           {secondaryCta}
         </button>
       )}
-      <p className="plan-note">{note}</p>
+      <p className="plan-note">{isWaitlist ? "Valores previstos para o lançamento. Entrar na lista não contrata o plano." : note}</p>
       {secondaryNote && <p className="plan-note secondary-note">{secondaryNote}</p>}
     </div>
   );

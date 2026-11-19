@@ -25,11 +25,11 @@ O anual equivale a R$ 5,90 ou R$ 9,90 por mês; não significa doze parcelas. N�
 
 Cartão: autorização de recorrência via `/preapproval`, frequência de um ou doze meses. Autorização não prova pagamento. O acesso só é concedido após leitura de pagamento aprovado, com valor e moeda esperados. A primeira cobrança é assíncrona e, segundo a documentação do provedor, ocorre aproximadamente uma hora depois da assinatura; a tela informa que está aguardando confirmação, o webhook e a reconciliação podem concluir o acesso mesmo após a usuária fechar a página.
 
-Pix: pagamento de um período via `/v1/payments`, com QR Code/Copia e Cola e validade de 30 minutos. Não é Pix Automático, não cobra novamente e não cria uma falsa recorrência. Depois do período pago, a usuária faz nova compra.
+Pix foi retirado desta versão. A API aceita somente token opaco de cartão; não há QR Code nem compra avulsa nesse checkout.
 
-Cancelar cartão pausa a autorização remota e interrompe renovações; o acesso pago permanece até seu vencimento. É possível retomar enquanto houver acesso. Trocas de plano são solicitadas para próximas cobranças: benefícios já pagos não são trocados nem ampliados gratuitamente. Uma mudança deve ser confirmada pelo provedor e o novo acesso só se aplica após pagamento correspondente. Não há promessa de ajuste proporcional ou parcelamento.
+Desativar a renovação pausa a autorização remota e mantém o acesso pago até o vencimento; a renovação pode ser retomada enquanto houver acesso válido. Cancelar imediatamente usa `status=cancelled` no provedor e um estado terminal local, que webhooks não podem reativar. Também interrompe trocas agendadas. Trocas de plano só alteram benefícios depois do pagamento correspondente; não há promessa de parcelamento ou ajuste proporcional.
 
-Reembolso não é cancelamento de renovação. Solicitações de reembolso passam pelo suporte e são efetuadas por um responsável no painel do Mercado Pago. Webhooks/reconciliação atualizam pagamentos reembolsados ou contestados e recalculam o acesso; o histórico mantém o registro da transação. Nenhuma cobrança ou devolução real deve ser feita automaticamente como teste de produção.
+Reembolso é separado de cancelamento e renovação. Configurações → Arrependimento e reembolso permite solicitar a devolução integral dentro de sete dias do primeiro pagamento aprovado desta contratação. Pedidos são gravados antes da chamada externa; o prazo é preservado nas retentativas. O adaptador usa `/v1/payments/{id}/refunds` com chave estável de idempotência e valida valor integral e aprovação. O worker retoma operações pendentes, sem duplicar estornos. Depois do prazo automático, o suporte continua disponível para outros direitos. Não se desconta tarifa da cliente no arrependimento; eventual tarifa não restituída pelo provedor é custo da Luma. Não realizar cobranças ou reembolsos reais como testes de produção.
 
 ## Segurança e Persistência
 
@@ -73,18 +73,9 @@ Client ID/Client Secret de OAuth não são necessários: esta integração receb
 
 ### Particularidades do Sandbox e Pendências
 
-O token `APP_USR` de testes de **Assinaturas** pertence ao vendedor de testes e é aceito pela API de recorrência. Nos ensaios reais, a tokenização do cartão pelo Brick retornou HTTP 201, mas a autorização exigiu o e-mail exato de um comprador de testes. Nome de usuário `TESTUSER...` não substitui o e-mail. Essa confirmação depende do responsável fornecer o e-mail; não se usa uma identidade real para contornar o sandbox.
+O token `APP_USR` de testes de **Assinaturas** pertence ao vendedor de testes. Nos ensaios reais de 19/11/2026, tokenização e autorização retornaram HTTP 201 com o e-mail retornado pela API ao criar um comprador de testes. Um e-mail arbitrário de domínio comum causou `Both payer and collector must be real or test users`; inventar um endereço com o ID do comprador também não funcionou. Nome `TESTUSER...` não substitui o e-mail. As autorizações isoladas de diagnóstico foram canceladas, sem cobrança real.
 
-A mesma credencial de testes de Assinaturas foi recusada pela Payments API para Pix com `Unauthorized use of live credentials`. Por isso, Pix fica **desativado em dev até haver credenciais compatíveis**, sem trocar silenciosamente pelo token de produção. Criar uma aplicação de Checkout Bricks/Payments API para testes e configurar:
-
-```dotenv
-MERCADOPAGO_PIX_ENABLED=true
-MERCADOPAGO_PIX_ACCESS_TOKEN=TEST-...
-MERCADOPAGO_PIX_SELLER_ID=ID_DO_TITULAR_DESTE_TOKEN
-MERCADOPAGO_PIX_WEBHOOK_SECRET=SEGREDO_DA_APLICACAO_DE_PIX
-```
-
-Habilitar o webhook de pagamentos dessa aplicação para o mesmo endpoint dev. Os campos ASP.NET Core correspondentes são `MercadoPago__PixEnabled`, `MercadoPago__PixAccessToken`, `MercadoPago__PixSellerId`, `MercadoPago__PixWebhookSecret`. No ambiente real, o adaptador usa o token e vendedor de produção já configurados; receber Pix pode exigir que a conta esteja habilitada pelo Mercado Pago. Nenhum Pix real foi pago nem cartão real foi cobrado como parte dos testes.
+A consulta real de faturas revelou `Invalid value for limit` para páginas de 100 e de 20. O adaptador usa dez, aceito pelo endpoint, com teste de regressão. A busca de assinatura usa `q` e exige igualdade da referência no resultado; `external_reference` era ignorado como filtro pelo endpoint de pesquisa de assinaturas.
 
 Trocar a frequência mensal/anual não usa um update não suportado pelo provedor. O checkout solicita nova autorização com início na data final do período já pago e valida essa data no retorno. Após confirmar a nova autorização, a renovação antiga é pausada. O perfil mostra a troca agendada e permite cancelá-la; a renovação anterior permanece desativada até a usuária retomá-la explicitamente. Para segurança, a troca não é iniciada nas duas horas anteriores ao vencimento.
 
@@ -97,7 +88,7 @@ Use exclusivamente o ambiente dev e o comprador de testes criado no Mercado Pago
 3. No cartão use o Mastercard de testes informado no painel: `5480 8328 0103 3311`, CVV `123`, validade `11/30`, nome `APRO` para aprovação, conforme os dados de teste atuais do provedor.
 4. Confira aprovação na API e entrega do webhook; não confunda autorização recorrente com primeira cobrança aprovada.
 5. Teste cancelar/retomar, troca de plano e troca de cartão. Confira os valores no painel do provedor.
-6. No Pix, gerar um QR Code não ativa acesso. A confirmação exige pagamento aprovado ou simulação oficial disponível no ambiente de testes; não use seu banco real para pagar um teste.
+6. Teste renovação desligada, cancelamento imediato e arrependimento como operações distintas; valide também pedido expirado, reenvio idempotente e indisponibilidade externa.
 7. Reenvie um webhook assinado: não deve gerar nova transação nem duplicar acesso.
 
 Documentação oficial: [Card token para assinaturas](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/additional-content/cardtoken), [assinaturas autorizadas](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/integration-configuration/subscription-no-associated-plan/authorized-payments), [gestão](https://www.mercadopago.com.br/developers/pt/docs/subscriptions/subscription-management) e [webhooks](https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks).

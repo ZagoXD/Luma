@@ -17,6 +17,25 @@ public sealed class BillingReconciliationWorker(IServiceScopeFactory scopes, ICo
                 var db = scope.ServiceProvider.GetRequiredService<LumaDbContext>();
                 var gateway = scope.ServiceProvider.GetRequiredService<ISubscriptionGateway>();
                 if (!gateway.IsReady) continue;
+                var requests = await db.AccountSubscriptions.AsNoTracking().Where(s => s.BillingProvider == gateway.Provider && s.TerminatedAt != null
+                    && (s.TerminationConfirmedAt == null || (s.WithdrawalRequestedAt != null && s.WithdrawalCompletedAt == null)))
+                    .OrderBy(s => s.UpdatedAt).Select(s => new { s.AccountUserId, s.Id, Withdrawal = s.WithdrawalRequestedAt != null }).Take(20).ToListAsync(stoppingToken);
+                foreach (var item in requests)
+                {
+                    using var retry = scopes.CreateScope();
+                    try { await retry.ServiceProvider.GetRequiredService<BillingService>().TerminateAsync(item.AccountUserId, item.Id, item.Withdrawal, stoppingToken); }
+                    catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                    { logger.LogWarning("Billing request {SubscriptionId} awaits retry: {ErrorType}", item.Id, exception.GetType().Name); }
+                }
+                var deletions = await db.AccountUsers.AsNoTracking().Where(a => a.DeletionRequestedAt != null && a.DeletionCompletedAt == null)
+                    .OrderBy(a => a.DeletionRequestedAt).Select(a => a.Id).Take(20).ToListAsync(stoppingToken);
+                foreach (var id in deletions)
+                {
+                    using var retry = scopes.CreateScope();
+                    try { await retry.ServiceProvider.GetRequiredService<Luma.Api.Services.AccountDeletionService>().CompleteAsync(id, stoppingToken); }
+                    catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                    { logger.LogWarning("Account deletion {AccountId} awaits retry: {ErrorType}", id, exception.GetType().Name); }
+                }
                 var before = DateTimeOffset.UtcNow.AddMinutes(-10);
                 var subscriptions = await db.AccountSubscriptions.AsNoTracking().Where(s => s.BillingProvider == gateway.Provider && s.Status != "failed"
                     && s.PaymentAttemptedAt != null && s.UpdatedAt < before
