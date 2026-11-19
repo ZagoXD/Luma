@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Copy } from "lucide-react";
 import { PaymentCardForm } from "@/components/organisms/PaymentCardForm";
-import { paymentRequest, type CheckoutConfiguration } from "@/lib/billing";
+import { paymentRequest, isPaidSubscription, type CheckoutConfiguration } from "@/lib/billing";
 import { prepareCheckout, submitCheckout, getCheckoutStatus, getPlanPrice, plans, type BillingInterval, type PlanCode, type PixDetails } from "@/lib/luma-api";
 
 export function CheckoutPageTemplate({ planCode, billingInterval, replacesSubscriptionId }: { planCode: PlanCode; billingInterval: BillingInterval; replacesSubscriptionId?: string }) {
@@ -38,9 +38,10 @@ export function CheckoutPageTemplate({ planCode, billingInterval, replacesSubscr
       inFlight = true;
       try {
         const { subscription } = await getCheckoutStatus(checkout.checkoutId);
-        if (active && subscription.status !== "pending" && new Date(subscription.currentPeriodEndsAt) > new Date()) {
+        if (active && isPaidSubscription(subscription)) {
           setSuccess(true); setWaiting(false);
         }
+        else if (active && subscription.status === "failed") { setWaiting(false); setStatus("Esta contratação foi encerrada. Volte ao perfil para escolher um novo plano."); }
       } catch { if (active) setStatus("A confirmação continua pendente. Você pode acompanhar pelo perfil."); }
       finally { inFlight = false; }
     }, 6000);
@@ -90,7 +91,8 @@ export function CheckoutPageTemplate({ planCode, billingInterval, replacesSubscr
                 const result = await submitCheckout(paymentRequest(checkout.checkoutId, form));
                 setCheckout(current => current && { ...current, submitted: true });
                 if (result.subscription.scheduled) setScheduled(true);
-                else if (result.subscription.status !== "pending") setSuccess(true);
+                else if (isPaidSubscription(result.subscription)) setSuccess(true);
+                else if (result.subscription.status === "failed") throw new Error("Esta contratação foi encerrada.");
                 else setWaiting(true);
               }} /> : <button type="button" className="account-primary" disabled={submitting} onClick={payPix}>{submitting ? "Gerando Pix..." : "Gerar Pix"}</button>}
           </>}

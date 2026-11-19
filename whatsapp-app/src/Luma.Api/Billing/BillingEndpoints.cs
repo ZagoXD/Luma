@@ -121,7 +121,7 @@ public static class BillingEndpoints
         subscription.BillingInterval, billingLabel = subscription.BillingInterval == "annual" ? "Anual" : "Mensal",
         subscription.Status, subscription.StartsAt, subscription.CurrentPeriodEndsAt, subscription.CanceledAt,
         subscription.PaymentMethod, subscription.PendingPlanCode, subscription.PendingBillingInterval,
-        scheduled = subscription.ReplacementConfirmedAt != null && subscription.StartsAt > DateTimeOffset.UtcNow,
+        scheduled = subscription.Status == "pending" && subscription.ReplacementConfirmedAt != null && subscription.StartsAt > DateTimeOffset.UtcNow,
         canManage = subscription.BillingProvider != "legacy" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
     };
 }

@@ -17,7 +17,7 @@ export type AccountSubscription = {
   planName: string;
   billingInterval: BillingInterval;
   billingLabel: string;
-  status: "active" | "canceled" | "pending";
+  status: "active" | "canceled" | "pending" | "failed";
   paymentMethod: "card" | "pix";
   canManage: boolean;
   scheduled?: boolean;

@@ -44,7 +44,11 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         if (method == "card" && (string.IsNullOrWhiteSpace(token) || token.Length > 256)) throw new BillingException("Token do cartão inválido.");
         await using var transaction = await LockAsync(user.Id, ct);
         var local = await OwnedAsync(user.Id, id, ct);
-        if (local.Status != SubscriptionStatuses.Pending) return local;
+        if (local.Status != SubscriptionStatuses.Pending)
+        {
+            if ((local.Status is SubscriptionStatuses.Active or SubscriptionStatuses.Canceled) && local.CurrentPeriodEndsAt > DateTimeOffset.UtcNow) return local;
+            throw new BillingException("Esta contratação já foi encerrada. Inicie um novo checkout pelo seu perfil.");
+        }
         if (local.ReplacesSubscriptionId is not null && method != "card")
             throw new BillingException("A troca da recorrência requer uma nova autorização de cartão. Pix pode ser contratado ao fim do período pago.");
         if (await db.AccountSubscriptions.AnyAsync(s => s.AccountUserId == user.Id && s.Id != id

@@ -567,11 +567,12 @@ function formatDays(value?: number | null) {
   return value ? `${value} dias` : "Não informado";
 }
 
-function formatSubscriptionStatus(status: "active" | "canceled" | "pending") {
+function formatSubscriptionStatus(status: "active" | "canceled" | "pending" | "failed") {
   const labels = {
     active: "Ativo",
     canceled: "Cancelado",
     pending: "Pagamento pendente",
+    failed: "Contratação encerrada",
   };
 
   return labels[status];

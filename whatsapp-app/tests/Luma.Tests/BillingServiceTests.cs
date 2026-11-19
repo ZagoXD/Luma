@@ -180,6 +180,18 @@ public sealed class BillingServiceTests
     }
 
     [Fact]
+    public async Task FailedScheduledOrderMustNeverBePresentedAsAPaidConfirmation()
+    {
+        var pending = await Prepare();
+        pending.Status = "failed";
+        pending.StartsAt = DateTimeOffset.UtcNow.AddMonths(1);
+        pending.CurrentPeriodEndsAt = pending.StartsAt;
+        await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<BillingException>(() => Service.SubmitAsync(account, pending.Id, "token", "card", null, default));
+        Assert.Equal(0, gateway.Creates);
+    }
+
+    [Fact]
     public async Task AmountManipulationCannotGrantAccess()
     {
         var pending = await Prepare();
