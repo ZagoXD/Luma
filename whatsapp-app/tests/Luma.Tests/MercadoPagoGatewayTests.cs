@@ -79,8 +79,10 @@ public sealed class MercadoPagoGatewayTests
     {
         var gateway = Create(request => Task.FromResult(request.RequestUri!.AbsolutePath.Contains("authorized_payments")
             ? Json("{\"results\":[{\"preapproval_id\":\"sub\",\"payment\":{\"id\":123}}]}")
-            : Json("{\"id\":123,\"collector_id\":123,\"live_mode\":true,\"payment_method_id\":\"master\",\"status\":\"approved\",\"transaction_amount\":11,\"currency_id\":\"BRL\",\"date_approved\":\"2026-11-18T20:00:00Z\"}")));
-        Assert.Single(await gateway.GetPaymentsAsync("sub", default));
+            : Json("{\"id\":123,\"collector_id\":123,\"live_mode\":true,\"payment_method_id\":\"master\",\"status\":\"approved\",\"transaction_amount\":11,\"currency_id\":\"BRL\",\"date_approved\":\"2026-11-18T20:00:00-04:00\"}")));
+        var payment = Assert.Single(await gateway.GetPaymentsAsync("sub", default));
+        Assert.Equal(TimeSpan.Zero, payment.ApprovedAt.Offset);
+        Assert.Equal(new DateTimeOffset(2026, 11, 19, 0, 0, 0, TimeSpan.Zero), payment.ApprovedAt);
     }
 
     [Fact]

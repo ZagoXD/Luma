@@ -315,7 +315,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
                 || payment.ApprovedAt < local.StartsAt.AddMinutes(-5)) continue;
             var plan = BillingCatalog.Get(effective.PlanCode, effective.BillingInterval);
             db.BillingPayments.Add(new() { Id = key, AccountSubscriptionId = local.Id, Status = payment.Status,
-                Amount = payment.Amount, Currency = payment.Currency, ApprovedAt = payment.ApprovedAt, PeriodEndsAt = plan.PeriodEnd(payment.ApprovedAt) });
+                Amount = payment.Amount, Currency = payment.Currency, ApprovedAt = payment.ApprovedAt.ToUniversalTime(), PeriodEndsAt = plan.PeriodEnd(payment.ApprovedAt.ToUniversalTime()) });
             local.PlanCode = effective.PlanCode;
             local.BillingInterval = effective.BillingInterval;
             local.PendingPlanCode = null;
