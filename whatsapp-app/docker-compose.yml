@@ -79,10 +79,6 @@ services:
       MercadoPago__WebhookSecret: ${MERCADOPAGO_WEBHOOK_SECRET:-}
       MercadoPago__SellerId: ${MERCADOPAGO_SELLER_ID:-}
       MercadoPago__TestMode: ${MERCADOPAGO_TEST_MODE:-true}
-      MercadoPago__PixEnabled: ${MERCADOPAGO_PIX_ENABLED:-false}
-      MercadoPago__PixAccessToken: ${MERCADOPAGO_PIX_ACCESS_TOKEN:-}
-      MercadoPago__PixSellerId: ${MERCADOPAGO_PIX_SELLER_ID:-}
-      MercadoPago__PixWebhookSecret: ${MERCADOPAGO_PIX_WEBHOOK_SECRET:-}
       OpenAI__ApiKey: ${OPENAI_API_KEY:-}
       Assistant__Enabled: ${LUMA_ASSISTANT_ENABLED:-false}
       Assistant__MaxModelTurns: ${LUMA_ASSISTANT_MAX_MODEL_TURNS:-3}

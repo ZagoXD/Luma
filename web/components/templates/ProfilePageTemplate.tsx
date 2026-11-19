@@ -17,8 +17,10 @@ import {
   User,
 } from "lucide-react";
 import { PaymentCardForm } from "@/components/organisms/PaymentCardForm";
+import { AccountSettings } from "@/components/organisms/AccountSettings";
 import {
   cancelSubscription,
+  setSubscriptionRenewal,
   cancelScheduledSubscription,
   changeSubscriptionPlan,
   getPaymentMethodConfiguration, confirmPaymentMethod,
@@ -113,17 +115,30 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
   }, [accountId, router]);
 
   async function handleCancel() {
+    if (!profile?.subscription || !window.confirm("Cancelar imediatamente? Você perderá o acesso à Luma agora e as futuras cobranças serão interrompidas. Isso não solicita reembolso; o arrependimento está em Configurações da conta.")) return;
     setStatus("");
     setCanceling(true);
     try {
-      const result = await cancelSubscription();
+      const result = await cancelSubscription(profile.subscription.id);
       setProfile((current) => current && { ...current, subscription: result.subscription });
-      setStatus("Assinatura cancelada. Seu acesso continua disponível até o fim do período já pago.");
+      setProfile(await getAccountProfile());
+      setNotificationsAvailable(false);
+      setStatus("Assinatura cancelada. O acesso foi encerrado e as futuras cobranças foram interrompidas.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Não consegui cancelar agora.");
     } finally {
       setCanceling(false);
     }
+  }
+
+  async function handleRenewal(enabled: boolean) {
+    setBillingAction("renewal");
+    try {
+      const result = await setSubscriptionRenewal(enabled);
+      setProfile(current => current && { ...current, subscription: result.subscription });
+      setStatus(enabled ? "Renovação automática ativada." : "Renovação automática desativada. Seu acesso continua até o fim do período pago.");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "Não consegui alterar a renovação."); }
+    finally { setBillingAction(""); }
   }
 
   async function handleResume() {
@@ -343,13 +358,13 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
                   <button type="button" className="account-secondary" onClick={handleCancelScheduled} disabled={billingAction === "scheduled"}>Cancelar troca agendada</button>
                 </div>}
                 {subscription.pendingPlanCode && <p>Próxima renovação: {getPlanPrice(subscription.pendingPlanCode, subscription.pendingBillingInterval || subscription.billingInterval)} no plano {plans[subscription.pendingPlanCode].name}.</p>}
-                {subscription.paymentMethod === "pix" && <p>Pago com Pix. Seu acesso não possui renovação automática.</p>}
                 <dl className="profile-list">
-                  <div><dt>Status</dt><dd>{subscription.paymentMethod === "pix" ? "Ativo, sem renovação automática" : formatSubscriptionStatus(subscription.status)}</dd></div>
+                  <div><dt>Status</dt><dd>{formatSubscriptionStatus(subscription.status)}</dd></div>
                   <div><dt>Cobrança</dt><dd>{subscription.billingLabel}</dd></div>
                   <div><dt>Acesso até</dt><dd>{formatDate(subscription.currentPeriodEndsAt)}</dd></div>
                 </dl>
                 {subscription.canManage && <div className="billing-actions">
+                  <label className="account-consent"><input type="checkbox" checked={subscription.status === "active"} disabled={billingAction !== "" || canceling} onChange={event => void handleRenewal(event.target.checked)} />Renovação automática · desativar mantém o período pago</label>
                   {subscription.status === "canceled" ? (
                     <button className="account-primary" type="button" onClick={handleResume} disabled={billingAction === "resume"}>
                       <RefreshCcw size={16} />
@@ -357,9 +372,10 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
                     </button>
                   ) : (
                     <button className="account-secondary danger" type="button" onClick={handleCancel} disabled={canceling}>
-                      {canceling ? "Cancelando..." : "Cancelar renovação"}
+                      {canceling ? "Cancelando..." : "Cancelar assinatura imediatamente"}
                     </button>
                   )}
+                  {subscription.status === "canceled" && <button className="account-secondary danger" type="button" onClick={handleCancel} disabled={canceling}>Cancelar assinatura imediatamente</button>}
                   {nextPlanCode && (
                     <button
                       className="account-secondary billing-button"
@@ -411,6 +427,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
             )}
           </section>
 
+          <AccountSettings accountId={accountId} onBillingChange={async () => { setProfile(await getAccountProfile()); setTransactions((await getBillingTransactions()).transactions); setNotificationsAvailable((await getNotificationPreferences()).available); }} />
           <section className="account-panel profile-card">
             <h2><CreditCard size={20} /> Histórico de transações</h2>
             {transactions.length > 0 ? (
@@ -567,10 +584,11 @@ function formatDays(value?: number | null) {
   return value ? `${value} dias` : "Não informado";
 }
 
-function formatSubscriptionStatus(status: "active" | "canceled" | "pending" | "failed") {
+function formatSubscriptionStatus(status: "active" | "canceled" | "pending" | "failed" | "terminated") {
   const labels = {
     active: "Ativo",
-    canceled: "Cancelado",
+    canceled: "Ativo, sem renovação automática",
+    terminated: "Encerrado",
     pending: "Pagamento pendente",
     failed: "Contratação encerrada",
   };

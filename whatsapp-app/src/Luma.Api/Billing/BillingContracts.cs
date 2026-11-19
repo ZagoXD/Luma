@@ -35,16 +35,15 @@ public interface ISubscriptionGateway
     string Provider { get; }
     string PublicKey { get; }
     bool IsReady { get; }
-    bool SupportsPix { get; }
     Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string cardToken, CancellationToken ct);
-    Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct);
-    Task<PixDetails> GetPixAsync(string id, CancellationToken ct);
     Task<ProviderSubscription> GetAsync(string id, CancellationToken ct);
     Task<ProviderSubscription?> FindAsync(Guid reference, string paymentMethod, CancellationToken ct);
     Task SetRenewalAsync(string id, bool enabled, CancellationToken ct);
     Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset nextPaymentAt, CancellationToken ct);
     Task ChangeCardAsync(string id, string cardToken, CancellationToken ct);
     Task CancelPendingAsync(string id, CancellationToken ct);
+    Task TerminateAsync(string id, CancellationToken ct);
+    Task RefundAsync(string paymentId, string idempotencyKey, CancellationToken ct);
     Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string subscriptionId, CancellationToken ct);
     Task<string?> ResolveSubscriptionAsync(string topic, string resourceId, CancellationToken ct);
     bool VerifyWebhook(string resourceId, string requestId, string signature, DateTimeOffset now);

@@ -12,6 +12,12 @@ public sealed class AccountUser
     public string PhoneNumber { get; set; } = string.Empty;
     public string PhoneHash { get; set; } = string.Empty;
     public DateTimeOffset? PhoneVerifiedAt { get; set; }
+    public string? TermsVersion { get; set; }
+    public DateTimeOffset? TermsAcceptedAt { get; set; }
+    public string? PrivacyVersion { get; set; }
+    public DateTimeOffset? HealthConsentAcceptedAt { get; set; }
+    public DateTimeOffset? DeletionRequestedAt { get; set; }
+    public DateTimeOffset? DeletionCompletedAt { get; set; }
     public string? BillingCustomerId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -63,6 +69,10 @@ public sealed class AccountSubscription
     public string? ProviderPlanId { get; set; }
     public string PaymentMethod { get; set; } = "card";
     public DateTimeOffset? PaymentAttemptedAt { get; set; }
+    public DateTimeOffset? TerminatedAt { get; set; }
+    public DateTimeOffset? TerminationConfirmedAt { get; set; }
+    public DateTimeOffset? WithdrawalRequestedAt { get; set; }
+    public DateTimeOffset? WithdrawalCompletedAt { get; set; }
     public Guid? ReplacesSubscriptionId { get; set; }
     public Guid? ReplacedBySubscriptionId { get; set; }
     public DateTimeOffset? ReplacementConfirmedAt { get; set; }

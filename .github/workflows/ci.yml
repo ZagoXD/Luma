@@ -112,8 +112,14 @@ jobs:
       - name: Test frontend SEO policy
         run: npm test
 
+      - name: Test waitlist data protection
+        run: node --test ../infra/waitlist/worker.test.mjs
+
       - name: Build frontend
         run: npm run build
 
       - name: Verify standalone SEO in production and dev modes
         run: node scripts/check-seo.mjs --local
+
+      - name: Build isolated Cloudflare Pages waitlist
+        run: node ../infra/waitlist/build.cjs

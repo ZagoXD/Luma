@@ -17,8 +17,8 @@ export type AccountSubscription = {
   planName: string;
   billingInterval: BillingInterval;
   billingLabel: string;
-  status: "active" | "canceled" | "pending" | "failed";
-  paymentMethod: "card" | "pix";
+  status: "active" | "canceled" | "pending" | "failed" | "terminated";
+  paymentMethod: "card";
   canManage: boolean;
   scheduled?: boolean;
   pendingPlanCode?: PlanCode | null;
@@ -26,6 +26,7 @@ export type AccountSubscription = {
   startsAt: string;
   currentPeriodEndsAt: string;
   canceledAt?: string | null;
+  terminatedAt?: string | null;
 };
 
 export type BillingTransaction = {
@@ -39,8 +40,6 @@ export type BillingTransaction = {
   invoicePdf?: string | null;
   created: string;
 };
-
-export type PixDetails = { qrCode: string; qrCodeBase64: string; expiresAt?: string };
 
 export type MenstrualSummary = {
   displayName?: string | null;
@@ -155,6 +154,8 @@ export async function registerAccount(input: {
   password: string;
   phoneNumber: string;
   dataConsentAccepted: boolean;
+  termsAccepted: boolean;
+  legalVersion: string;
 }) {
   return appRequest<{ user: AccountUser; phoneVerificationRequired?: boolean; phoneVerificationMessage?: string }>("/api/auth/register", {
     method: "POST",
@@ -237,17 +238,22 @@ export async function prepareCheckout(input: { planCode: PlanCode; billingInterv
 export async function cancelScheduledSubscription(id: string) {
   return appRequest<{ ok: true }>("/api/account/subscription/scheduled/cancel", { method: "POST", body: JSON.stringify({ id }) });
 }
-export async function submitCheckout(input: { checkoutId: string; paymentToken?: string; paymentMethod: "card" | "pix"; payerEmail?: string }) {
-  return appRequest<{ subscription: AccountSubscription; pix?: PixDetails }>("/api/checkout/confirm-subscription", { method: "POST", body: JSON.stringify(input) });
+export async function submitCheckout(input: { checkoutId: string; paymentToken?: string; paymentMethod: "card"; payerEmail?: string }) {
+  return appRequest<{ subscription: AccountSubscription }>("/api/checkout/confirm-subscription", { method: "POST", body: JSON.stringify(input) });
 }
 export async function getCheckoutStatus(id: string) {
   return appRequest<{ subscription: AccountSubscription }>("/api/checkout/status/" + encodeURIComponent(id));
 }
 
-export async function cancelSubscription() {
+export async function cancelSubscription(id: string) {
   return appRequest<{ subscription: AccountSubscription }>("/api/account/subscription/cancel", {
     method: "POST",
+    body: JSON.stringify({ id }),
   });
+}
+
+export async function setSubscriptionRenewal(enabled: boolean) {
+  return appRequest<{ subscription: AccountSubscription }>("/api/account/subscription/renewal", { method: "POST", body: JSON.stringify({ enabled }) });
 }
 
 export async function resumeSubscription() {

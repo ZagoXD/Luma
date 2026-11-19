@@ -26,11 +26,9 @@ public static class BillingEndpoints
             if (!gateway.IsReady)
                 return Results.Json(new { message = "O checkout está temporariamente indisponível." }, statusCode: 503);
             var local = await billing.PrepareAsync(user, input.PlanCode, input.BillingInterval, ct, input.ReplacesSubscriptionId);
-            var pix = local.PaymentMethod == "pix" && local.ProviderSubscriptionId is not null
-                ? await gateway.GetPixAsync(local.ProviderSubscriptionId, ct) : null;
             return Results.Ok(new { provider = gateway.Provider, publicKey = gateway.PublicKey, checkoutId = local.Id,
                 amount = BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount, email = user.Email,
-                submitted = local.PaymentAttemptedAt is not null, pix, pixAvailable = gateway.SupportsPix, scheduled = local.ReplacementConfirmedAt != null, startsAt = local.StartsAt });
+                submitted = local.PaymentAttemptedAt is not null, scheduled = local.ReplacementConfirmedAt != null, startsAt = local.StartsAt });
         });
 
         group.MapPost("/checkout/confirm-subscription", async (HttpRequest http, PaymentRequest input, LumaDbContext db,
@@ -39,9 +37,7 @@ public static class BillingEndpoints
             var user = await authenticate(http, db);
             if (user is null) return Results.Unauthorized();
             var local = await billing.SubmitAsync(user, input.CheckoutId, input.PaymentToken, input.PaymentMethod, input.PayerEmail, ct);
-            var pix = local.PaymentMethod == "pix" && local.ProviderSubscriptionId is not null
-                ? await gateway.GetPixAsync(local.ProviderSubscriptionId, ct) : null;
-            return Results.Ok(new { subscription = View(local), pix });
+            return Results.Ok(new { subscription = View(local) });
         });
 
         group.MapGet("/checkout/status/{id:guid}", async (Guid id, HttpRequest http, LumaDbContext db, BillingService billing, CancellationToken ct) =>
@@ -50,10 +46,30 @@ public static class BillingEndpoints
             return user is null ? Results.Unauthorized() : Results.Ok(new { subscription = View(await billing.RefreshAsync(user.Id, id, ct)) });
         });
 
-        group.MapPost("/account/subscription/cancel", async (HttpRequest http, LumaDbContext db, BillingService billing, CancellationToken ct) =>
+        group.MapPost("/account/subscription/cancel", async (HttpRequest http, ScheduledRequest input, LumaDbContext db, BillingService billing, CancellationToken ct) =>
         {
             var user = await authenticate(http, db);
-            return user is null ? Results.Unauthorized() : Results.Ok(new { subscription = View(await billing.SetRenewalAsync(user.Id, false, ct)) });
+            return user is null ? Results.Unauthorized() : Results.Ok(new { subscription = View(await billing.TerminateAsync(user.Id, input.Id, false, ct)) });
+        });
+        group.MapPost("/account/subscription/renewal", async (HttpRequest http, RenewalRequest input, LumaDbContext db, BillingService billing, CancellationToken ct) =>
+        {
+            var user = await authenticate(http, db);
+            return user is null ? Results.Unauthorized() : Results.Ok(new { subscription = View(await billing.SetRenewalAsync(user.Id, input.Enabled, ct)) });
+        });
+        group.MapPost("/account/subscription/withdraw", async (HttpRequest http, ScheduledRequest input, LumaDbContext db, BillingService billing, CancellationToken ct) =>
+        {
+            var user = await authenticate(http, db);
+            return user is null ? Results.Unauthorized() : Results.Ok(new { subscription = View(await billing.TerminateAsync(user.Id, input.Id, true, ct)) });
+        });
+        group.MapGet("/account/subscription/withdrawals", async (HttpRequest http, LumaDbContext db, CancellationToken ct) =>
+        {
+            var user = await authenticate(http, db);
+            if (user is null) return Results.Unauthorized();
+            var orders = await db.AccountSubscriptions.Where(s => s.AccountUserId == user.Id).OrderByDescending(s => s.CreatedAt).Take(50).ToListAsync(ct);
+            var ids = orders.Select(s => s.Id).ToArray();
+            var payments = await db.BillingPayments.Where(p => ids.Contains(p.AccountSubscriptionId)).ToListAsync(ct);
+            return Results.Ok(new { orders = orders.Select(s => new { s.Id, s.PlanCode, s.BillingInterval, s.Status, s.WithdrawalRequestedAt, s.WithdrawalCompletedAt,
+                deadline = payments.Where(p => p.AccountSubscriptionId == s.Id).Select(p => (DateTimeOffset?)p.ApprovedAt).Min()?.AddDays(7) }) });
         });
         group.MapPost("/account/subscription/resume", async (HttpRequest http, LumaDbContext db, BillingService billing, CancellationToken ct) =>
         {
@@ -121,8 +137,9 @@ public static class BillingEndpoints
         subscription.BillingInterval, billingLabel = subscription.BillingInterval == "annual" ? "Anual" : "Mensal",
         subscription.Status, subscription.StartsAt, subscription.CurrentPeriodEndsAt, subscription.CanceledAt,
         subscription.PaymentMethod, subscription.PendingPlanCode, subscription.PendingBillingInterval,
+        subscription.TerminatedAt, subscription.WithdrawalRequestedAt, subscription.WithdrawalCompletedAt,
         scheduled = subscription.Status == "pending" && subscription.ReplacementConfirmedAt != null && subscription.StartsAt > DateTimeOffset.UtcNow,
-        canManage = subscription.BillingProvider != "legacy" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
+        canManage = subscription.TerminatedAt == null && subscription.BillingProvider != "legacy" && subscription.PaymentMethod == "card" && subscription.ReplacedBySubscriptionId == null
     };
 }
 
@@ -134,3 +151,5 @@ public sealed record PaymentRequest(Guid CheckoutId, string? PaymentToken, strin
 public sealed record CardRequest(string PaymentToken);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ScheduledRequest(Guid Id);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RenewalRequest(bool Enabled);

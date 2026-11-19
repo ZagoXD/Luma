@@ -158,14 +158,80 @@ public sealed class BillingServiceTests
     }
 
     [Fact]
-    public async Task PixNeverImpliesAutomaticRenewal()
+    public async Task PixIsRejectedWithoutCallingTheProvider()
     {
         var pending = await Prepare();
+        await Assert.ThrowsAsync<BillingException>(() => Service.SubmitAsync(account, pending.Id, null, "pix", null, default));
+        Assert.Equal(0, gateway.Creates);
+    }
+
+    [Fact]
+    public async Task ImmediateCancellationCannotBeResurrectedByWebhookOrRenewal()
+    {
+        var subscription = await Prepare();
         gateway.PaymentStatus = "approved";
-        await Service.SubmitAsync(account, pending.Id, null, "pix", null, default);
-        Assert.Equal("canceled", pending.Status);
-        Assert.Equal("pix", pending.PaymentMethod);
+        await Service.SubmitAsync(account, subscription.Id, "token", "card", null, default);
+        var paidEnd = subscription.CurrentPeriodEndsAt;
+        await Service.TerminateAsync(account.Id, subscription.Id, false, default);
+        await Service.RefreshAsync(account.Id, subscription.Id, default);
+        Assert.Equal("terminated", subscription.Status);
+        Assert.Equal(paidEnd, subscription.CurrentPeriodEndsAt);
         await Assert.ThrowsAsync<BillingException>(() => Service.SetRenewalAsync(account.Id, true, default));
+    }
+
+    [Fact]
+    public async Task AccountDeletionRequiresPasswordAndErasesHealthAndContactDetails()
+    {
+        account.PasswordHash = AccountSecurity.HashPassword("correct-password");
+        var subscription = await Prepare();
+        gateway.PaymentStatus = "approved";
+        await Service.SubmitAsync(account, subscription.Id, "token", "card", null, default);
+        var user = new LumaUser { PhoneNumber = account.PhoneNumber };
+        db.Users.Add(user);
+        db.UserPreferences.Add(new() { UserId = user.Id });
+        db.Cycles.Add(new() { UserId = user.Id });
+        await db.SaveChangesAsync();
+        var deletion = new AccountDeletionService(db, Service);
+        await Assert.ThrowsAsync<BillingException>(() => deletion.RequestAsync(account.Id, "wrong", default));
+        Assert.Null(account.DeletionRequestedAt);
+        await deletion.RequestAsync(account.Id, "correct-password", default);
+        Assert.Empty(db.Users);
+        Assert.Empty(db.Cycles);
+        Assert.Empty(db.UserPreferences);
+        Assert.NotNull(account.DeletionCompletedAt);
+        Assert.EndsWith("@deleted.invalid", account.Email);
+        Assert.Equal("terminated", subscription.Status);
+        Assert.Single(db.BillingPayments);
+    }
+
+    [Fact]
+    public async Task WithdrawalRefundsOnceAndPreservesItsRequestAfterFailure()
+    {
+        var subscription = await Prepare();
+        gateway.PaymentStatus = "approved";
+        await Service.SubmitAsync(account, subscription.Id, "token", "card", null, default);
+        gateway.FailRefund = true;
+        await Assert.ThrowsAsync<BillingException>(() => Service.TerminateAsync(account.Id, subscription.Id, true, default));
+        Assert.NotNull(subscription.WithdrawalRequestedAt);
+        Assert.Equal("terminated", subscription.Status);
+        gateway.FailRefund = false;
+        await Service.TerminateAsync(account.Id, subscription.Id, true, default);
+        await Service.TerminateAsync(account.Id, subscription.Id, true, default);
+        Assert.Equal(1, gateway.Refunds);
+        Assert.NotNull(subscription.WithdrawalCompletedAt);
+    }
+
+    [Fact]
+    public async Task LateWithdrawalDoesNotCancelAnOtherwiseValidSubscription()
+    {
+        var subscription = await Prepare();
+        gateway.PaymentStatus = "approved";
+        await Service.SubmitAsync(account, subscription.Id, "token", "card", null, default);
+        db.BillingPayments.Single().ApprovedAt = DateTimeOffset.UtcNow.AddDays(-8);
+        subscription.CreatedAt = DateTimeOffset.UtcNow.AddDays(-8);
+        await db.SaveChangesAsync();
+        await Assert.ThrowsAsync<BillingException>(() => Service.TerminateAsync(account.Id, subscription.Id, true, default));
+        Assert.Equal("active", subscription.Status);
     }
 
     [Fact]
@@ -207,9 +273,10 @@ public sealed class BillingServiceTests
         public string Provider => "mercadopago";
         public string PublicKey => "public";
         public bool IsReady => true;
-        public bool SupportsPix => true;
         public ProviderSubscription? Remote;
         public int Creates;
+        public int Refunds;
+        public bool FailRefund;
         public string PaymentStatus = "pending";
         public decimal PaymentAmount = 118.80m;
         public Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string token, CancellationToken ct)
@@ -218,14 +285,18 @@ public sealed class BillingServiceTests
             Remote = new("remote", order.Id.ToString("N"), "authorized", order.Plan.Amount, "BRL", order.Plan.Months, null);
             return Task.FromResult(Remote);
         }
-        public Task<ProviderSubscription> CreatePixAsync(SubscriptionOrder order, string cpf, string name, CancellationToken ct) => CreateAsync(order, "", ct);
-        public Task<PixDetails> GetPixAsync(string id, CancellationToken ct) => Task.FromResult(new PixDetails("qr", "bitmap", null));
         public Task<ProviderSubscription> GetAsync(string id, CancellationToken ct) => Task.FromResult(Remote!);
         public Task<ProviderSubscription?> FindAsync(Guid reference, string method, CancellationToken ct) => Task.FromResult(Remote);
         public Task SetRenewalAsync(string id, bool enabled, CancellationToken ct) { Remote = Remote! with { Status = enabled ? "authorized" : "paused" }; return Task.CompletedTask; }
         public Task ChangePlanAsync(string id, BillingPlan plan, DateTimeOffset date, CancellationToken ct) { Remote = Remote! with { Amount = plan.Amount, Months = plan.Months }; return Task.CompletedTask; }
         public Task ChangeCardAsync(string id, string token, CancellationToken ct) => Task.CompletedTask;
         public Task CancelPendingAsync(string id, CancellationToken ct) => SetRenewalAsync(id, false, ct);
+        public Task TerminateAsync(string id, CancellationToken ct) { Remote = Remote! with { Status = "cancelled" }; return Task.CompletedTask; }
+        public Task RefundAsync(string paymentId, string key, CancellationToken ct)
+        {
+            if (FailRefund) throw new BillingException("temporary", true);
+            Refunds++; PaymentStatus = "refunded"; return Task.CompletedTask;
+        }
         public Task<IReadOnlyList<ProviderPayment>> GetPaymentsAsync(string id, CancellationToken ct)
             => Task.FromResult<IReadOnlyList<ProviderPayment>>([new("payment", id, PaymentStatus, PaymentAmount, "BRL", DateTimeOffset.UtcNow)]);
         public Task<string?> ResolveSubscriptionAsync(string topic, string resource, CancellationToken ct) => Task.FromResult<string?>("remote");

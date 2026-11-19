@@ -12,6 +12,8 @@ import { ProblemSection } from "@/components/organisms/ProblemSection";
 import { RegisterSection } from "@/components/organisms/RegisterSection";
 import { SolutionSection } from "@/components/organisms/SolutionSection";
 import { WaitlistSection } from "@/components/organisms/WaitlistSection";
+import { WaitlistForm } from "@/components/organisms/WaitlistForm";
+import { isWaitlist } from "@/lib/site-mode";
 
 export function LandingPageTemplate() {
   return (
@@ -29,7 +31,7 @@ export function LandingPageTemplate() {
         <PrivacySection />
         <PricingSection />
         <DevelopmentSection />
-        <WaitlistSection />
+        {isWaitlist ? <WaitlistForm /> : <WaitlistSection />}
       </main>
       <Footer />
     </>

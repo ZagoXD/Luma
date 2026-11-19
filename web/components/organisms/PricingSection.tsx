@@ -41,7 +41,7 @@ export function PricingSection() {
             cta="Assinar anual"
             secondaryCta="Assinar mensal"
             ctaClass="basic-btn"
-            note="No anual, o acesso fica ativo por 12 meses. Cancelar impede a próxima renovação."
+            note="Desativar a renovação mantém o período pago; cancelar imediatamente encerra o acesso."
             secondaryNote="No mensal, a cobrança é feita a cada mês."
             delay="0.15s"
           />
@@ -68,7 +68,7 @@ export function PricingSection() {
             cta="Assinar anual"
             secondaryCta="Assinar mensal"
             ctaClass="full-btn"
-            note="No anual, o acesso fica ativo por 12 meses. Cancelar impede a próxima renovação."
+            note="Desativar a renovação mantém o período pago; cancelar imediatamente encerra o acesso."
             secondaryNote="No mensal, a cobrança é feita a cada mês."
             featured
             delay="0.25s"

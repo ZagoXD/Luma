@@ -1,11 +1,12 @@
 import { ButtonLink } from "@/components/atoms/Button";
 import { PhoneFrame } from "@/components/molecules/PhoneFrame";
+import { isWaitlist } from "@/lib/site-mode";
 
 export function HeroSection() {
   return (
     <section className="hero">
       <div className="hero-text fade-up">
-        <span className="hero-badge">Disponível agora</span>
+        <span className="hero-badge">{isWaitlist ? "Em breve · entre na lista" : "Disponível agora"}</span>
         <h1>
           Seu ciclo,
           <br />
@@ -17,8 +18,8 @@ export function HeroSection() {
           Chega de abrir aplicativo que você esquece de usar. Com a Luma, você conversa direto pelo WhatsApp: registre seu ciclo, acompanhe sintomas, gravidez e lembretes em uma rotina mais leve.
         </p>
         <div className="hero-actions">
-          <ButtonLink variant="primary" href="#precos">
-            Adquira seu plano
+          <ButtonLink variant="primary" href={isWaitlist ? "#lista" : "#precos"}>
+            {isWaitlist ? "Quero conhecer a Luma" : "Adquira seu plano"}
           </ButtonLink>
           <ButtonLink variant="ghost" href="#como">
             Ver como funciona

@@ -1,3 +1,27 @@
+.legal-document { width: min(100% - 32px, 820px); margin: 0 auto; padding: 32px 0; line-height: 1.7; overflow-wrap: anywhere; }
+.legal-document h1 { font-size: 32px; line-height: 1.2; margin: 24px 0; }
+.legal-document h2 { font-size: 21px; margin: 28px 0 8px; }
+.legal-document p { margin: 12px 0; }
+.account-settings h3 { font-size: 18px; margin: 24px 0 12px; }
+.account-settings p { line-height: 1.6; margin: 12px 0; }
+.account-settings input:not([type=checkbox]) { box-sizing: border-box; width: 100%; min-width: 0; padding: 12px; border: 1px solid #d8cce6; border-radius: 6px; }
+.settings-order { border-top: 1px solid #d8cce6; padding: 16px 0; }
+.waitlist-form { width: min(100%, 580px); margin: 24px auto 0; display: grid; gap: 20px; text-align: left; }
+.waitlist-form > label { display: grid; gap: 8px; }
+.waitlist-form input:not([type=checkbox]) { box-sizing: border-box; width: 100%; padding: 14px; color: #21132b; border: 1px solid #d8cce6; border-radius: 6px; background: white; }
+.waitlist-form a { color: inherit; text-decoration: underline; }
+.waitlist-section { color: #ffffff; }
+.waitlist-section .section-inner > p:not(.section-tag) { color: #ece4f3; line-height: 1.7; }
+.waitlist-section .section-tag { color: #d4b2ff; }
+.waitlist-section .waitlist-form > label { color: #ffffff; font-weight: 500; }
+.waitlist-section .waitlist-form .account-consent { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 12px; color: #ece4f3; line-height: 1.65; text-align: left; font-weight: 400; }
+.waitlist-section .account-consent input[type=checkbox] { width: 18px; height: 18px; margin: 4px 0 0; accent-color: #c49af5; }
+.waitlist-section .account-consent a { color: #e0c8ff; text-underline-offset: 3px; }
+.waitlist-section .account-primary { min-height: 52px; background: #ede0ff; color: #281335; border: 1px solid #ede0ff; }
+.waitlist-section .account-primary:hover:not(:disabled) { background: #ffffff; color: #281335; border-color: #ffffff; }
+.waitlist-section .account-primary:disabled { opacity: 0.7; cursor: wait; }
+.waitlist-section input:focus-visible, .waitlist-section button:focus-visible, .waitlist-section a:focus-visible { outline: 3px solid #d6b8ff; outline-offset: 4px; }
+.waitlist-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 :root {
       --plum-deep:   oklch(20% 0.07 315);
       --plum-mid:    oklch(32% 0.09 315);
@@ -2006,7 +2030,7 @@ nav .nav-cta:focus {
       nav { padding: 1rem 1.25rem; }
       .dev-counter { gap: 1.5rem; }
       .form-wrapper { padding: 1.5rem; border-radius: 1.25rem; }
-      .plans-grid { gap: 0.625rem; }
+      .plans-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
       .plan-card { padding: 1.25rem 0.875rem; border-radius: 1.25rem; max-width: none; }
       .plan-badge { font-size: 0.65rem; padding: 0.25rem 0.6rem; margin-bottom: 0.875rem; }
       .plan-name { font-size: 1.1rem; }

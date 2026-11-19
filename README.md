@@ -55,7 +55,11 @@ Pendente para produção completa:
 
 ## Planos
 
-Pagamentos usam **Mercado Pago Checkout Bricks**: cartão com renovação automática ou Pix para um período, sem renovação automática. O anual continua cobrado à vista. A arquitetura de cobrança separa domínio, casos de uso e adaptador; o acesso exige pagamento aprovado, nunca apenas abrir o checkout. Consulte [Pagamentos e operação](specs/pagamentos-mercadopago.md) para configuração, segurança, cancelamento, testes e migração.
+Pagamentos usam **Mercado Pago Checkout Bricks, somente cartão de crédito**. O anual é cobrado à vista. Desativar a renovação mantém o período pago; cancelar imediatamente encerra o acesso. O arrependimento de sete dias tem fluxo próprio de reembolso integral, com solicitação durável e idempotência. Consulte [Pagamentos e operação](specs/pagamentos-mercadopago.md).
+
+O cadastro exige os termos e consentimento específico de dados sensíveis, com registro de versão e data. Termos e privacidade estão em `/termos` e `/privacidade`. O perfil oferece Configurações da conta, arrependimento e exclusão confirmada por senha. A exclusão interrompe cobranças antes de eliminar os dados pessoais; falhas externas ficam pendentes para retentativa. O ledger financeiro mínimo permanece sem os contatos e dados de saúde.
+
+A divulgação em `https://espera.ia-luma.com.br` usa Cloudflare Pages e D1, independentes da AWS, com a landing atual e sem rotas de autenticação ou compra. Contatos são criptografados antes de persistir. Veja [Lista de espera e ciclo de vida da conta](specs/conta-privacidade-e-lista-de-espera.md). A Vercel anterior não foi alterada. A AWS não é pausada automaticamente.
 
 Notificações e armazenamento de imagens estão descritos em [Notificações e R2](specs/notificacoes-r2-operacao.md), incluindo templates, retentativas, fusos, callbacks de entrega e limpeza automática no bucket.
 

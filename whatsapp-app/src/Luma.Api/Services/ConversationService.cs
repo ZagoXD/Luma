@@ -1352,7 +1352,7 @@ public sealed partial class ConversationService(
 
         if (body.Contains("apagar", StringComparison.Ordinal) || body.Contains("excluir", StringComparison.Ordinal))
         {
-            return "Eu posso apagar seus dados, mas essa acao precisa de confirmacao. Para este MVP local, me avise no painel/admin ou implemente o fluxo definitivo antes de usar em producao.";
+            return "Você pode solicitar a exclusão da conta nas Configurações do seu perfil no site da Luma, confirmando sua senha. A exclusão interrompe cobranças e remove seus dados conforme a política de privacidade. Arrependimento e reembolso são solicitações separadas. Se precisar, fale com o suporte pelo site.";
         }
 
         if (intent.Intent == ConversationIntents.LumaIdentityQuestion)

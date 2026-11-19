@@ -231,7 +231,7 @@ Funcionalidades:
 
 - criação de assinatura;
 - confirmação de pagamento;
-- cancelamento ao fim do período;
+- renovação desligada preservando o período pago, cancelamento imediato terminal e arrependimento/reembolso em fluxo separado;
 - retomada;
 - troca de plano;
 - troca de cartão;

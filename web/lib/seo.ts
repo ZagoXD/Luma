@@ -15,7 +15,7 @@ export function siteOrigin(value = process.env.LUMA_SITE_URL || "http://localhos
 }
 
 export function isIndexableSite(value?: string) {
-  return siteOrigin(value) === productionOrigin;
+  return siteOrigin(value) === productionOrigin || (process.env.NEXT_PUBLIC_LUMA_SITE_MODE === "waitlist" && siteOrigin(value) === "https://espera.ia-luma.com.br");
 }
 
 export function isPrivatePath(path: string) {
@@ -47,12 +47,12 @@ export function buildRobots(origin?: string): MetadataRoute.Robots {
   if (!isIndexableSite(origin)) return { rules: { userAgent: "*", allow: "/" } };
   return {
     rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/perfil", "/checkout", "/login", "/forgot-password", "/reset-password"] },
-    sitemap: productionOrigin + "/sitemap.xml",
+    sitemap: siteOrigin(origin) + "/sitemap.xml",
   };
 }
 
 export function buildSitemap(origin?: string): MetadataRoute.Sitemap {
-  return isIndexableSite(origin) ? [{ url: productionOrigin + "/" }] : [];
+  return isIndexableSite(origin) ? [{ url: siteOrigin(origin) + "/" }] : [];
 }
 
 export function buildStructuredData() {

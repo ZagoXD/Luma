@@ -9,8 +9,7 @@
         "MercadoPago__PublicKey": "${MERCADOPAGO_PRODUCTION_PUBLIC_KEY:?Missing production public key}",
         "MercadoPago__WebhookSecret": "${MERCADOPAGO_PRODUCTION_WEBHOOK_SECRET:?Missing webhook secret}",
         "MercadoPago__SellerId": "${MERCADOPAGO_PRODUCTION_SELLER_ID:?Missing production seller}",
-        "MercadoPago__TestMode": "false",
-        "MercadoPago__PixEnabled": "true"
+        "MercadoPago__TestMode": "false"
       }
     }
   }

@@ -1,0 +1,38 @@
+# Conta, privacidade e lista de espera
+
+Atualização: 19/11/2026. Documentos jurídicos publicados com a versão imutável `2026-11-18`; recomenda-se revisão jurídica profissional antes da abertura comercial.
+
+## Cadastro e documentos
+
+`/termos` e `/privacidade` são públicos. O rodapé, cadastro e Configurações do perfil oferecem links. O cadastro exige aceite dos termos e consentimento específico de saúde, desmarcados inicialmente; o backend rejeita versão desatualizada ou aceite ausente e grava versão e data. CPF do responsável não é publicado; identificação empresarial, CNPJ, endereço e contato foram fornecidos pelo titular.
+
+## Assinatura
+
+- Somente cartão de crédito: mensal ou anual à vista.
+- Renovação automática desligada: pausa futuras cobranças, mantém o período já pago e permite retomar.
+- Cancelamento imediato: encerra acesso e cancela o contrato remoto e trocas pendentes. É terminal; webhook e reconciliação não restauram benefícios.
+- Arrependimento: área separada e visível em Configurações, com prazo, status e suporte. Devolve integralmente o pagamento original, sem descontar taxas da cliente. Não se confunde com cancelamento.
+- Pedidos de cancelamento/reembolso são persistidos antes da rede. O worker de reconciliação tenta concluir falhas externas a cada dez minutos. Chaves de idempotência evitam estornos repetidos.
+- A primeira cobrança de assinatura é assíncrona: autorização não libera acesso. A aprovação precisa existir no provedor e no ledger.
+
+## Exclusão
+
+Confirmação por senha. O pedido bloqueia autenticação e benefícios imediatamente, interrompe contratos atuais e agendados e só então remove dados de contato, sessões, códigos, histórico menstrual, gravidez, mensagens, memória, suporte e notificações. Imagens por usuário são removidas do R2; sua regra de expiração de um dia continua como defesa adicional. Erros de provedor/armazenamento mantêm o pedido pendente e são retomados pelo worker.
+
+Conserva-se um registro financeiro mínimo com identificadores de pagamento, valores e datas, sem nome, CPF, celular, e-mail ou saúde da usuária. Os backups privados têm retenção de sete dias. Ao restaurar um backup anterior a uma exclusão, reaplicar os pedidos posteriores antes de reabrir o serviço. Dados mantidos pelos próprios provedores seguem suas obrigações e políticas; não prometer eliminação instantânea do histórico financeiro externo.
+
+## Divulgação independente
+
+Cloudflare Pages: projeto `luma-espera`, produção da branch lógica `waitlist`, domínio `espera.ia-luma.com.br`. A Vercel permanece intocada. A exportação estática reutiliza os componentes atuais de atomic design, calendário, demonstração de áudio, preços e documentos. Não inclui rotas de login, cadastro, checkout, conta ou APIs privadas.
+
+Build: `node infra/waitlist/build.cjs`, após `npm ci` em `web`. Saída regenerável em `.backups/waitlist-build/out`. Upload de assets usa `infra/waitlist/upload-assets.cjs` e token temporário de upload do Pages. O deployment envia manifest, `_worker.js` e `_routes.json`. Segredos nunca são incluídos nos assets ou no Git.
+
+Pages Function `/api/waitlist`: valida origem, tamanho, consentimento, nome/e-mail, honeypot e limite persistente de cinco tentativas por hora/IP. IP é armazenado apenas como HMAC temporário. D1 `luma-waitlist` conserva nome/e-mail em AES-256-GCM e identificador HMAC para deduplicação; respostas não revelam se um contato já existe. Não há campos de saúde nem texto livre.
+
+Bindings privados do Pages: `DB` aponta ao D1; `API_SECRET` protege o serviço e os buckets de limite; `ENCRYPTION_KEY` é uma chave base64 de 32 bytes. Backup das chaves está no `.env` local ignorado: `WAITLIST_API_SECRET`, `WAITLIST_ENCRYPTION_KEY`, `WAITLIST_DATABASE_ID`. Não rotacionar a chave sem migrar o acervo. Configuração de divulgação não necessita OpenAI, Twilio, Mercado Pago nem segredos de produção da Luma.
+
+O Supabase antigo foi consultado com as credenciais fornecidas e a tabela `waitlist_signups` existe. Não foi apagada nem alterada. A lista nova não depende da instância antiga nem da AWS; contatos anteriores permanecem na origem e não se importam automaticamente textos livres que possam conter saúde.
+
+Para consultar contatos da lista nova, exporte `encrypted_contact` via D1 autenticado e use `infra/waitlist/export.cjs` localmente. A exportação contém dados pessoais: manter em local protegido e remover quando não for necessária. Exclusão de um lead pode ser solicitada pelo contato público e executada pelo seu hash, sem tornar o banco público.
+
+Não pausar AWS automaticamente. Antes de suspender: verificar assinantes, interromper vendas e renovações que não poderão ser atendidas, validar backups, ajustar o domínio principal e comunicar a manutenção. Parar EC2 não elimina despesas de volumes, segredos e armazenamento.
