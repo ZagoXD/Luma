@@ -10,10 +10,7 @@ public sealed class ConversationScopeDetector
     [
         "GroupSid",
         "GroupId",
-        "GroupName",
-        "ChannelSid",
-        "ConversationSid",
-        "ParticipantSid"
+        "GroupName"
     ];
 
     public ConversationScopeResult DetectTwilio(IFormCollection form)

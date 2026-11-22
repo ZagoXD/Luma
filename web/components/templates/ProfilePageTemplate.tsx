@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { PaymentCardForm } from "@/components/organisms/PaymentCardForm";
 import { AccountSettings } from "@/components/organisms/AccountSettings";
+import { AccountUsage } from "@/components/organisms/AccountUsage";
 import {
   cancelSubscription,
   setSubscriptionRenewal,
@@ -427,6 +428,7 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
             )}
           </section>
 
+          {hasContractedPlan && <AccountUsage key={subscription?.planCode} />}
           <AccountSettings accountId={accountId} onBillingChange={async () => { setProfile(await getAccountProfile()); setTransactions((await getBillingTransactions()).transactions); setNotificationsAvailable((await getNotificationPreferences()).available); }} />
           <section className="account-panel profile-card">
             <h2><CreditCard size={20} /> Histórico de transações</h2>

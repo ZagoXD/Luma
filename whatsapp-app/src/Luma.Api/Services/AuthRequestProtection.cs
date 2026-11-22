@@ -1,10 +1,20 @@
 namespace Luma.Api.Services;
 
-public sealed class AuthRequestProtection(RequestDelegate next)
+public sealed class AuthRequestProtection(RequestDelegate next, IWebHostEnvironment environment, IConfiguration configuration)
 {
     public async Task InvokeAsync(HttpContext context, IAccountRequestLimiter limiter)
     {
         var path = context.Request.Path.Value ?? "";
+        var developmentKey = configuration["Development:AccessToken"] ?? "";
+        if (context.Request.Path.StartsWithSegments("/dev") && (!environment.IsDevelopment()
+            || context.Connection.RemoteIpAddress is not { } address || !System.Net.IPAddress.IsLoopback(address)
+            || developmentKey.Length < 32 || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(developmentKey)),
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(context.Request.Headers["X-Luma-Development-Key"].ToString())))))
+        {
+            context.Response.StatusCode = 404;
+            return;
+        }
         var auth = path is "/account/register" or "/account/login" or "/account/refresh" or "/account/logout"
             or "/auth/forgot-password" or "/auth/reset-password" || path.StartsWith("/account/phone-", StringComparison.Ordinal);
         try

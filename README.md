@@ -6,6 +6,9 @@ Ela não faz diagnósticos, não confirma gravidez, não substitui orientação 
 
 ## Estado Atual
 
+Atualização de 22/11/2026: [uso seguro, cotas e custo](specs/uso-seguro-mensagens-e-custos.md)
+e [preparação fiscal](specs/preparacao-fiscal.md). A emissão de notas permanece desativada.
+
 ### Hospedagem e deploy
 
 A implantação AWS usa dev e produção isolados em Docker, com PostgreSQL/pgvector e Redis próprios, segredos no AWS Secrets Manager, acesso HTTPS pelo Cloudflare Tunnel e backups privados. O CI da `main` libera o deploy automático de dev; produção é promovida manualmente com as mesmas imagens validadas.
@@ -41,6 +44,13 @@ Implementado:
 - Pedido de calendário pelo WhatsApp com link direto para o mês solicitado.
 - Guardrails médicos.
 - Bloqueio defensivo de grupos.
+- Recusa local de anexos, contatos e localização, sem enviar esses arquivos à IA.
+- Até três registros explícitos por mensagem, com validação e transação no backend.
+- Cotas diárias persistentes de IA: 10 no Básico e 20 no Essencial, sem cota mensal de mensagens.
+- Menu `registrar` sem IA para registros, correção da última menstruação e notificações.
+- Essencial: áudio de até 60 segundos, 10 minutos/mês e duas solicitações de imagem/mês.
+- Consumo no perfil e contabilização técnica de chamadas sem guardar texto de saúde nesse ledger.
+- Pendências fiscais idempotentes para pagamentos aprovados, sem emissão automática.
 - Estrutura de notificações do plano Essencial.
 - Criptografia de dados reais da usuária em repouso, com AES-GCM e hashes HMAC para busca.
 
@@ -59,7 +69,7 @@ Pagamentos usam **Mercado Pago Checkout Bricks, somente cartão de crédito**. O
 
 O cadastro exige os termos e consentimento específico de dados sensíveis, com registro de versão e data. Termos e privacidade estão em `/termos` e `/privacidade`. O perfil oferece Configurações da conta, arrependimento e exclusão confirmada por senha. A exclusão interrompe cobranças antes de eliminar os dados pessoais; falhas externas ficam pendentes para retentativa. O ledger financeiro mínimo permanece sem os contatos e dados de saúde.
 
-A divulgação em `https://espera.ia-luma.com.br` usa Cloudflare Pages e D1, independentes da AWS, com a landing atual e sem rotas de autenticação ou compra. Contatos são criptografados antes de persistir. Veja [Lista de espera e ciclo de vida da conta](specs/conta-privacidade-e-lista-de-espera.md). A Vercel anterior não foi alterada. A AWS não é pausada automaticamente.
+A divulgação em `https://espera.ia-luma.com.br` usa Cloudflare Pages e D1, independentes da AWS, com a landing atual e sem rotas de autenticação ou compra. A lista permite escolher e-mail, WhatsApp ou ambos, com dois aceites separados: Termos/leitura da Política e autorização específica de contato sobre o lançamento. Contatos, canais e evidências dos aceites são criptografados antes de persistir. Veja [Lista de espera e ciclo de vida da conta](specs/conta-privacidade-e-lista-de-espera.md). A Vercel anterior não foi alterada. A AWS não é pausada automaticamente.
 
 Notificações e armazenamento de imagens estão descritos em [Notificações e R2](specs/notificacoes-r2-operacao.md), incluindo templates, retentativas, fusos, callbacks de entrega e limpeza automática no bucket.
 

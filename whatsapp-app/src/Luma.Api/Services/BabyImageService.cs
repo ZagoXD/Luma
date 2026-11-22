@@ -47,7 +47,9 @@ public sealed class BabyImageService(
     HttpClient httpClient,
     IOptions<OpenAiOptions> openAiOptions,
     IOptions<R2Options> r2Options,
-    ILogger<BabyImageService> logger) : IBabyImageService
+    ILogger<BabyImageService> logger,
+    UsageLedger? ledger = null,
+    UsageContext? usageContext = null) : IBabyImageService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -100,11 +102,18 @@ public sealed class BabyImageService(
 
     private async Task<byte[]> GenerateOpenAiImageAsync(BabyDevelopmentInfo development, CancellationToken cancellationToken)
     {
+        var imageModel = _openAi.ImageModel;
+        if (string.IsNullOrWhiteSpace(imageModel) || imageModel == "gpt-image-1")
+        {
+            imageModel = OpenAiOptions.DefaultImageModel;
+            logger.LogWarning("Legacy image model configuration replaced by supported model {ImageModel}; update runtime configuration.", imageModel);
+        }
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildImagesUri(_openAi.BaseUrl));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _openAi.ApiKey);
         request.Content = JsonContent.Create(new
         {
-            model = string.IsNullOrWhiteSpace(_openAi.ImageModel) ? "gpt-image-1" : _openAi.ImageModel,
+            model = imageModel,
+            quality = _openAi.ImageQuality,
             prompt = $"""
 Crie uma imagem educativa, acolhedora e não médica, em estilo ilustração limpa, mostrando uma comparação de tamanho fetal aproximado para {development.Week} semanas.
 Use uma escala visual simples com o bebê representado de forma respeitosa e abstrata, ao lado de {development.Comparison}.
@@ -113,10 +122,18 @@ Não inclua texto na imagem, sangue, nudez, aparência realista explícita, diag
             size = "1024x1024"
         }, options: SerializerOptions);
 
+        var callId = ledger is null ? null : await ledger.StartCallAsync(usageContext, "openai-image", imageModel, 0, cancellationToken);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+        if (ledger is not null)
+        {
+            var hasUsage = document.RootElement.TryGetProperty("usage", out var usage);
+            var input = hasUsage && usage.TryGetProperty("input_tokens", out var inputTokens) ? inputTokens.GetInt32() : 0;
+            var output = hasUsage && usage.TryGetProperty("output_tokens", out var outputTokens) ? outputTokens.GetInt32() : 0;
+            await ledger.CompleteCallAsync(callId, input, 0, output, null, cancellationToken);
+        }
         var b64 = document.RootElement
             .GetProperty("data")[0]
             .GetProperty("b64_json")

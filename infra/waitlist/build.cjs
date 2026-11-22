@@ -27,7 +27,8 @@ fs.writeFileSync(path.join(stage, 'next.config.mjs'), `export default { output: 
 execFileSync(process.execPath, [path.join(source, 'node_modules/next/dist/bin/next'), 'build'], { cwd: stage, stdio: 'inherit',
   env: { ...process.env, NEXT_PUBLIC_LUMA_SITE_MODE: 'waitlist', LUMA_SITE_URL: 'https://espera.ia-luma.com.br' } });
 const out = path.join(stage, 'out');
-fs.copyFileSync(path.join(__dirname, 'worker.mjs'), path.join(out, '_worker.js'));
+require(path.join(source, 'node_modules/esbuild')).buildSync({ entryPoints:[path.join(__dirname,'worker.mjs')],
+  outfile:path.join(out,'_worker.js'), bundle:true, format:'esm', platform:'browser', target:'es2022' });
 fs.writeFileSync(path.join(out, '_routes.json'), JSON.stringify({ version: 1, include: ['/api/waitlist'], exclude: [] }));
 fs.writeFileSync(path.join(out, '_headers'), '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n');
 console.log('Pages output: ' + out);

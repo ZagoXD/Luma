@@ -65,7 +65,7 @@ public sealed class ElevenLabsSpeechToTextService(
             var payload = await response.Content.ReadAsStringAsync(timeout.Token);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("ElevenLabs STT failed with status {StatusCode}: {Payload}", (int)response.StatusCode, Truncate(payload));
+                logger.LogWarning("ElevenLabs STT failed with status {StatusCode}.", (int)response.StatusCode);
                 return new SpeechToTextResult(false, null, "elevenlabs_request_failed");
             }
 
@@ -103,10 +103,6 @@ public sealed class ElevenLabsSpeechToTextService(
         };
     }
 
-    private static string Truncate(string value)
-    {
-        return value.Length <= 512 ? value : value[..512];
-    }
 }
 
 public sealed record TwilioMediaDownloadResult(byte[] Bytes, string ContentType);
@@ -123,17 +119,23 @@ public sealed class TwilioMediaDownloader(HttpClient http, IConfiguration config
 
     public async Task<TwilioMediaDownloadResult> DownloadAsync(string mediaUrl, CancellationToken cancellationToken = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        cancellationToken = timeout.Token;
         if (string.IsNullOrWhiteSpace(_accountSid) || string.IsNullOrWhiteSpace(_authToken))
         {
             throw new InvalidOperationException("Twilio credentials are required to download incoming media.");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, mediaUrl);
+        if (!Uri.TryCreate(mediaUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https"
+            || uri.Host != "api.twilio.com" || uri.Port != 443 || uri.UserInfo.Length > 0
+            || !uri.AbsolutePath.StartsWith($"/2010-04-01/Accounts/{_accountSid}/Messages/", StringComparison.Ordinal))
+            throw new InvalidOperationException("Incoming media must belong to this Twilio account.");
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         var auth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{_accountSid}:{_authToken}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", auth);
 
-        using var response = await http.SendAsync(request, cancellationToken);
-        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning("Twilio media download failed with status {StatusCode}.", (int)response.StatusCode);
@@ -141,7 +143,18 @@ public sealed class TwilioMediaDownloader(HttpClient http, IConfiguration config
         }
 
         var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
-        return new TwilioMediaDownloadResult(bytes, contentType);
+        const int maxBytes = 10 * 1024 * 1024;
+        if (response.Content.Headers.ContentLength > maxBytes) throw new InvalidOperationException("Audio too large.");
+        await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var output = new MemoryStream();
+        var buffer = new byte[8192];
+        int read;
+        while ((read = await input.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            if (output.Length + read > maxBytes) throw new InvalidOperationException("Audio too large.");
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
+        return new TwilioMediaDownloadResult(output.ToArray(), contentType);
     }
 }
 
@@ -158,7 +171,11 @@ public interface IWhatsAppAudioTranscriptionService
 public sealed class WhatsAppAudioTranscriptionService(
     ITwilioMediaDownloader mediaDownloader,
     ISpeechToTextService speechToText,
-    ILogger<WhatsAppAudioTranscriptionService> logger) : IWhatsAppAudioTranscriptionService
+    ILogger<WhatsAppAudioTranscriptionService> logger,
+    UsageLedger? usage = null,
+    UsageContext? usageContext = null,
+    IAudioPreparer? audioPreparer = null,
+    AudioProcessingGate? processingGate = null) : IWhatsAppAudioTranscriptionService
 {
     public static bool HasAudioMedia(IFormCollection form)
     {
@@ -173,19 +190,43 @@ public sealed class WhatsAppAudioTranscriptionService(
             return AudioTranscriptionResult.NotAttempted;
         }
 
+        if (processingGate is not null && !await processingGate.Slots.WaitAsync(0, cancellationToken))
+            return new(true, false, null, "audio_busy");
+
         try
         {
+            if (usage is not null)
+            {
+                if (usageContext?.AccountId is not Guid owner || usageContext.Plan != "essencial") return new(true, false, null, "audio_limit");
+                var remaining = await usage.SnapshotAsync(owner, usageContext.Plan, cancellationToken);
+                if (remaining.DailyUsed >= remaining.DailyLimit) return new(true, false, null, "daily_limit");
+                if (remaining.AudioSecondsUsed >= remaining.MonthlyAudioSeconds) return new(true, false, null, "audio_limit");
+            }
             var media = await mediaDownloader.DownloadAsync(audio.Value.MediaUrl, cancellationToken);
+            if (audioPreparer is not null) media = await audioPreparer.PrepareAsync(media.Bytes, cancellationToken);
+            if (usage is not null)
+            {
+                if (usageContext?.AccountId is not Guid accountId) return new(true, false, null, "audio_limit");
+                var seconds = AudioDurationReader.Seconds(media.Bytes, media.ContentType);
+                if (seconds > usage.Policy.MaxAudioSeconds) return new(true, false, null, "audio_limit");
+                var admission = await usage.ReserveAudioAsync(accountId, usageContext.Plan, usageContext.MessageId, seconds, cancellationToken);
+                if (!admission.Allowed || admission.Duplicate) return new(true, false, null, "daily_limit");
+                usageContext.Admitted = true;
+            }
+            var callId = usage is null ? null : await usage.StartCallAsync(usageContext, "elevenlabs", "speech-to-text", 0, cancellationToken);
             var transcript = await speechToText.TranscribeAsync(media.Bytes, media.ContentType, cancellationToken);
+            if (usage is not null && transcript.Success) await usage.CompleteCallAsync(callId, 0, 0, 0, null, cancellationToken);
             return transcript.Success && !string.IsNullOrWhiteSpace(transcript.Text)
                 ? new AudioTranscriptionResult(true, true, transcript.Text.Trim())
                 : new AudioTranscriptionResult(true, false, null, transcript.ErrorMessage ?? "empty_transcript");
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+        catch (AudioLimitException) { return new(true, false, null, "audio_limit"); }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException or IOException or System.ComponentModel.Win32Exception or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
         {
             logger.LogWarning(ex, "WhatsApp audio transcription failed.");
             return new AudioTranscriptionResult(true, false, null, "audio_transcription_failed");
         }
+        finally { processingGate?.Slots.Release(); }
     }
 
     private static (string MediaUrl, string ContentType)? FindFirstAudio(IFormCollection form)

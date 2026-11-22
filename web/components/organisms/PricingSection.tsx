@@ -34,6 +34,8 @@ export function PricingSection() {
             description="Tudo que você precisa para registrar seu ciclo de forma simples e sem esforço."
             features={[
               ...baseFeatures,
+              { enabled: true, label: "Até 10 mensagens com IA por dia, sem cota mensal" },
+              { enabled: true, label: "Menu de registros disponível após a cota de IA" },
               { enabled: false, label: "Mensagens por áudio" },
               { enabled: false, label: "Imagens educativas do bebê" },
               { enabled: false, label: "Notificações e lembretes automáticos" },
@@ -60,8 +62,10 @@ export function PricingSection() {
             description="Tudo do plano Básico, mais recursos inteligentes para uma rotina com menos esforço."
             features={[
               ...baseFeatures,
-              { enabled: true, label: "Mensagens por áudio" },
-              { enabled: true, label: "Imagens educativas do bebê" },
+              { enabled: true, label: "Até 20 mensagens com IA por dia, sem cota mensal" },
+              { enabled: true, label: "Menu de registros disponível após a cota de IA" },
+              { enabled: true, label: "Áudios de até 60 segundos: 10 minutos por mês" },
+              { enabled: true, label: "Até 2 imagens educativas por mês" },
               { enabled: true, label: "Notificações e lembretes automáticos" },
               { enabled: true, label: "Acompanhamento de gravidez com mais contexto" },
             ]}

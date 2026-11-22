@@ -53,7 +53,7 @@ jobs:
       Luma__StoreMessageBodies: "false"
       OpenAI__ApiKey: ci-placeholder
       OpenAI__Model: gpt-5.4-mini
-      OpenAI__ImageModel: gpt-image-1
+      OpenAI__ImageModel: gpt-image-2.6-flare
       Privacy__EncryptionEnabled: "true"
       Privacy__EncryptionKey: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
       Privacy__LookupPepper: HyAdHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA=
@@ -73,6 +73,9 @@ jobs:
 
       - name: Restore backend
         run: dotnet restore Luma.sln
+
+      - name: Install audio decoder
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Test backend
         run: dotnet test Luma.sln --configuration Release --no-restore

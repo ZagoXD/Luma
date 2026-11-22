@@ -177,6 +177,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
                 {
                     await gateway.RefundAsync(payment.Id[(gateway.Provider.Length + 1)..], "withdrawal-" + subscription.Id.ToString("N") + "-" + payment.Id.Split(':').Last(), ct);
                     payment.Status = "refunded";
+                    await new Luma.Api.Fiscal.FiscalOutbox(db).ObserveAsync(payment, ct);
                     await db.SaveChangesAsync(ct);
                 }
                 subscription.WithdrawalCompletedAt = DateTimeOffset.UtcNow;
@@ -309,13 +310,16 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
             {
                 if (saved.AccountSubscriptionId != local.Id) throw new BillingException("Pagamento já vinculado a outro pedido.");
                 saved.Status = payment.Status;
+                await new Luma.Api.Fiscal.FiscalOutbox(db).ObserveAsync(saved,ct);
                 continue;
             }
             if (!BillingPolicy.IsPaid(effective, remote, payment) || payment.ApprovedAt > DateTimeOffset.UtcNow.AddMinutes(5)
                 || payment.ApprovedAt < local.StartsAt.AddMinutes(-5)) continue;
             var plan = BillingCatalog.Get(effective.PlanCode, effective.BillingInterval);
-            db.BillingPayments.Add(new() { Id = key, AccountSubscriptionId = local.Id, Status = payment.Status,
-                Amount = payment.Amount, Currency = payment.Currency, ApprovedAt = payment.ApprovedAt.ToUniversalTime(), PeriodEndsAt = plan.PeriodEnd(payment.ApprovedAt.ToUniversalTime()) });
+            var savedPayment = new BillingPayment { Id = key, AccountSubscriptionId = local.Id, Status = payment.Status,
+                Amount = payment.Amount, Currency = payment.Currency, ApprovedAt = payment.ApprovedAt.ToUniversalTime(), PeriodEndsAt = plan.PeriodEnd(payment.ApprovedAt.ToUniversalTime()) };
+            db.BillingPayments.Add(savedPayment);
+            await new Luma.Api.Fiscal.FiscalOutbox(db).ObserveAsync(savedPayment,ct);
             local.PlanCode = effective.PlanCode;
             local.BillingInterval = effective.BillingInterval;
             local.PendingPlanCode = null;

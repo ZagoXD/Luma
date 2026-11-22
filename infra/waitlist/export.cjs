@@ -9,11 +9,14 @@ const data = JSON.parse(fs.readFileSync(input,'utf8'));
 const rows = Array.isArray(data) ? data : data.result?.[0]?.results;
 if (!rows) throw new Error('Expected an array or a D1 result envelope');
 const escape = value => '"'+String(value ?? '').replaceAll('"','""')+'"';
-console.log('name,email,created_at,consent_version');
+console.log('name,email,whatsapp,email_opt_in,whatsapp_opt_in,terms_accepted,terms_version,privacy_version,consent_recorded_at,created_at,consent_version');
 for (const row of rows) {
   const bytes=Buffer.from(row.encrypted_contact,'base64');
   const decipher=crypto.createDecipheriv('aes-256-gcm',Buffer.from(env.WAITLIST_ENCRYPTION_KEY,'base64'),bytes.subarray(0,12));
   decipher.setAAD(Buffer.from('luma.waitlist.v1'));decipher.setAuthTag(bytes.subarray(-16));
   const contact=JSON.parse(Buffer.concat([decipher.update(bytes.subarray(12,-16)),decipher.final()]).toString('utf8'));
-  console.log([contact.name,contact.email,row.created_at,row.consent_version].map(escape).join(','));
+  // Older leads only have the original combined email consent; do not invent new acceptances.
+  const legacy=row.consent_version==='2026-11-18';
+  console.log([contact.name,contact.email,contact.whatsapp,contact.emailOptIn ?? (legacy ? true : ''),contact.whatsappOptIn ?? false,
+    contact.termsAccepted ?? '',contact.termsVersion,contact.privacyVersion,contact.consentRecordedAt,row.created_at,row.consent_version].map(escape).join(','));
 }

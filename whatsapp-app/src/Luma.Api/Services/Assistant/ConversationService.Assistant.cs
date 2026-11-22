@@ -42,26 +42,57 @@ public sealed partial class ConversationService
             await db.SaveChangesAsync();
         }
         _mediaUrlForCurrentReply = null;
+        await BindUsageAsync(phone, messageId);
+        if (usage is not null && _requireActiveSubscription && usageContext?.AccountId is null)
+            return new("Não consegui validar a conta vinculada a este número. Acesse seu perfil ou fale com o suporte.");
         AssistantReply reply;
         if (newUser)
             reply = new(InitialConsentMessage(), null);
         else if (user.OnboardingStep == OnboardingSteps.UnderageBlocked)
             reply = new("Por segurança, a Luma não pode continuar esse cadastro para menores de 18 anos.", null);
+        else if (await TryStructuredRecordAsync(user, incoming.Body) is { } structured)
+            reply = new(structured, null);
+        else if (ConversationTopicPolicy.IsClearlyExternal(incoming.Body))
+            reply = new(ConversationTopicPolicy.Reply, null);
         else
         {
+            if (usage is not null && usageContext?.AccountId is Guid accountId && !usageContext.Admitted)
+            {
+                var admission = await usage.ReserveAsync(accountId, usageContext.Plan, messageId,
+                    user.OnboardingStep == OnboardingSteps.Completed ? "ai" : "onboarding", 1);
+                if (!admission.Allowed) return new(admission.Message!);
+                if (admission.Duplicate) return new("Essa mensagem já foi recebida. Confira seu histórico ou envie registrar para continuar sem repetir uma chamada à IA.");
+                usageContext.Admitted = true;
+            }
             var cutoff = DateTimeOffset.UtcNow.AddDays(-7);
             var history = user.ConsentAcceptedAt is null ? [] : await db.AssistantTurns
                 .Where(turn => turn.UserId == user.Id && turn.CreatedAt >= cutoff)
                 .OrderByDescending(turn => turn.CreatedAt).Take(4).ToListAsync();
-            var memory = string.Join("\n", history.AsEnumerable().Reverse().Select(turn => "Usuária: " + turn.Request + "\nLuma: " + turn.Reply));
+            var memory = string.Join("\n", history.AsEnumerable().Reverse().Select(turn => "Usuária: " + turn.Request[..Math.Min(turn.Request.Length, 600)] + "\nLuma: " + turn.Reply[..Math.Min(turn.Reply.Length, 600)]));
             reply = await assistant!.RespondAsync(new(incoming.Body, await AssistantContextAsync(user), Today(), memory),
                 async (name, arguments, ct) =>
                 {
                     ct.ThrowIfCancellationRequested();
                     var result = await ExecuteBoundToolAsync(user, incoming.Body, name, arguments, ct);
+                    if (result.Success && name == "record_period_start" && user.PendingAction == PendingActions.AwaitingFlowIntensity)
+                    {
+                        var flowSession = await db.StructuredRecordSessions.SingleOrDefaultAsync(x => x.UserId == user.Id, ct);
+                        if (flowSession is null) { flowSession = new() { UserId = user.Id }; db.StructuredRecordSessions.Add(flowSession); }
+                        flowSession.State = "record_flow_update|" + arguments.GetProperty("date").GetString();
+                        flowSession.ExpiresAt = dateProvider.UtcNow.AddHours(24);
+                    }
                     await db.SaveChangesAsync();
-                    return result with { State = await AssistantContextAsync(user) };
+                    var authoritativeWrite = name.StartsWith("record_", StringComparison.Ordinal)
+                        || name.StartsWith("update_", StringComparison.Ordinal) || name.StartsWith("complete_", StringComparison.Ordinal)
+                        || name.StartsWith("disable_", StringComparison.Ordinal) || name is "start_pregnancy_mode" or "confirm_pending_intent" or "generate_baby_size_image";
+                    return result with { State = await AssistantContextAsync(user), Fixed = result.Fixed || authoritativeWrite };
                 });
+            if (reply.RollbackWrites)
+            {
+                if (transaction is not null) await transaction.RollbackAsync();
+                db.ChangeTracker.Clear();
+                return new("Não concluí os registros desta mensagem. " + reply.Body);
+            }
         }
         db.AssistantTurns.Add(new AssistantTurnRecord
         {
@@ -93,6 +124,17 @@ public sealed partial class ConversationService
             today = Today(), name = user.DisplayName, stage = user.OnboardingStep, pending_action = user.PendingAction,
             consent = user.ConsentAcceptedAt is not null, adult = user.IsAdultConfirmed,
             subscription,
+            usage_policy = usage is null ? null : new
+            {
+                basic_daily_messages = usage.Policy.BasicDailyMessages,
+                essential_daily_messages = usage.Policy.EssentialDailyMessages,
+                monthly_message_cap = false,
+                monthly_audio_seconds = usage.Policy.MonthlyAudioSeconds,
+                max_audio_seconds = usage.Policy.MaxAudioSeconds,
+                monthly_images = usage.Policy.MonthlyImages,
+                resets_time_zone = usage.Policy.TimeZone,
+                records_without_ai = "registrar"
+            },
             preferences = user.ConsentAcceptedAt is null || user.Preference is null ? null : new
             {
                 user.Preference.LastPeriodStartDate, user.Preference.AverageCycleLength,
@@ -121,6 +163,7 @@ public sealed partial class ConversationService
             return new(false, "Por segurança, não posso continuar esse cadastro para menores de 18 anos.", true);
         if (name == "get_user_profile")
             return new(true, await AssistantContextAsync(user), ContextOnly: true);
+        if (name == "get_usage_summary") return new(true, await BuildUsageReplyAsync(), true);
         if (name == "confirm_pending_intent")
         {
             if (user.OnboardingStep != OnboardingSteps.Completed) return new(false, NextOnboardingPrompt(user, null));
@@ -188,6 +231,13 @@ public sealed partial class ConversationService
         if (name == "get_pregnancy_due_date") return new(true, await BuildPregnancyDueDateReplyAsync(user.Id));
         if (name == "get_pregnancy_weeks") return new(true, await BuildPregnancyWeeksReplyAsync(user.Id, today));
         if (name == "get_fertile_window") return new(true, BuildFertileWindowReply(user, today));
+        if (name == "record_period_end" && data.Date is { } endDate)
+        {
+            var cycle = await db.Cycles.Where(x => x.UserId == user.Id && x.Status == CycleStatus.Ongoing)
+                .OrderByDescending(x => x.StartDate).FirstOrDefaultAsync(ct);
+            if (cycle is not null && endDate < cycle.StartDate)
+                return new(false, "A data de término ficou antes do início da menstruação. Pode confirmar as datas?");
+        }
         if (name == "start_pregnancy_mode" && data.GestationalWeeks is null && data.LastPeriodDate is null && data.EstimatedDueDate is null)
             return new(false, "Obrigada por me contar. Você sabe de quantas semanas está, a DPP informada no pré-natal ou a data da última menstruação?");
         if (name == "update_notification_preferences")

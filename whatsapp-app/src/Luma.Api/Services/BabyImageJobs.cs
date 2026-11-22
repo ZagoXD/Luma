@@ -14,7 +14,7 @@ public interface IBabyImageJobQueue
 
 public sealed class BabyImageJobQueue : IBabyImageJobQueue
 {
-    private readonly Channel<BabyImageJob> _channel = Channel.CreateUnbounded<BabyImageJob>(new UnboundedChannelOptions
+    private readonly Channel<BabyImageJob> _channel = Channel.CreateBounded<BabyImageJob>(new BoundedChannelOptions(16)
     {
         SingleReader = true,
         SingleWriter = false
@@ -85,6 +85,12 @@ public sealed class BabyImageWorker(
             && s.PlanCode == "essencial" && s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow
             && (s.Status == SubscriptionStatuses.Active || s.Status == SubscriptionStatuses.Canceled), cancellationToken);
         if (!await HasAccess()) return;
+
+        var account = await db.AccountUsers.AsNoTracking().SingleOrDefaultAsync(x => x.PhoneHash == phoneHash && x.DeletionRequestedAt == null, cancellationToken);
+        if (account is null) return;
+        var usageContext = scope.ServiceProvider.GetRequiredService<UsageContext>();
+        usageContext.AccountId = account.Id;
+        usageContext.Plan = "essencial";
 
         var result = await imageService.GenerateAsync(development, job.UserId, cancellationToken);
         if (result.PublicUrl is null)

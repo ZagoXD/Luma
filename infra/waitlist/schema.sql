@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS leads (
   id TEXT PRIMARY KEY,
+  -- Legacy column name: email HMAC, or HMAC of whatsapp:+55... for phone-only leads.
   email_hash TEXT NOT NULL UNIQUE,
   encrypted_contact TEXT NOT NULL,
   consent_version TEXT NOT NULL,

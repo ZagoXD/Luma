@@ -28,8 +28,14 @@ public sealed class AssistantFlowTests
                 await setup.Database.ExecuteSqlRawAsync(setup.Database.GenerateCreateScript());
         }
         var phone = "+55169" + Random.Shared.Next(10000000, 99999999);
-        var user = new LumaUser { PhoneNumber = phone, OnboardingStep = OnboardingSteps.Completed,
-            IsAdultConfirmed = true, ConsentAcceptedAt = DateTimeOffset.UtcNow, Preference = new() };
+        var user = new LumaUser
+        {
+            PhoneNumber = phone,
+            OnboardingStep = OnboardingSteps.Completed,
+            IsAdultConfirmed = true,
+            ConsentAcceptedAt = DateTimeOffset.UtcNow,
+            Preference = new()
+        };
         setup.Users.Add(user);
         await setup.SaveChangesAsync();
         var model = new ScriptedModel();
@@ -49,8 +55,14 @@ public sealed class AssistantFlowTests
     {
         await using var db = CreateDb();
         var user = await AddUser(db);
-        db.AccountSubscriptions.AddRange(new AccountSubscription { PhoneNumber = user.PhoneNumber, PlanCode = "essencial",
-            Status = SubscriptionStatuses.Active, BillingInterval = "annual", CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30) },
+        db.AccountSubscriptions.AddRange(new AccountSubscription
+        {
+            PhoneNumber = user.PhoneNumber,
+            PlanCode = "essencial",
+            Status = SubscriptionStatuses.Active,
+            BillingInterval = "annual",
+            CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30)
+        },
             new AccountSubscription { PhoneNumber = "+5516999998888", PlanCode = "other-user-private-plan" });
         await db.SaveChangesAsync();
         var model = new ScriptedModel();
@@ -124,7 +136,7 @@ public sealed class AssistantFlowTests
         Assert.Single(await db.Cycles.ToListAsync());
         Assert.Single(await db.CycleEvents.Where(item => item.Type == CycleEventTypes.PeriodStart).ToListAsync());
         Assert.Equal(new DateOnly(2026, 11, 9), user.Preference!.LastPeriodStartDate);
-        Assert.Equal(2, model.Requests);
+        Assert.Equal(1, model.Requests);
     }
 
     [Fact]
@@ -181,14 +193,25 @@ public sealed class AssistantFlowTests
     {
         await using var db = CreateDb();
         var user = await AddUser(db);
-        db.AccountSubscriptions.Add(new AccountSubscription { PhoneNumber = user.PhoneNumber,
-            PlanCode = "essencial", Status = SubscriptionStatuses.Active,
-            CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30) });
+        db.AccountSubscriptions.Add(new AccountSubscription
+        {
+            PhoneNumber = user.PhoneNumber,
+            PlanCode = "essencial",
+            Status = SubscriptionStatuses.Active,
+            CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30)
+        });
         await db.SaveChangesAsync();
         var model = new ScriptedModel();
-        model.Call("update_notification_preferences", new { contraceptive_type = "pill",
-            period_reminder_enabled = true, contraceptive_reminder_enabled = true, symptom_checkin_enabled = true,
-            period_reminder_time = "09:30", contraceptive_reminder_time = "07:00", symptom_checkin_time = "20:00" });
+        model.Call("update_notification_preferences", new
+        {
+            contraceptive_type = "pill",
+            period_reminder_enabled = true,
+            contraceptive_reminder_enabled = true,
+            symptom_checkin_enabled = true,
+            period_reminder_time = "09:30",
+            contraceptive_reminder_time = "07:00",
+            symptom_checkin_time = "20:00"
+        });
         await CreateService(db, model).HandleIncomingMessageAsync(new("test", user.PhoneNumber, "quero os lembretes", "essential"));
         var preference = await db.NotificationPreferences.SingleAsync();
         Assert.Equal(new TimeOnly(9, 30), preference.PeriodReminderTime);
@@ -221,20 +244,130 @@ public sealed class AssistantFlowTests
         Assert.Single(await db.CycleEvents.ToListAsync());
     }
 
+    [Fact]
+    public async Task Exhausted_AI_quota_still_allows_records_corrections_and_replay_without_model_calls()
+    {
+        var options = new DbContextOptionsBuilder<LumaDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new LumaDbContext(options);
+        var user = await AddUser(db);
+        var account = new AccountUser { PhoneNumber = user.PhoneNumber, Email = "test@example.invalid" };
+        db.AccountUsers.Add(account);
+        db.AccountSubscriptions.Add(new AccountSubscription
+        {
+            AccountUserId = account.Id,
+            PhoneNumber = user.PhoneNumber,
+            PlanCode = "basico",
+            Status = SubscriptionStatuses.Active,
+            CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30)
+        });
+        await db.SaveChangesAsync();
+        var ledger = new UsageLedger(options, Options.Create(new UsageOptions { BasicDailyMessages = 1 }), TimeProvider.System);
+        var model = new ScriptedModel();
+        model.Call("get_last_period", new { });
+        var service = CreateService(db, model, ledger, new UsageContext());
+        await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, "qual minha última menstruação?", "quota-1"));
+        var calls = model.Requests;
+        var blocked = await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, "outra pergunta", "quota-2"));
+        Assert.Contains("limite", blocked);
+        Assert.Equal(calls, model.Requests);
+        Assert.Contains("1 de 1", await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, "meu uso", "usage-without-ai")));
+        Assert.Equal(calls, model.Requests);
+        foreach (var text in new[] { "registrar", "1", "ontem", "1" })
+            await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, text, Guid.NewGuid().ToString()));
+        Assert.Single(await db.CycleEvents.Where(x => x.Type == CycleEventTypes.FlowUpdate).ToListAsync());
+        Assert.Null(user.PendingAction);
+        Assert.Equal(new DateOnly(2026, 11, 9), (await db.Cycles.SingleAsync()).StartDate);
+        foreach (var text in new[] { "registrar", "7" })
+            await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, text, Guid.NewGuid().ToString()));
+        var correction = new IncomingMessage("test", user.PhoneNumber, "hoje", "correct-once");
+        var corrected = await service.HandleIncomingMessageAsync(correction);
+        Assert.Contains("Corrigi", corrected);
+        Assert.Equal(corrected, await service.HandleIncomingMessageAsync(correction));
+        Assert.Equal(new DateOnly(2026, 11, 10), user.Preference!.LastPeriodStartDate);
+        Assert.Single(await db.Cycles.ToListAsync());
+        Assert.Equal(calls, model.Requests);
+    }
+
+    [Fact]
+    public async Task Obvious_external_topics_do_not_invoke_the_model()
+    {
+        await using var db = CreateDb();
+        var user = await AddUser(db);
+        var model = new ScriptedModel();
+        var reply = await CreateService(db, model).HandleIncomingMessageAsync(new("test", user.PhoneNumber, "qual a previsão do tempo?", "weather"));
+        Assert.Contains("ciclo menstrual", reply);
+        Assert.Equal(0, model.Requests);
+    }
+
+    [Fact]
+    public async Task Essential_notification_menu_saves_time_and_timezone_without_AI()
+    {
+        await using var db = CreateDb();
+        var user = await AddUser(db);
+        db.AccountSubscriptions.Add(new AccountSubscription { PhoneNumber = user.PhoneNumber, PlanCode = "essencial", Status = SubscriptionStatuses.Active, CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30) });
+        await db.SaveChangesAsync();
+        var model = new ScriptedModel();
+        var service = CreateService(db, model);
+        foreach (var text in new[] { "registrar", "8", "3", "1", "1", "07:00", "6", "America/Manaus" })
+            await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, text, Guid.NewGuid().ToString()));
+        var settings = await db.NotificationPreferences.SingleAsync();
+        Assert.True(settings.ContraceptiveReminderEnabled);
+        Assert.Equal(new TimeOnly(7, 0), settings.ContraceptiveReminderTime);
+        Assert.Equal("America/Manaus", settings.TimeZone);
+        Assert.Equal("pill", user.Preference!.ContraceptiveType);
+        Assert.Equal(0, model.Requests);
+    }
+
+    [PostgresFact]
+    public async Task Batch_rolls_back_the_first_record_when_a_later_record_is_inconsistent()
+    {
+        var options = new DbContextOptionsBuilder<LumaDbContext>().UseNpgsql(Environment.GetEnvironmentVariable("LUMA_INTEGRATION_DATABASE")).Options;
+        await using var db = new LumaDbContext(options);
+        var phone = "+55169" + Random.Shared.Next(10000000, 99999999);
+        var user = new LumaUser
+        {
+            PhoneNumber = phone,
+            OnboardingStep = OnboardingSteps.Completed,
+            ConsentAcceptedAt = DateTimeOffset.UtcNow,
+            IsAdultConfirmed = true,
+            Preference = new()
+        };
+        db.Users.Add(user); await db.SaveChangesAsync();
+        var model = new ScriptedModel();
+        model.Call("record_actions", new
+        {
+            actions = new[] {
+            new { tool = "record_period_start", arguments = new { date = "2026-11-10" } },
+            new { tool = "record_period_end", arguments = new { date = "2026-11-09" } } }
+        });
+        var reply = await CreateService(db, model).HandleIncomingMessageAsync(new("test", phone, "começou hoje e terminou ontem", Guid.NewGuid().ToString()));
+        Assert.Contains("Não concluí", reply);
+        Assert.Empty(await db.Cycles.Where(x => x.UserId == user.Id).ToListAsync());
+        Assert.Empty(await db.CycleEvents.Where(x => x.UserId == user.Id).ToListAsync());
+    }
+
     private static LumaDbContext CreateDb() => new(new DbContextOptionsBuilder<LumaDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private static async Task<LumaUser> AddUser(LumaDbContext db, string step = OnboardingSteps.Completed)
     {
-        var user = new LumaUser { PhoneNumber = "+5516992000042", DisplayName = "Nay", IsAdultConfirmed = true,
-            ConsentAcceptedAt = DateTimeOffset.UtcNow, OnboardingStep = step, Preference = new() };
+        var user = new LumaUser
+        {
+            PhoneNumber = "+5516992000042",
+            DisplayName = "Nay",
+            IsAdultConfirmed = true,
+            ConsentAcceptedAt = DateTimeOffset.UtcNow,
+            OnboardingStep = step,
+            Preference = new()
+        };
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;
     }
 
-    private static ConversationService CreateService(LumaDbContext db, IAssistantModel model) => new(
+    private static ConversationService CreateService(LumaDbContext db, IAssistantModel model, UsageLedger? ledger = null, UsageContext? context = null) => new(
         db, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Luma:RequireActiveSubscription"] = "false" }).Build(),
         null!, null!, new NullLumaToolAgent(), new PassthroughLumaResponseGenerator(), new FixedDate(), NullLogger<ConversationService>.Instance,
-        assistant: new AssistantOrchestrator(model, Options.Create(new AssistantOptions { Enabled = true }), NullLogger<AssistantOrchestrator>.Instance));
+        assistant: new AssistantOrchestrator(model, Options.Create(new AssistantOptions { Enabled = true }), NullLogger<AssistantOrchestrator>.Instance),
+        usage: ledger, usageContext: context);
 
     private sealed class FixedDate : IDateProvider { public DateTimeOffset UtcNow => new(2026, 11, 10, 15, 0, 0, TimeSpan.Zero); }
     private sealed class ScriptedModel : IAssistantModel
@@ -245,7 +378,10 @@ public sealed class AssistantFlowTests
         public bool FailAfterCall { get; init; }
         public void Call(string name, object arguments) => _calls.Enqueue(JsonSerializer.SerializeToElement(new
         {
-            type = "function_call", name, call_id = Guid.NewGuid().ToString(), arguments = JsonSerializer.Serialize(arguments)
+            type = "function_call",
+            name,
+            call_id = Guid.NewGuid().ToString(),
+            arguments = JsonSerializer.Serialize(arguments)
         }));
         public Task<AssistantModelTurn> CompleteAsync(IReadOnlyList<object> input, IReadOnlyList<Tool> tools, bool requireTool, CancellationToken ct)
         {

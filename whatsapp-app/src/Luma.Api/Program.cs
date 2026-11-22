@@ -8,6 +8,7 @@ using Luma.Api.Services.Assistant;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Luma.Api.Billing;
+using Luma.Api.Fiscal;
 using LumaSubscriptionStatuses = Luma.Api.Models.SubscriptionStatuses;
 
 if (args.Length == 2 && args[0] == "--knowledge-release")
@@ -60,6 +61,20 @@ builder.Services.AddHttpClient<IAssistantModel, OpenAiAssistantModel>(http => ht
 builder.Services.AddHttpClient<IEmbeddingClient, OpenAiEmbeddingClient>(http => http.Timeout = TimeSpan.FromSeconds(20));
 builder.Services.AddScoped<AssistantOrchestrator>();
 builder.Services.AddScoped<KnowledgeStore>();
+builder.Services.AddOptions<UsageOptions>().Bind(builder.Configuration.GetSection("Usage"))
+    .Validate(x => x.BasicDailyMessages > 0 && x.EssentialDailyMessages >= x.BasicDailyMessages
+        && x.OnboardingDailyMessages > 0 && x.MonthlyAudioSeconds > 0 && x.MaxAudioSeconds > 0
+        && x.MonthlyImages > 0 && TimeZoneInfo.TryFindSystemTimeZoneById(x.TimeZone, out _), "Limites ou fuso de uso inválidos.")
+    .ValidateOnStart();
+builder.Services.AddScoped<UsageLedger>();
+builder.Services.AddScoped<UsageContext>();
+builder.Services.AddScoped<IAudioPreparer, FfmpegAudioPreparer>();
+builder.Services.AddSingleton<AudioProcessingGate>();
+builder.Services.AddScoped<FiscalOutbox>();
+builder.Services.AddScoped<FiscalProcessor>();
+builder.Services.AddSingleton<IFiscalGateway, DisabledFiscalGateway>();
+if (builder.Configuration.GetValue("Fiscal:EmissionEnabled",false))
+    throw new InvalidOperationException("A emissão fiscal ainda não possui emissor configurado. Mantenha Fiscal:EmissionEnabled=false.");
 builder.Services.Configure<R2Options>(builder.Configuration.GetSection("R2"));
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection("Notifications"));
 builder.Services.Configure<ElevenLabsOptions>(builder.Configuration.GetSection("ElevenLabs"));
@@ -338,6 +353,16 @@ app.MapPost("/account/logout", async (RefreshAccountRequest input, HttpRequest r
     return Results.Ok(new { ok = true });
 });
 
+app.MapGet("/account/usage", async (HttpRequest request, LumaDbContext db, UsageLedger usage, CancellationToken ct) =>
+{
+    request.HttpContext.Response.Headers.CacheControl = "no-store";
+    var account = await GetAuthenticatedAccountAsync(request, db);
+    if (account is null) return Results.Unauthorized();
+    var subscription = await GetVisibleSubscriptionAsync(db, account.PhoneNumber);
+    if (subscription is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
+    return Results.Ok(await usage.SnapshotAsync(account.Id, subscription.PlanCode, ct));
+});
+
 app.MapGet("/account/me", async (HttpRequest request, LumaDbContext db, ISubscriptionGateway gateway) =>
 {
     var account = await GetAuthenticatedAccountAsync(request, db);
@@ -591,6 +616,9 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     MessageIngressGuard ingressGuard,
     IWhatsAppAudioTranscriptionService audioTranscription,
     IWhatsAppTypingIndicatorSender typingIndicators,
+    IAccountRequestLimiter requestLimiter,
+    UsageLedger usage,
+    UsageContext usageContext,
     LumaDbContext db,
     IConfiguration configuration) =>
 {
@@ -619,6 +647,7 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     var from = form["From"].ToString();
     var body = form["Body"].ToString();
     var messageSid = form["MessageSid"].ToString();
+    if (string.IsNullOrWhiteSpace(messageSid)) return Results.BadRequest("Missing Twilio MessageSid field.");
 
     if (string.IsNullOrWhiteSpace(from))
     {
@@ -628,10 +657,12 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     var scope = scopeDetector.DetectTwilio(form);
     if (scope.IsGroup)
     {
+        if (!await requestLimiter.AllowAsync("group-warning", from, 1, TimeSpan.FromDays(1), request.HttpContext.RequestAborted))
+            return TwilioEmptyReply();
         db.BlockedConversations.Add(new BlockedConversation
         {
             Provider = "twilio",
-            From = PhoneNumber.Normalize(from),
+            From = from,
             Reason = scope.Reason
         });
         await db.SaveChangesAsync();
@@ -649,6 +680,10 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
     }
 
     await using var lease = decision.Lease;
+    var contentKind = IncomingContentPolicy.Classify(form);
+    if (contentKind is IncomingContentKind.Unsupported or IncomingContentKind.UnsupportedWithCaption)
+        return TwilioXmlReply(contentKind == IncomingContentKind.Unsupported ? IncomingContentPolicy.UnsupportedReply : IncomingContentPolicy.CaptionReply);
+    if (contentKind == IncomingContentKind.Empty) return TwilioEmptyReply();
     _ = typingIndicators.TrySendAsync(messageSid, CancellationToken.None);
 
     if (string.IsNullOrWhiteSpace(body))
@@ -664,6 +699,12 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
             {
                 return TwilioXmlReply(await BuildFeatureUpgradeReplyAsync(db, configuration, normalizedFrom, "mensagens por áudio"));
             }
+            var phoneHash = PrivacyRuntime.LookupHash(normalizedFrom, "account.phone");
+            var account = await db.AccountUsers.AsNoTracking().SingleOrDefaultAsync(x => x.PhoneHash == phoneHash && x.DeletionRequestedAt == null);
+            if (account is null) return TwilioEmptyReply();
+            usageContext.AccountId = account.Id;
+            usageContext.Plan = "essencial";
+            usageContext.MessageId = messageSid;
         }
 
         var audio = await audioTranscription.TryTranscribeAsync(form, request.HttpContext.RequestAborted);
@@ -673,7 +714,10 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
         }
         else if (audio.Attempted)
         {
-            return TwilioXmlReply("Eu recebi seu áudio, mas não consegui entender com segurança agora. Pode tentar mandar de novo ou escrever a mensagem em texto?");
+            if (audio.ErrorMessage == "audio_busy") return TwilioXmlReply("Estou processando outros áudios agora. Tente novamente em instantes ou escreva sua mensagem.");
+            return TwilioXmlReply(audio.ErrorMessage is "audio_limit" or "daily_limit"
+                ? "Este áudio excede seus limites de uso: até 60 segundos por áudio e 10 minutos por mês, além da cota diária de IA. Você pode escrever ou enviar *registrar* para usar o menu sem IA."
+                : "Eu recebi seu áudio, mas não consegui entender com segurança agora. Pode tentar mandar de novo ou escrever a mensagem em texto?");
         }
         else if (int.TryParse(form["NumMedia"].ToString(), out var mediaCount) && mediaCount > 0)
         {
@@ -1048,6 +1092,7 @@ WHERE "PhoneNumber" ~ '^\+[1-9][0-9]{{9,10}}$' AND "PhoneNumber" NOT LIKE '+55%'
 
     await BillingSchema.EnsureAsync(db);
     await AuthSecuritySchema.EnsureAsync(db);
+    await UsageSchema.EnsureAsync(db);
     await BackfillPrivacyIndexesAsync(db);
 }
 
