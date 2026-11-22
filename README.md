@@ -13,6 +13,8 @@ e [preparação fiscal](specs/preparacao-fiscal.md). A emissão de notas permane
 
 A implantação AWS usa dev e produção isolados em Docker, com PostgreSQL/pgvector e Redis próprios, segredos no AWS Secrets Manager, acesso HTTPS pelo Cloudflare Tunnel e backups privados. O CI da `main` libera o deploy automático de dev; produção é promovida manualmente com as mesmas imagens validadas.
 
+Com a AWS pausada, a execução manual de `Deploy AWS` aceita `stage_only=true` e um SHA explícito. Ela prepara o canal assinado sem ligar instâncias nem declarar validação de saúde. Para produção, exige CI aprovado e os mesmos artefatos do canal assinado de dev. O atualizador instala a versão após a próxima inicialização; a validação em execução continua pendente até esse momento.
+
 Consulte [Operação e migração AWS](specs/deploy-aws-luma.md) para arquitetura, custos do plano FREE, deploy, rollback, retorno ao computador e credenciais pendentes. A branch `backup/local-cloudflared` preserva o ambiente local; seus volumes permanecem no computador.
 
 O SEO técnico, os ícones e a separação de indexação entre produção/dev estão em [SEO e indexação](specs/seo-e-indexacao.md). A verificação do domínio e a solicitação de indexação no Google Search Console dependem do responsável.
