@@ -2,6 +2,7 @@ using Luma.Api.Models;
 using Luma.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Luma.Api.Fiscal;
 
 namespace Luma.Api.Data;
 
@@ -29,6 +30,11 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<BlockedConversation> BlockedConversations => Set<BlockedConversation>();
     public DbSet<AssistantTurnRecord> AssistantTurns => Set<AssistantTurnRecord>();
+    public DbSet<UsageBucket> UsageBuckets => Set<UsageBucket>();
+    public DbSet<UsageReceipt> UsageReceipts => Set<UsageReceipt>();
+    public DbSet<UsageCall> UsageCalls => Set<UsageCall>();
+    public DbSet<FiscalDocument> FiscalDocuments => Set<FiscalDocument>();
+    public DbSet<StructuredRecordSession> StructuredRecordSessions => Set<StructuredRecordSession>();
 
     public override int SaveChanges()
     {
@@ -44,6 +50,11 @@ public sealed class LumaDbContext(DbContextOptions<LumaDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<UsageBucket>(e=>{e.ToTable("usage_buckets");e.HasKey(x=>x.Key);e.HasIndex(x=>x.AccountId);});
+        modelBuilder.Entity<UsageReceipt>(e=>{e.ToTable("usage_receipts");e.HasKey(x=>x.Id);e.HasIndex(x=>new{x.AccountId,x.CreatedAt});});
+        modelBuilder.Entity<UsageCall>(e=>{e.ToTable("usage_calls");e.HasKey(x=>x.Id);e.Property(x=>x.EstimatedUsd).HasPrecision(18,8);e.Property(x=>x.ReferenceCostUsd).HasPrecision(18,8);e.HasIndex(x=>new{x.AccountId,x.CreatedAt});});
+        modelBuilder.Entity<FiscalDocument>(e=>{e.ToTable("fiscal_documents");e.HasKey(x=>x.Id);e.HasIndex(x=>x.PaymentId).IsUnique();e.Property(x=>x.Amount).HasPrecision(18,2);});
+        modelBuilder.Entity<StructuredRecordSession>(e=>{e.ToTable("structured_record_sessions");e.HasKey(x=>x.UserId);e.Property(x=>x.State).HasConversion(ProtectedString("structured.session"));e.HasOne<LumaUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Cascade);});
         modelBuilder.Entity<AuthRateLimit>(entity => {
             entity.ToTable("auth_rate_limits"); entity.HasKey(x => x.Key);
             entity.Property(x => x.Key).HasMaxLength(128); entity.HasIndex(x => x.ExpiresAt);

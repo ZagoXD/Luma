@@ -114,6 +114,8 @@ export const plans: Record<PlanCode, {
       "Registro de menstruação, sintomas, humor e relação sexual",
       "Histórico e calendário visual do ciclo",
       "Previsões estimadas de menstruação",
+      "Até 10 mensagens com IA por dia, sem cota mensal",
+      "Menu de registros disponível após a cota de IA",
     ],
   },
   essencial: {
@@ -123,9 +125,10 @@ export const plans: Record<PlanCode, {
     annualEquivalent: "equivale a R$ 9,90/mês",
     benefits: [
       "Tudo do plano Básico",
-      "Mensagens por áudio no WhatsApp",
+      "Até 20 mensagens com IA por dia, sem cota mensal",
+      "Áudios de até 60 segundos: 10 minutos por mês",
       "Notificações automáticas e lembretes",
-      "Imagens educativas do bebê e outros recursos visuais",
+      "Até 2 imagens educativas por mês",
     ],
   },
 };

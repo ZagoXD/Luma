@@ -48,8 +48,16 @@ services:
       Luma__RateLimit__WindowSeconds: ${LUMA_RATE_LIMIT_WINDOW_SECONDS:-30}
       Luma__RateLimit__MaxMessages: ${LUMA_RATE_LIMIT_MAX_MESSAGES:-5}
       Luma__RateLimit__CooldownSeconds: ${LUMA_RATE_LIMIT_COOLDOWN_SECONDS:-60}
-      Luma__MessageLockSeconds: ${LUMA_MESSAGE_LOCK_SECONDS:-25}
+      Luma__MessageLockSeconds: ${LUMA_MESSAGE_LOCK_SECONDS:-90}
       Luma__DeduplicationSeconds: ${LUMA_DEDUPLICATION_SECONDS:-300}
+      Usage__BasicDailyMessages: ${USAGE_BASIC_DAILY_MESSAGES:-10}
+      Usage__EssentialDailyMessages: ${USAGE_ESSENTIAL_DAILY_MESSAGES:-20}
+      Usage__OnboardingDailyMessages: ${USAGE_ONBOARDING_DAILY_MESSAGES:-12}
+      Usage__MonthlyAudioSeconds: ${USAGE_MONTHLY_AUDIO_SECONDS:-600}
+      Usage__MaxAudioSeconds: ${USAGE_MAX_AUDIO_SECONDS:-60}
+      Usage__MonthlyImages: ${USAGE_MONTHLY_IMAGES:-2}
+      Usage__TimeZone: ${USAGE_TIME_ZONE:-America/Sao_Paulo}
+      Fiscal__EmissionEnabled: ${FISCAL_EMISSION_ENABLED:-false}
       Privacy__EncryptionEnabled: ${PRIVACY_ENCRYPTION_ENABLED:-true}
       Privacy__EncryptionKey: ${PRIVACY_ENCRYPTION_KEY:-}
       Privacy__LookupPepper: ${PRIVACY_LOOKUP_PEPPER:-}
@@ -91,7 +99,8 @@ services:
       Rag__Dimensions: ${LUMA_RAG_DIMENSIONS:-512}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OpenAI__Model: ${OPENAI_MODEL:-gpt-5.4-mini}
-      OpenAI__ImageModel: ${OPENAI_IMAGE_MODEL:-gpt-image-1}
+      OpenAI__ImageModel: ${OPENAI_IMAGE_MODEL:-gpt-image-2.6-flare}
+      OpenAI__ImageQuality: ${OPENAI_IMAGE_QUALITY:-low}
       OpenAI__TimeoutSeconds: ${OPENAI_TIMEOUT_SECONDS:-12}
       OpenAI__MaxOutputTokens: ${OPENAI_MAX_OUTPUT_TOKENS:-700}
       OpenAI__ReasoningEffort: ${OPENAI_REASONING_EFFORT:-none}

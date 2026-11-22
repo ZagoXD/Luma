@@ -11,9 +11,11 @@ public sealed record ToolOutcome(bool Success, string Message, bool Fixed = fals
 
 public static class LumaToolCatalog
 {
+    public static readonly HashSet<string> BatchRecordTools = ["record_period_start", "record_period_end", "record_flow_update", "record_symptom", "record_mood", "record_sexual_activity"];
     private static readonly Dictionary<string, (string Description, string[] Fields, string[] Required)> Definitions = new()
     {
         ["get_user_profile"] = ("Consulta dados pessoais autorizados e preferências menstruais reais.", [], []),
+        ["get_usage_summary"] = ("Consulta limites e consumo real de IA, áudio e imagens da conta atual. Não estime contagens pela conversa.", [], []),
         ["get_onboarding_state"] = ("Consulta a etapa atual, o próximo dado necessário e intenções aguardando confirmação.", [], []),
         ["complete_onboarding_step"] = ("Registra somente dados explicitamente informados no cadastro; não infira idade ou consentimento a partir do nome. Se a usuária não lembra a DUM, use last_period_unknown=true.", ["display_name", "consent_accepted", "is_adult_confirmed", "date", "last_period_unknown", "average_cycle_length", "average_period_length", "contraceptive_type"], []),
         ["confirm_pending_intent"] = ("Confirma ou descarta a intenção pendente após cadastro concluído, só mediante resposta explícita da usuária.", ["confirmed"], ["confirmed"]),
@@ -69,10 +71,29 @@ public static class LumaToolCatalog
                 ["additionalProperties"] = false
             })
         };
-    }).ToArray();
+    }).Append(new Tool { Name = "record_actions", Description = "Registra até três ações explicitamente relatadas na mesma mensagem. Cada ação contém tool e arguments. Não inclua ações inferidas.",
+        InputSchema = JsonSerializer.SerializeToElement(new {type="object",additionalProperties=false,required=new[]{"actions"},properties=new{
+            actions=new{type="array",minItems=1,maxItems=3,items=new{type="object",additionalProperties=false,required=new[]{"tool","arguments"},properties=new{
+                tool=new{type="string",@enum=BatchRecordTools.ToArray()},arguments=new{type="object"}
+            }}}
+        }}) }).ToArray();
 
     public static string? Validate(string name, JsonElement arguments)
     {
+        if (name == "record_actions")
+        {
+            if (arguments.ValueKind != JsonValueKind.Object || arguments.EnumerateObject().Count()!=1
+                || !arguments.TryGetProperty("actions",out var actions) || actions.ValueKind!=JsonValueKind.Array
+                || actions.GetArrayLength() is < 1 or > 3) return "Envie de uma a três ações para registrar.";
+            foreach (var action in actions.EnumerateArray())
+            {
+                if (action.ValueKind!=JsonValueKind.Object || action.EnumerateObject().Count()!=2
+                    || !action.TryGetProperty("tool",out var tool) || tool.ValueKind!=JsonValueKind.String || !BatchRecordTools.Contains(tool.GetString()!)
+                    || !action.TryGetProperty("arguments",out var fields)) return "Ação não permitida neste registro.";
+                if (Validate(tool.GetString()!,fields) is {} error) return error;
+            }
+            return null;
+        }
         if (!Definitions.TryGetValue(name, out var definition) || arguments.ValueKind != JsonValueKind.Object)
             return "Ferramenta ou argumentos inválidos.";
         if (arguments.EnumerateObject().Any(field => !definition.Fields.Contains(field.Name))

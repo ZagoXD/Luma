@@ -13,7 +13,7 @@ public sealed class MessageIngressOptions
     public int WindowSeconds { get; set; } = 30;
     public int MaxMessages { get; set; } = 5;
     public int CooldownSeconds { get; set; } = 60;
-    public int MessageLockSeconds { get; set; } = 25;
+    public int MessageLockSeconds { get; set; } = 90;
     public int DeduplicationSeconds { get; set; } = 300;
 }
 
@@ -89,7 +89,7 @@ public sealed class MessageIngressGuard(
         WindowSeconds = configuration.GetValue("Luma:RateLimit:WindowSeconds", 30),
         MaxMessages = configuration.GetValue("Luma:RateLimit:MaxMessages", 5),
         CooldownSeconds = configuration.GetValue("Luma:RateLimit:CooldownSeconds", 60),
-        MessageLockSeconds = configuration.GetValue("Luma:MessageLockSeconds", 25),
+        MessageLockSeconds = configuration.GetValue("Luma:MessageLockSeconds", 90),
         DeduplicationSeconds = configuration.GetValue("Luma:DeduplicationSeconds", 300)
     };
 
@@ -104,8 +104,8 @@ public sealed class MessageIngressGuard(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Ingress guard failed. Allowing message without Redis controls.");
-            return MessageIngressDecision.Allow(null);
+            logger.LogWarning(ex, "Ingress guard failed. Blocking processing to preserve limits.");
+            return MessageIngressDecision.Block("Não consegui validar o envio agora. Aguarde alguns instantes antes de tentar novamente.");
         }
     }
 

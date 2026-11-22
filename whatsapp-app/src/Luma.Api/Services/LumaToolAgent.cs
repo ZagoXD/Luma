@@ -45,6 +45,7 @@ public sealed class LumaToolCall
     public string? PeriodReminderTime { get; set; }
     public string? ContraceptiveReminderTime { get; set; }
     public string? SymptomCheckinTime { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("timezone")]
     public string? TimeZone { get; set; }
     public int? GestationalWeeks { get; set; }
     public DateOnly? LastPeriodDate { get; set; }

@@ -9,7 +9,9 @@ namespace Luma.Api.Services;
 public sealed class OpenAiResponsesClient(
     HttpClient httpClient,
     IOptions<OpenAiOptions> options,
-    ILogger<OpenAiResponsesClient> logger)
+    ILogger<OpenAiResponsesClient> logger,
+    UsageLedger? ledger = null,
+    UsageContext? usageContext = null)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -38,6 +40,7 @@ public sealed class OpenAiResponsesClient(
         request.Content = JsonContent.Create(new
         {
             model = _options.Model,
+            store = false,
             input = new object[]
             {
                 new { role = "developer", content = developerPrompt },
@@ -60,15 +63,17 @@ public sealed class OpenAiResponsesClient(
 
         try
         {
-            var response = await httpClient.SendAsync(request, linked.Token);
+            var callId = ledger is null ? null : await ledger.StartCallAsync(usageContext, "openai-legacy", _options.Model, 0, linked.Token);
+            using var response = await httpClient.SendAsync(request, linked.Token);
             if (!response.IsSuccessStatusCode)
             {
-                var error = await response.Content.ReadAsStringAsync(linked.Token);
-                logger.LogWarning("OpenAI Responses API failed with status {StatusCode}: {Body}", response.StatusCode, error);
+                logger.LogWarning("OpenAI Responses API failed with status {StatusCode}.", response.StatusCode);
                 return default;
             }
 
             using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(linked.Token), cancellationToken: linked.Token);
+            if (ledger is not null && document.RootElement.TryGetProperty("usage", out var usage))
+                await ledger.CompleteCallAsync(callId, usage.GetProperty("input_tokens").GetInt32(), 0, usage.GetProperty("output_tokens").GetInt32(), null, linked.Token);
             var text = ExtractOutputText(document.RootElement);
             if (string.IsNullOrWhiteSpace(text))
             {

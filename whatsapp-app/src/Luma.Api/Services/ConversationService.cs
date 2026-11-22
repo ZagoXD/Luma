@@ -18,7 +18,9 @@ public sealed partial class ConversationService(
     IBabyImageService? babyImages = null,
     IBabyImageJobQueue? babyImageJobs = null,
     AssistantOrchestrator? assistant = null,
-    KnowledgeStore? knowledge = null)
+    KnowledgeStore? knowledge = null,
+    UsageLedger? usage = null,
+    UsageContext? usageContext = null)
 {
     private readonly bool _storeMessageBodies = configuration.GetValue("Luma:StoreMessageBodies", false);
     private readonly bool _requireActiveSubscription = configuration.GetValue("Luma:RequireActiveSubscription", false);
@@ -67,8 +69,20 @@ public sealed partial class ConversationService(
             Body = _storeMessageBodies ? incoming.Body : null
         });
 
-        var backendReply = await BuildReplyAsync(user, incoming.Body);
-        var reply = PortugueseReplyPolisher.Apply(await BuildFinalReplyAsync(user, incoming.Body, backendReply));
+        await BindUsageAsync(phone, incoming.ProviderMessageId ?? Guid.NewGuid().ToString());
+        if (usage is not null && _requireActiveSubscription && usageContext?.AccountId is null)
+            return new ConversationResult("Não consegui validar a conta vinculada a este número. Acesse seu perfil ou fale com o suporte.");
+        var structured = await TryStructuredRecordAsync(user, incoming.Body);
+        if (structured is null && usage is not null && usageContext?.AccountId is Guid accountId && !usageContext.Admitted)
+        {
+            var admission = await usage.ReserveAsync(accountId, usageContext.Plan, usageContext.MessageId,
+                user.OnboardingStep == OnboardingSteps.Completed ? "ai" : "onboarding", 1);
+            if (!admission.Allowed) return new ConversationResult(admission.Message!);
+            if (admission.Duplicate) return new ConversationResult("Essa mensagem já foi recebida. Confira seu histórico ou envie registrar para continuar.");
+        }
+        var backendReply = structured ?? (ConversationTopicPolicy.IsClearlyExternal(incoming.Body) ? ConversationTopicPolicy.Reply : await BuildReplyAsync(user, incoming.Body));
+        var reply = PortugueseReplyPolisher.Apply(structured is not null || backendReply == ConversationTopicPolicy.Reply
+            ? backendReply : await BuildFinalReplyAsync(user, incoming.Body, backendReply));
 
         db.Messages.Add(new ConversationMessage
         {
@@ -327,6 +341,7 @@ public sealed partial class ConversationService(
                 }
 
                 await AddOrReplaceFlowEventAsync(user.Id, await GetCurrentCycleIdAsync(user.Id), tool.Date ?? today, tool.FlowIntensity);
+                if (user.PendingAction == PendingActions.AwaitingFlowIntensity) user.PendingAction = null;
                 return tool.FlowIntensity == "unknown"
                     ? "Tudo bem, deixei o fluxo sem informar."
                     : $"Registrei o fluxo {FlowLabel(tool.FlowIntensity)} para {FormatDate(tool.Date ?? today)}.";
@@ -701,6 +716,7 @@ public sealed partial class ConversationService(
 
         if (tool.FlowIntensity is not null)
         {
+            if (user.PendingAction == PendingActions.AwaitingFlowIntensity) user.PendingAction = null;
             await AddOrReplaceFlowEventAsync(user.Id, cycle.Id, date, tool.FlowIntensity);
             return $"Registrei o inicio da sua menstruacao em {FormatDate(date)} com fluxo {FlowLabel(tool.FlowIntensity)}.";
         }
@@ -1583,7 +1599,9 @@ public sealed partial class ConversationService(
 
     private DateOnly Today()
     {
-        return DateOnly.FromDateTime(dateProvider.UtcNow.UtcDateTime);
+        var local = TimeZoneInfo.ConvertTime(dateProvider.UtcNow,
+            TimeZoneInfo.FindSystemTimeZoneById(usage?.Policy.TimeZone ?? "America/Sao_Paulo"));
+        return DateOnly.FromDateTime(local.DateTime);
     }
 
     private async Task<Guid?> GetCurrentCycleIdAsync(Guid userId)
@@ -2179,6 +2197,12 @@ public sealed partial class ConversationService(
         if (!await HasActiveEssentialSubscriptionAsync(user.PhoneNumber))
         {
             return await BuildEssentialFeatureUpgradeReplyAsync(user, "geração de imagens");
+        }
+
+        if (usage is not null && usageContext?.AccountId is Guid accountId)
+        {
+            var admission = await usage.ReserveAsync(accountId, usageContext.Plan, usageContext.MessageId, "image", 1);
+            if (!admission.Allowed || admission.Duplicate) return admission.Message ?? "Esta solicitação de imagem já foi recebida.";
         }
 
         if (babyImageJobs is not null)

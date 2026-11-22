@@ -60,7 +60,8 @@ public interface IEmbeddingClient
     Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct);
 }
 
-public sealed class OpenAiEmbeddingClient(HttpClient http, IOptions<OpenAiOptions> openAi, IOptions<RagOptions> rag) : IEmbeddingClient
+public sealed class OpenAiEmbeddingClient(HttpClient http, IOptions<OpenAiOptions> openAi, IOptions<RagOptions> rag,
+    UsageLedger? ledger = null, UsageContext? usageContext = null) : IEmbeddingClient
 {
     public async Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct)
     {
@@ -69,10 +70,13 @@ public sealed class OpenAiEmbeddingClient(HttpClient http, IOptions<OpenAiOption
         using var request = new HttpRequestMessage(HttpMethod.Post, openAi.Value.BaseUrl.TrimEnd('/') + "/embeddings");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", openAi.Value.ApiKey);
         request.Content = JsonContent.Create(new { model = rag.Value.EmbeddingModel, input = texts, dimensions = rag.Value.Dimensions });
+        var callId = ledger is null ? null : await ledger.StartCallAsync(usageContext, "openai-embedding", rag.Value.EmbeddingModel, 0, ct);
         using var response = await http.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException("Falha na API de embeddings: " + (int)response.StatusCode);
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        if (ledger is not null && json.RootElement.TryGetProperty("usage", out var usage))
+            await ledger.CompleteCallAsync(callId, usage.GetProperty("total_tokens").GetInt32(), 0, 0, null, ct);
         var result = json.RootElement.GetProperty("data").EnumerateArray().OrderBy(item => item.GetProperty("index").GetInt32())
             .Select(item => item.GetProperty("embedding").EnumerateArray().Select(value => value.GetSingle()).ToArray()).ToArray();
         if (result.Length != texts.Count) throw new InvalidDataException("Quantidade inesperada de embeddings.");

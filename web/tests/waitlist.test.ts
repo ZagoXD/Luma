@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { validateWaitlist } from "../lib/waitlist.ts";
 const valid = { name: " Nay ", email: " NAY@EXAMPLE.COM ", channel: "email", termsAccepted: true,
-  launchConsent: true, version: "2026-11-22", termsVersion: "2026-11-18", privacyVersion: "2026-11-18" };
+  launchConsent: true, version: "2026-11-22", termsVersion: "2026-11-22", privacyVersion: "2026-11-22" };
 
 test("waitlist requires separate explicit legal acceptance and launch authorization", () => {
   for (const input of [{...valid, termsAccepted:false}, {...valid, launchConsent:false}, {...valid, termsAccepted:"true"},

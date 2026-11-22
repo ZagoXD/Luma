@@ -6,6 +6,9 @@ Ela não faz diagnósticos, não confirma gravidez, não substitui orientação 
 
 ## Estado Atual
 
+Atualização de 22/11/2026: [uso seguro, cotas e custo](specs/uso-seguro-mensagens-e-custos.md)
+e [preparação fiscal](specs/preparacao-fiscal.md). A emissão de notas permanece desativada.
+
 ### Hospedagem e deploy
 
 A implantação AWS usa dev e produção isolados em Docker, com PostgreSQL/pgvector e Redis próprios, segredos no AWS Secrets Manager, acesso HTTPS pelo Cloudflare Tunnel e backups privados. O CI da `main` libera o deploy automático de dev; produção é promovida manualmente com as mesmas imagens validadas.
@@ -41,6 +44,13 @@ Implementado:
 - Pedido de calendário pelo WhatsApp com link direto para o mês solicitado.
 - Guardrails médicos.
 - Bloqueio defensivo de grupos.
+- Recusa local de anexos, contatos e localização, sem enviar esses arquivos à IA.
+- Até três registros explícitos por mensagem, com validação e transação no backend.
+- Cotas diárias persistentes de IA: 10 no Básico e 20 no Essencial, sem cota mensal de mensagens.
+- Menu `registrar` sem IA para registros, correção da última menstruação e notificações.
+- Essencial: áudio de até 60 segundos, 10 minutos/mês e duas solicitações de imagem/mês.
+- Consumo no perfil e contabilização técnica de chamadas sem guardar texto de saúde nesse ledger.
+- Pendências fiscais idempotentes para pagamentos aprovados, sem emissão automática.
 - Estrutura de notificações do plano Essencial.
 - Criptografia de dados reais da usuária em repouso, com AES-GCM e hashes HMAC para busca.
 

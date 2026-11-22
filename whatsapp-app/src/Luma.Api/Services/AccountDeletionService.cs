@@ -43,6 +43,10 @@ public sealed class AccountDeletionService(LumaDbContext db, BillingService bill
         var whatsappHash = PrivacyRuntime.LookupHash("whatsapp:" + account.PhoneNumber, "blocked_conversation.from");
         db.RemoveRange(await db.BlockedConversations.Where(x => x.FromHash == blockedHash || x.FromHash == whatsappHash).ToListAsync(ct));
         db.RemoveRange(await db.AssistantTurns.Where(x => ids.Contains(x.UserId)).ToListAsync(ct));
+        db.RemoveRange(await db.StructuredRecordSessions.Where(x => ids.Contains(x.UserId)).ToListAsync(ct));
+        db.RemoveRange(await db.UsageBuckets.Where(x => x.AccountId == accountId).ToListAsync(ct));
+        db.RemoveRange(await db.UsageReceipts.Where(x => x.AccountId == accountId).ToListAsync(ct));
+        db.RemoveRange(await db.UsageCalls.Where(x => x.AccountId == accountId).ToListAsync(ct));
         db.RemoveRange(await db.Messages.Where(x => ids.Contains(x.UserId)).ToListAsync(ct));
         db.RemoveRange(await db.PendingIntents.Where(x => ids.Contains(x.UserId)).ToListAsync(ct));
         db.RemoveRange(await db.CycleEvents.Where(x => ids.Contains(x.UserId)).ToListAsync(ct));
