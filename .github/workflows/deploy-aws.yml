@@ -17,9 +17,14 @@ on:
         description: Commit completo; produção deve corresponder ao dev validado
         type: string
         required: false
+      stage_only:
+        description: Preparar canal sem validar execução (AWS pausada; não liga instâncias)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: aws-${{ inputs.environment || 'dev' }}
@@ -41,6 +46,7 @@ jobs:
       TARGET_ENV: ${{ inputs.environment || 'dev' }}
       REQUESTED_SHA: ${{ inputs.sha }}
       CI_SHA: ${{ github.event.workflow_run.head_sha }}
+      STAGE_ONLY: ${{ inputs.stage_only || 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +57,22 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$TARGET_ENV" = production ]; then
-            curl --fail --retry 3 "https://dev.ia-luma.com.br/deployment?run=$GITHUB_RUN_ID" -o /tmp/dev.json
+            if [ "$STAGE_ONLY" = true ]; then
+              test -n "$REQUESTED_SHA"
+              mkdir /tmp/luma-dev-channel
+              gh release download aws-channel-dev --dir /tmp/luma-dev-channel --pattern 'manifest.*'
+              openssl pkeyutl -verify -pubin -inkey infra/aws/keys/dev.pem -rawin -in /tmp/luma-dev-channel/manifest.json -sigfile /tmp/luma-dev-channel/manifest.sig
+              python3 - <<'PY'
+          import json, sys
+          sys.path.insert(0, "infra/aws")
+          from deploy import validate_manifest
+          data = json.load(open("/tmp/luma-dev-channel/manifest.json"))
+          validate_manifest(data, "dev")
+          PY
+              cp /tmp/luma-dev-channel/manifest.json /tmp/dev.json
+            else
+              curl --fail --retry 3 "https://dev.ia-luma.com.br/deployment?run=$GITHUB_RUN_ID" -o /tmp/dev.json
+            fi
             SHA=$(jq -r .sha /tmp/dev.json)
             if [ -n "$REQUESTED_SHA" ] && [ "$SHA" != "$REQUESTED_SHA" ]; then
               echo 'Production must promote the currently validated dev commit.' >&2
@@ -62,6 +83,9 @@ jobs:
           fi
           [[ "$SHA" =~ ^[a-f0-9]{40}$ ]]
           git merge-base --is-ancestor "$SHA" origin/main
+          if [ "$STAGE_ONLY" = true ]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=100" | jq -e '.workflow_runs | any(.status == "completed" and .conclusion == "success")' > /dev/null
+          fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           git checkout --detach "$SHA"
       - name: Prepare immutable images
@@ -93,12 +117,22 @@ jobs:
           printf '%s\n' "$SIGNING_KEY" > /tmp/luma-signing.pem
           trap 'rm -f /tmp/luma-signing.pem' EXIT
           python3 infra/aws/release.py "$SHA" "$TARGET_ENV"
+          if [ "$STAGE_ONLY" = true ] && [ "$TARGET_ENV" = production ]; then
+            python3 - <<'PY'
+          import json
+          staged = json.load(open("out/manifest.json"))
+          dev = json.load(open("/tmp/luma-dev-channel/manifest.json"))
+          if staged["sha"] != dev["sha"] or staged["assets"] != dev["assets"]:
+              raise ValueError("Production artifacts differ from the signed dev channel")
+          PY
+          fi
           openssl pkeyutl -sign -rawin -inkey /tmp/luma-signing.pem -in out/manifest.json -out out/manifest.sig
           if ! gh release view "aws-channel-$TARGET_ENV" >/dev/null 2>&1; then
             gh release create "aws-channel-$TARGET_ENV" --target "$SHA" --prerelease --title "AWS $TARGET_ENV channel" --notes 'Signed deployment pointer; signature and archive hashes are verified by the host.'
           fi
           gh release upload "aws-channel-$TARGET_ENV" out/manifest.sig out/manifest.json --clobber
       - name: Verify deployed revision and health
+        if: inputs.stage_only != true
         env:
           SHA: ${{ steps.release.outputs.sha }}
           HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
@@ -108,3 +142,10 @@ jobs:
           test -n "$HEALTH_URL"
           python3 infra/aws/health.py "$HEALTH_URL" "$SHA" "$TARGET_ENV"
           echo "### $TARGET_ENV deployed: $SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Report pending installation
+        if: inputs.stage_only == true
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          echo "### $TARGET_ENV staged: $SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Signed channel published; not installed or health-validated. No AWS instances were started. The host updater installs it after startup.' >> "$GITHUB_STEP_SUMMARY"
