@@ -1,27 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { getAccountCalendar, getAccountProfile, type AccountProfile, type CycleCalendar } from "@/lib/luma-api";
+import { CycleCalendarGrid } from "@/components/molecules/CycleCalendarGrid";
 
 type ProfileCalendarPageTemplateProps = {
   accountId: string;
 };
-
-const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-const legend = [
-  { type: "period_start_recorded", label: "Início registrado" },
-  { type: "period_day_recorded", label: "Menstruação registrada" },
-  { type: "period_start_predicted", label: "Previsão menstrual" },
-  { type: "fertile_window_estimated", label: "Janela fértil" },
-  { type: "ovulation_estimated", label: "Ovulação" },
-  { type: "sexual_activity_recorded", label: "Relação sexual" },
-  { type: "pregnancy_week", label: "Gravidez" },
-  { type: "estimated_due_date", label: "Semana prevista para parto" },
-];
 
 export function ProfileCalendarPageTemplate({ accountId }: ProfileCalendarPageTemplateProps) {
   const router = useRouter();
@@ -82,8 +70,6 @@ export function ProfileCalendarPageTemplate({ accountId }: ProfileCalendarPageTe
     };
   }, [month]);
 
-  const visibleDays = useMemo(() => buildVisibleDays(calendar), [calendar]);
-
   function moveMonth(delta: number) {
     const next = addMonths(month, delta);
     setLoading(true);
@@ -110,38 +96,20 @@ export function ProfileCalendarPageTemplate({ accountId }: ProfileCalendarPageTe
 
         <section className="account-panel calendar-panel">
           <div className="calendar-toolbar">
-            <button className="account-secondary calendar-nav" type="button" onClick={() => moveMonth(-1)}>
+            <button className="account-secondary calendar-nav" type="button" title="Mês anterior" aria-label="Mês anterior" onClick={() => moveMonth(-1)}>
               <ChevronLeft size={18} />
-              Mês anterior
             </button>
             <strong>{formatMonthTitle(month)}</strong>
-            <button className="account-secondary calendar-nav" type="button" onClick={() => moveMonth(1)}>
-              Próximo mês
+            <button className="account-secondary calendar-nav" type="button" title="Próximo mês" aria-label="Próximo mês" onClick={() => moveMonth(1)}>
               <ChevronRight size={18} />
             </button>
           </div>
 
           {loading ? (
             <div className="calendar-loading"><Loader2 size={20} /> Carregando calendário...</div>
-          ) : (
-            <div className="calendar-grid" role="grid" aria-label={`Calendário de ${formatMonthTitle(month)}`}>
-              {weekDays.map((day) => (
-                <div className="calendar-weekday" key={day}>{day}</div>
-              ))}
-              {visibleDays.map((day) => (
-                <div className={`calendar-day ${day.inMonth ? "" : "muted"}`} key={day.date}>
-                  <span>{Number(day.date.slice(-2))}</span>
-                  <div className="calendar-pins">
-                    {day.items.map((item) => (
-                      <span className={`calendar-pin pin-${item.type}`} key={item.type} title={item.label}>
-                        {shortLabel(item.label)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          ) : calendar ? (
+            <CycleCalendarGrid calendar={calendar} label={`Calendário de ${formatMonthTitle(month)}`} />
+          ) : null}
 
           {status && <p className="account-status info">{status}</p>}
 
@@ -151,43 +119,14 @@ export function ProfileCalendarPageTemplate({ accountId }: ProfileCalendarPageTe
             <span>DPP: {formatDateOnly(calendar?.summary.estimatedDueDate)}</span>
           </div>
 
-          <div className="calendar-legend">
-            {legend.map((item) => (
-              <span key={item.type}><i className={`legend-dot pin-${item.type}`} />{item.label}</span>
-            ))}
-          </div>
         </section>
       </section>
     </main>
   );
 }
 
-function buildVisibleDays(calendar: CycleCalendar | null) {
-  if (!calendar) return [];
-  const [year, month] = calendar.month.split("-").map(Number);
-  const first = new Date(Date.UTC(year, month - 1, 1));
-  const offset = first.getUTCDay();
-  const byDate = new Map(calendar.days.map((day) => [day.date, day]));
-  const start = new Date(Date.UTC(year, month - 1, 1 - offset));
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setUTCDate(start.getUTCDate() + index);
-    const key = toYearMonthDay(date);
-    return {
-      date: key,
-      inMonth: key.startsWith(calendar.month),
-      items: byDate.get(key)?.items || [],
-    };
-  });
-}
-
 function toYearMonth(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function toYearMonthDay(date: Date) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function addMonths(month: string, delta: number) {
@@ -204,8 +143,4 @@ function formatMonthTitle(month: string) {
 function formatDateOnly(value?: string | null) {
   if (!value) return "não informado";
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
-}
-
-function shortLabel(label: string) {
-  return label.length > 18 ? `${label.slice(0, 16)}...` : label;
 }
