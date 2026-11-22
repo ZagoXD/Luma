@@ -11,7 +11,7 @@ for (const name of ['app', 'components', 'lib', 'public', 'package.json', 'tscon
   if (fs.existsSync(path.join(source, name))) fs.cpSync(path.join(source, name), path.join(stage, name), { recursive: true });
 }
 fs.symlinkSync(path.join(source, 'node_modules'), path.join(stage, 'node_modules'), 'junction');
-const allowed = new Set(['page.tsx', 'layout.tsx', 'globals.css', 'termos', 'privacidade', 'icon.tsx', 'apple-icon.tsx', 'opengraph-image.tsx', 'robots.ts', 'sitemap.ts']);
+const allowed = new Set(['page.tsx', 'layout.tsx', 'globals.css', 'calendar.css', 'termos', 'privacidade', 'icon.tsx', 'apple-icon.tsx', 'opengraph-image.tsx', 'robots.ts', 'sitemap.ts']);
 for (const name of fs.readdirSync(path.join(stage, 'app'))) if (!allowed.has(name)) fs.rmSync(path.join(stage, 'app', name), { force: true, recursive: true });
 const layout = path.join(stage, 'app/layout.tsx');
 fs.writeFileSync(layout, fs.readFileSync(layout, 'utf8').replace('export const dynamic = "force-dynamic";', 'export const dynamic = "force-static";'));

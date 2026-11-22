@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import "./calendar.css";
 import { buildMetadata } from "@/lib/seo";
 
 // One immutable image serves dev and production; indexing policy is read at request time.
