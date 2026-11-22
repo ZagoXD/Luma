@@ -8,8 +8,17 @@
 .settings-order { border-top: 1px solid #d8cce6; padding: 16px 0; }
 .waitlist-form { width: min(100%, 580px); margin: 24px auto 0; display: grid; gap: 20px; text-align: left; }
 .waitlist-form > label { display: grid; gap: 8px; }
-.waitlist-form input:not([type=checkbox]) { box-sizing: border-box; width: 100%; padding: 14px; color: #21132b; border: 1px solid #d8cce6; border-radius: 6px; background: white; }
+.waitlist-form input:not([type=checkbox]):not([type=radio]) { box-sizing: border-box; width: 100%; padding: 14px; color: #21132b; border: 1px solid #d8cce6; border-radius: 6px; background: white; }
 .waitlist-form a { color: inherit; text-decoration: underline; }
+.waitlist-channels { margin: 0; padding: 0; border: 0; min-width: 0; }
+.waitlist-channels legend { color: #fff; margin-bottom: 12px; font-weight: 500; }
+.waitlist-channels > div { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.waitlist-channels label { position: relative; display: grid; }
+.waitlist-channels input[type=radio] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.waitlist-channels span { min-height: 48px; display: grid; place-items: center; color: #ece4f3; border: 1px solid #9b80ac; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 16px; }
+.waitlist-channels input:checked + span { background: #ede0ff; color: #281335; border-color: #ede0ff; font-weight: 600; }
+.waitlist-channels input:focus-visible + span { outline: 3px solid #d6b8ff; outline-offset: 3px; }
+.waitlist-hint { color: #ece4f3; font-size: 14px; line-height: 1.5; font-weight: 400; }
 .waitlist-section { color: #ffffff; }
 .waitlist-section .section-inner > p:not(.section-tag) { color: #ece4f3; line-height: 1.7; }
 .waitlist-section .section-tag { color: #d4b2ff; }

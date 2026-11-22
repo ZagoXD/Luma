@@ -1,3 +1,4 @@
+import { validateWaitlist, waitlistSuccessMessage } from "../../web/lib/waitlist-validation.mjs";
 const encoder = new TextEncoder();
 async function hash(value, secret) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -25,21 +26,21 @@ export default {
     if (fromPages && input && typeof input === "object") {
       if (input.website) return Response.json({ message: "Interesse registrado." });
       input.ip = request.headers.get("cf-connecting-ip") || "unknown";
-      input.version = "2026-11-18";
     }
-    if (!input || input.consent !== true || input.version !== "2026-11-18" || typeof input.name !== "string" || input.name.trim().length < 2 || input.name.length > 100
-      || typeof input.email !== "string" || input.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email) || typeof input.ip !== "string" || input.ip.length > 100)
-      return new Response(null, { status: 400 });
+    const contact = validateWaitlist(input);
+    if (!contact || typeof input.ip !== "string" || input.ip.length > 100)
+      return Response.json({ message: "Confira os contatos dos canais escolhidos e marque separadamente os dois aceites." }, { status: 400 });
     const now = Math.floor(Date.now() / 1000);
     const bucket = await hash(input.ip + ":" + Math.floor(now / 3600), env.API_SECRET);
     await env.DB.prepare("DELETE FROM request_limits WHERE expires_at < ?").bind(now).run();
     const limit = await env.DB.prepare("INSERT INTO request_limits(bucket,attempts,expires_at) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET attempts=attempts+1 RETURNING attempts").bind(bucket, now + 3600).first();
-    if (limit.attempts > 5) return new Response(null, { status: 429 });
-    const email = input.email.trim().toLowerCase();
-    const emailHash = await hash(email, env.ENCRYPTION_KEY);
-    const encrypted = await protect({ name: input.name.trim(), email }, env.ENCRYPTION_KEY);
+    if (limit.attempts > 5) return Response.json({message:"Aguarde um pouco antes de tentar novamente."}, {status:429,headers:{"Retry-After":"3600"}});
+    // Preserve existing email hashes; phone-only leads use a distinct namespace.
+    const contactHash = await hash(contact.email || `whatsapp:${contact.whatsapp}`, env.ENCRYPTION_KEY);
+    const recordedAt = new Date().toISOString();
+    const encrypted = await protect({ ...contact, consentRecordedAt: recordedAt }, env.ENCRYPTION_KEY);
     await env.DB.prepare("INSERT INTO leads(id,email_hash,encrypted_contact,consent_version,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email_hash) DO NOTHING")
-      .bind(crypto.randomUUID(), emailHash, encrypted, input.version, new Date().toISOString()).run();
-    return Response.json({ accepted: true, message: "Você está na lista! Avisaremos por e-mail quando a Luma estiver disponível." });
+      .bind(crypto.randomUUID(), contactHash, encrypted, contact.version, recordedAt).run();
+    return Response.json({ accepted: true, message: waitlistSuccessMessage });
   }
 };
