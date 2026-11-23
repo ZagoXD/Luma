@@ -2,7 +2,7 @@
 
 import { Check, Minus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { isWaitlist, purchasePath } from "@/lib/site-mode";
+import { isWaitlist, purchasePath, waitlistPlanEvent } from "@/lib/site-mode";
 
 type PlanCardProps = {
   badge: string;
@@ -43,7 +43,7 @@ export function PlanCard({
     <div className={`plan-card ${featured ? "featured " : ""}fade-up`} style={{ transitionDelay: delay }}>
       <span className={`plan-badge ${badgeClass}`}>{badge}</span>
       <div className="plan-name">{name}</div>
-      <div className="plan-price">{price}</div>
+      {!isWaitlist && <div className="plan-price">{price}</div>}
       <p className="plan-desc">{description}</p>
       <div className="plan-divider" />
       <ul className="plan-features">
@@ -56,7 +56,10 @@ export function PlanCard({
           </li>
         ))}
       </ul>
-      <button className={`plan-cta ${ctaClass}`} onClick={() => router.push(purchasePath(planValue, "annual"))}>
+      <button className={`plan-cta ${ctaClass}`} onClick={() => {
+        if (isWaitlist) window.dispatchEvent(new CustomEvent(waitlistPlanEvent, { detail: planValue }));
+        router.push(purchasePath(planValue, "annual"));
+      }}>
         {isWaitlist ? "Quero esse plano no lançamento" : cta}
       </button>
       {secondaryCta && !isWaitlist && (
@@ -64,8 +67,8 @@ export function PlanCard({
           {secondaryCta}
         </button>
       )}
-      <p className="plan-note">{isWaitlist ? "Valores previstos para o lançamento. Entrar na lista não contrata o plano." : note}</p>
-      {secondaryNote && <p className="plan-note secondary-note">{secondaryNote}</p>}
+      <p className="plan-note">{isWaitlist ? "Entrar na lista indica interesse, sem contratar o plano." : note}</p>
+      {secondaryNote && !isWaitlist && <p className="plan-note secondary-note">{secondaryNote}</p>}
     </div>
   );
 }

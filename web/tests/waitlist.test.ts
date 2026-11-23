@@ -2,7 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { validateWaitlist } from "../lib/waitlist.ts";
 const valid = { name: " Nay ", email: " NAY@EXAMPLE.COM ", channel: "email", termsAccepted: true,
-  launchConsent: true, version: "2026-11-22", termsVersion: "2026-11-22-v2", privacyVersion: "2026-11-22-v2" };
+  desiredPlan: "basico", launchConsent: true, version: "2026-11-23", termsVersion: "2026-11-22-v2", privacyVersion: "2026-11-22-v2" };
+
+test("plan preference is explicit, validated and preserved without guessing", () => {
+  for (const desiredPlan of ["basico", "essencial", "lista-espera"])
+    assert.equal(validateWaitlist({ ...valid, desiredPlan })?.desiredPlan, desiredPlan);
+  for (const desiredPlan of [undefined, null, "", "premium", [], "Dados de saúde"])
+    assert.equal(validateWaitlist({ ...valid, desiredPlan }), null);
+});
 
 test("waitlist requires separate explicit legal acceptance and launch authorization", () => {
   for (const input of [{...valid, termsAccepted:false}, {...valid, launchConsent:false}, {...valid, termsAccepted:"true"},

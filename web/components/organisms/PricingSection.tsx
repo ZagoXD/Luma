@@ -1,6 +1,7 @@
 import { PlanCard } from "@/components/molecules/PlanCard";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
 import { plans } from "@/lib/luma-api";
+import { isWaitlist } from "@/lib/site-mode";
 
 const baseFeatures = [
   { enabled: true, label: "Mensagens de texto pelo WhatsApp" },
@@ -16,7 +17,7 @@ export function PricingSection() {
         <SectionHeading
           tag="Planos"
           title="Simples e transparente"
-          lead="Escolha o plano anual para economizar ou siga com a cobrança mensal tradicional."
+          lead={isWaitlist ? "Compare os recursos e conte qual plano combina mais com você." : "Escolha o plano anual para economizar ou siga com a cobrança mensal tradicional."}
           centered
         />
         <div className="plans-grid">
@@ -25,13 +26,13 @@ export function PricingSection() {
             badgeClass="basic"
             name="Básico"
             planValue="basico"
-            price={
+            price={isWaitlist ? null : (
               <div className="plan-price-stack">
                 <span className="plan-price-line">{plans.basico.annualEquivalent.replace("equivale a ", "")}</span>
                 <span className="plan-period">no anual à vista: {plans.basico.annualPrice}, sem parcelamento</span>
                 <span className="plan-monthly-line">Plano mensal: {plans.basico.monthlyPrice}</span>
               </div>
-            }
+            )}
             description="Tudo que você precisa para registrar seu ciclo de forma simples e sem esforço."
             features={[
               ...baseFeatures,
@@ -53,13 +54,13 @@ export function PricingSection() {
             badgeClass="full"
             name="Essencial"
             planValue="essencial"
-            price={
+            price={isWaitlist ? null : (
               <div className="plan-price-stack">
                 <span className="plan-price-line">{plans.essencial.annualEquivalent.replace("equivale a ", "")}</span>
                 <span className="plan-period">no anual à vista: {plans.essencial.annualPrice}, sem parcelamento</span>
                 <span className="plan-monthly-line">Plano mensal: {plans.essencial.monthlyPrice}</span>
               </div>
-            }
+            )}
             description="Tudo do plano Básico, mais recursos inteligentes para uma rotina com menos esforço."
             features={[
               ...baseFeatures,

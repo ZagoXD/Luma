@@ -14,6 +14,8 @@
 .waitlist-form { width: min(100%, 580px); margin: 24px auto 0; display: grid; gap: 20px; text-align: left; }
 .waitlist-form > label { display: grid; gap: 8px; }
 .waitlist-form input:not([type=checkbox]):not([type=radio]) { box-sizing: border-box; width: 100%; padding: 14px; color: #21132b; border: 1px solid #d8cce6; border-radius: 6px; background: white; }
+.waitlist-form select { box-sizing: border-box; width: 100%; min-width: 0; padding: 14px; color: #21132b; border: 1px solid #d8cce6; border-radius: 6px; background: white; font: inherit; scroll-margin-top: 100px; }
+.waitlist-section { scroll-margin-top: 90px; }
 .waitlist-form a { color: inherit; text-decoration: underline; }
 .waitlist-channels { margin: 0; padding: 0; border: 0; min-width: 0; }
 .waitlist-channels legend { color: #fff; margin-bottom: 12px; font-weight: 500; }

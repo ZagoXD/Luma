@@ -45,6 +45,18 @@ Não pausar AWS automaticamente. Antes de suspender: verificar assinantes, inter
 
 ## Verificação da entrega
 
+Atualização da divulgação em 23/11/2026 (`feat/waitlist-contact-consent`): preços ocultos
+somente no modo de lista de espera, inclusive no documento de Termos dessa publicação.
+A comparação de recursos permanece. O formulário exige `desiredPlan`: `basico`,
+`essencial` ou `lista-espera` ("Ainda não decidi"), sem opção previamente marcada.
+Clicar em um cartão preenche a escolha, que pode ser alterada no formulário.
+A preferência não cria assinatura nem reserva de preço. Formulário versão `2026-11-23`;
+o Worker valida o mesmo enum e conserva o valor no JSON criptografado do contato.
+Não há migração do D1; a exportação CSV inclui `desired_plan` e deixa o campo vazio
+nos registros antigos, sem inferir escolhas. Inscrições duplicadas continuam preservando
+o cadastro original. A `main`, o catálogo de cobrança e as instâncias AWS não são alterados
+por essa entrega isolada da lista.
+
 Os testes reais de dev validaram cobrança de teste, renovação, troca de cartão, mudança anual agendada, cancelamento imediato e exclusão por senha. Não houve cobrança real nem chamadas conversacionais pagas para esses testes. O reembolso real de sandbox está pendente de autorização do Mercado Pago, conforme o documento de pagamentos; não confundir pedido persistido com dinheiro devolvido.
 
 A lista de espera foi validada em navegador nas larguras de 390 e 1440 pixels: contraste dos textos, consentimento, botão, ausência de overflow horizontal e envio real ao D1 criptografado. O contato exclusivo desse ensaio foi removido depois da validação. Login, cadastro e checkout retornam 404 na publicação isolada do Pages. O Worker provisório redundante foi removido; a Pages Function e o D1 ativos foram preservados.

@@ -29,7 +29,7 @@ export default {
     }
     const contact = validateWaitlist(input);
     if (!contact || typeof input.ip !== "string" || input.ip.length > 100)
-      return Response.json({ message: "Confira os contatos dos canais escolhidos e marque separadamente os dois aceites." }, { status: 400 });
+      return Response.json({ message: "Selecione um plano de interesse, confira seus contatos e marque separadamente os dois aceites. Se necessário, atualize a página." }, { status: 400 });
     const now = Math.floor(Date.now() / 1000);
     const bucket = await hash(input.ip + ":" + Math.floor(now / 3600), env.API_SECRET);
     await env.DB.prepare("DELETE FROM request_limits WHERE expires_at < ?").bind(now).run();

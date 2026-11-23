@@ -24,8 +24,8 @@ async function main() {
       }
       let file=path.resolve(out,'.'+decodeURIComponent(url.pathname));
       if(!file.startsWith(out+path.sep)&&file!==out){res.writeHead(403);res.end();return;}
-      if(fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');
-      else if(!fs.existsSync(file)&&fs.existsSync(file+'.html'))file+='.html';
+      if(fs.existsSync(file+'.html'))file+='.html';
+      else if(fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');
       if(!fs.existsSync(file)){res.writeHead(404);res.end();return;}
       res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream'});fs.createReadStream(file).pipe(res);
     }catch(e){res.writeHead(500);res.end(e.message);}
@@ -39,6 +39,14 @@ async function main() {
         const errors=[];page.on('pageerror',e=>errors.push(e.message));
         await page.goto(`http://127.0.0.1:${server.address().port}/#lista`);
         const form=page.locator('.waitlist-form');await form.waitFor();
+        assert.equal(await page.locator('.plan-price').count(),0);
+        assert.ok(!(await page.locator('body').innerText()).includes('R$'));
+        assert.equal(await form.locator('select[name=desiredPlan]').inputValue(),'');
+        const plan=channel==='email'?'basico':channel==='whatsapp'?'essencial':'lista-espera';
+        if(plan!=='lista-espera'){
+          await page.locator(`.plan-card`).filter({has:page.locator('.plan-name',{hasText:plan==='basico'?'Básico':'Essencial'})}).getByRole('button',{name:'Quero esse plano no lançamento'}).click();
+          assert.equal(await form.locator('select[name=desiredPlan]').inputValue(),plan);
+        }else await form.locator('select[name=desiredPlan]').selectOption(plan);
         assert.equal(await form.locator('input[type=checkbox]').count(),2);
         assert.equal(await form.locator('input[type=checkbox]:checked').count(),0);
         await form.locator(`input[value="${channel}"]`).check();
@@ -62,6 +70,12 @@ async function main() {
         assert.equal((await responsePromise).status(),200);
         await page.getByRole('status').filter({hasText:'canais escolhidos'}).waitFor();
         assert.equal(inserts.length,before+1);assert.deepEqual(errors,[]);
+        const bytes=Buffer.from(inserts.at(-1)[2],'base64');
+        const aes=await crypto.subtle.importKey('raw',Buffer.alloc(32,1),'AES-GCM',false,['decrypt']);
+        const saved=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes.subarray(0,12),additionalData:new TextEncoder().encode('luma.waitlist.v1')},aes,bytes.subarray(12))));
+        assert.equal(saved.desiredPlan,plan);
+        await page.goto(`http://127.0.0.1:${server.address().port}/termos`);
+        assert.ok(!(await page.locator('body').innerText()).includes('R$'));
         console.log(`${width}px / ${channel}: two independent consents, selected contacts only, encrypted persistence, no overflow or browser errors`);
         await page.close();
       }

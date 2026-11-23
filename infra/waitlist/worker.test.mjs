@@ -13,7 +13,7 @@ test("contact encryption is randomized and does not expose its payload", async (
 
 const key = Buffer.alloc(32, 1).toString("base64");
 const signup = { name: "Nay", email: "nay@example.com", channel: "email", termsAccepted: true,
-  launchConsent: true, version: "2026-11-22", termsVersion: "2026-11-22-v2", privacyVersion: "2026-11-22-v2" };
+  desiredPlan: "basico", launchConsent: true, version: "2026-11-23", termsVersion: "2026-11-22-v2", privacyVersion: "2026-11-22-v2" };
 function harness() {
   const inserts = [];
   const env = { API_SECRET: "secret", ENCRYPTION_KEY: key, ASSETS: { fetch: () => new Response("asset") },
@@ -35,23 +35,24 @@ async function unprotect(value) {
 test("Pages rejects missing, combined or stale consents before persisting", async () => {
   const h = harness();
   for (const body of [{...signup, termsAccepted: false}, {...signup, launchConsent: false},
-    {name: "Nay", email: "nay@example.com", consent: true}, {...signup, version: "old"}, null, []]) {
+    {name: "Nay", email: "nay@example.com", consent: true}, {...signup, version: "old"}, {...signup, desiredPlan: "premium"}, {...signup, desiredPlan: undefined}, null, []]) {
     const response = await h.send(body);
     assert.equal(response.status, 400); assert.ok((await response.json()).message);
   }
   assert.equal(h.inserts.length, 0);
 });
 test("Pages encrypts contacts and independent consent evidence for each channel", async () => {
-  for (const channel of ["email", "whatsapp", "both"]) {
-    const h = harness(); const response = await h.send({...signup, channel, whatsapp: "16992330309"});
+  for (const [channel, desiredPlan] of [["email", "basico"], ["whatsapp", "essencial"], ["both", "lista-espera"]]) {
+    const h = harness(); const response = await h.send({...signup, channel, desiredPlan, whatsapp: "16992330309"});
     assert.equal(response.status, 200); assert.match((await response.json()).message, /canais escolhidos/);
     const insert = h.inserts[0], stored = await unprotect(insert[2]);
     assert.equal(stored.email, channel === "whatsapp" ? null : "nay@example.com");
     assert.equal(stored.whatsapp, channel === "email" ? null : "+5516992330309");
     assert.equal(stored.termsAccepted, true); assert.equal(stored.launchConsent, true);
     assert.equal(stored.emailOptIn, channel !== "whatsapp"); assert.equal(stored.whatsappOptIn, channel !== "email");
-    assert.equal(stored.termsVersion, "2026-11-22-v2"); assert.equal(stored.version, "2026-11-22");
-    assert.ok(!Number.isNaN(Date.parse(stored.consentRecordedAt))); assert.equal(insert[3], "2026-11-22");
+    assert.equal(stored.desiredPlan, desiredPlan);
+    assert.equal(stored.termsVersion, "2026-11-22-v2"); assert.equal(stored.version, "2026-11-23");
+    assert.ok(!Number.isNaN(Date.parse(stored.consentRecordedAt))); assert.equal(insert[3], "2026-11-23");
     assert.ok(!insert.join(" ").includes("nay@example.com"));
   }
 });

@@ -1,4 +1,4 @@
-export const waitlistConsentVersion = "2026-11-22";
+export const waitlistConsentVersion = "2026-11-23";
 export const waitlistLegalVersion = "2026-11-22-v2";
 export const waitlistSuccessMessage = "Você está na lista! O aviso de lançamento será enviado pelos canais escolhidos.";
 const brazilAreaCodes = new Set([11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,
@@ -16,7 +16,8 @@ export function validateWaitlist(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   if (input.termsAccepted !== true || input.launchConsent !== true || input.version !== waitlistConsentVersion
     || input.termsVersion !== waitlistLegalVersion || input.privacyVersion !== waitlistLegalVersion
-    || !["email", "whatsapp", "both"].includes(input.channel)) return null;
+    || !["email", "whatsapp", "both"].includes(input.channel)
+    || !["basico", "essencial", "lista-espera"].includes(input.desiredPlan)) return null;
   const name = typeof input.name === "string" ? input.name.trim() : "";
   if (name.length < 2 || name.length > 100) return null;
   const emailOptIn = input.channel !== "whatsapp";
@@ -25,6 +26,6 @@ export function validateWaitlist(input) {
   const whatsapp = whatsappOptIn ? normalizeWaitlistPhone(input.whatsapp) : null;
   if (emailOptIn && (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return null;
   if (whatsappOptIn && !whatsapp) return null;
-  return {name, email, whatsapp, channel:input.channel, termsAccepted:true, launchConsent:true, emailOptIn, whatsappOptIn,
+  return {name, email, whatsapp, channel:input.channel, desiredPlan:input.desiredPlan, termsAccepted:true, launchConsent:true, emailOptIn, whatsappOptIn,
     version:waitlistConsentVersion, termsVersion:waitlistLegalVersion, privacyVersion:waitlistLegalVersion};
 }

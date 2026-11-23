@@ -1,5 +1,5 @@
-export const waitlistConsentVersion: "2026-11-22";
-export const waitlistLegalVersion: "2026-11-18";
+export const waitlistConsentVersion: "2026-11-23";
+export const waitlistLegalVersion: "2026-11-22-v2";
 export const waitlistSuccessMessage: string;
 export type WaitlistChannel = "email" | "whatsapp" | "both";
 export interface WaitlistInput {
@@ -7,6 +7,7 @@ export interface WaitlistInput {
   email: string | null;
   whatsapp: string | null;
   channel: WaitlistChannel;
+  desiredPlan: "basico" | "essencial" | "lista-espera";
   termsAccepted: true;
   launchConsent: true;
   emailOptIn: boolean;

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { legalVersion } from "@/lib/legal";
+import { isWaitlist } from "@/lib/site-mode";
 
 export function LegalPageTemplate({ privacy = false }: { privacy?: boolean }) {
   return <main className="account-page"><article className="legal-document">
@@ -31,7 +32,8 @@ export function LegalPageTemplate({ privacy = false }: { privacy?: boolean }) {
       <h2>Planos e cobrança</h2>
       <p>O Básico inclui até 10 mensagens processadas pela IA por dia e 150 por mês; o Essencial, até 20 por dia e 300 por mês. Os limites são simultâneos. A contagem diária renova à meia-noite e a mensal no primeiro dia de cada mês, no horário de São Paulo, inclusive no plano anual. Após a franquia de IA, registros e correções pelo menu, calendário, configurações e suporte continuam disponíveis, sujeitos à proteção contra spam. No Essencial, cada áudio usa uma mensagem das cotas diária e mensal e sua duração no saldo de 10 minutos por mês, com até 60 segundos por áudio. São permitidas até duas solicitações de imagem por mês. Tentativas admitidas podem consumir a cota mesmo se houver falha do provedor; consulte o suporte em caso de divergência.</p>
       <p>Após a cota de IA, o menu registrar do WhatsApp permite continuar registrando dados e corrigir a última menstruação, sem IA. O painel, calendário, suporte e configurações permanecem disponíveis. Os controles contra abuso e envio simultâneo continuam aplicáveis. O cadastro inicial possui uma cota separada de até 12 mensagens por dia.</p>
-      <p>Para novas contratações: Básico R$ 32,90 por mês ou R$ 334,80 por ano; Essencial R$ 59,90 por mês ou R$ 658,80 por ano. Os equivalentes de R$ 27,90 e R$ 54,90 mensais referem-se ao anual cobrado integralmente à vista, sem parcelamento. O checkout apresenta o valor total e o período antes da confirmação. Contratos anteriores preservam o preço contratado; uma troca solicitada confirma as novas condições.</p>
+      {isWaitlist ? <p>Os valores e as condições comerciais serão informados antes de qualquer contratação no lançamento. Participar da lista e escolher um plano de interesse não cria assinatura, reserva de preço ou autorização de cobrança.</p>
+        : <p>Para novas contratações: Básico R$ 32,90 por mês ou R$ 334,80 por ano; Essencial R$ 59,90 por mês ou R$ 658,80 por ano. Os equivalentes de R$ 27,90 e R$ 54,90 mensais referem-se ao anual cobrado integralmente à vista, sem parcelamento. O checkout apresenta o valor total e o período antes da confirmação. Contratos anteriores preservam o preço contratado; uma troca solicitada confirma as novas condições.</p>}
       <p>O Essencial inclui recursos adicionais como áudios, imagens educativas e lembretes. O acesso depende de pagamento aprovado; autorização do cartão ou abertura do checkout não significam pagamento. A primeira cobrança pode ser assíncrona. Os dados de cartão são processados pelo Mercado Pago.</p>
       <h2>Renovação e cancelamento</h2>
       <p>A contratação autoriza cobranças recorrentes no período escolhido, informadas no checkout. A renovação automática pode ser desativada no painel: isso impede novas renovações e mantém o período já pago. Alterar plano ou período pode exigir nova autorização, sempre indicada antes de confirmar.</p>
