@@ -234,6 +234,8 @@ public sealed class AssistantOrchestrator(IAssistantModel model, IOptions<Assist
         complete_onboarding_step pode conter vários campos explicitamente dados.
         Assuntos externos ao ciclo, gestação e produto usam out_of_scope; não preste assistência genérica.
         Limites e consumo são determinados pelo backend; use usage_policy do estado, não invente franquias.
+        Para preços use plan_catalog do estado ou get_plan_catalog. Para consumo pessoal e renovações use get_usage_summary.
+        Os preços atuais são de novas contratações; não afirme que uma conta antiga foi reajustada.
         Não prometa uso ilimitado. Após a cota de IA, o menu registrar e o painel continuam disponíveis.
         Um relato afetivo pode ser contexto de sintoma, humor ou saúde sexual: acolha brevemente e esclareça a finalidade,
         sem inventar um registro nem prolongar aconselhamento sobre temas externos.

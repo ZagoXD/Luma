@@ -149,8 +149,8 @@ Implementado:
 - Validação e normalização de CPF e celular.
 - Checkout com Checkout Bricks.
 - Planos:
-  - Luma Básico: R$ 5,90/mês.
-  - Luma Essencial: R$ 9,90/mês.
+  - Luma Básico: R$ 32,90/mês ou R$ 334,80/ano à vista, sem parcelamento; IA até 10/dia e 150/mês.
+  - Luma Essencial: R$ 59,90/mês ou R$ 658,80/ano à vista, sem parcelamento; IA até 20/dia e 300/mês.
 - Webhooks Mercado Pago para sincronizar assinatura.
 - Renovação automática pode ser desligada mantendo o período pago. Cancelamento imediato encerra o acesso. Arrependimento e reembolso têm fluxo separado nas Configurações da conta; consultar `conta-privacidade-e-lista-de-espera.md`.
 - Retomada de assinatura.

@@ -219,8 +219,8 @@ Stack:
 
 Planos:
 
-- Básico: R$ 5,90/mês.
-- Essencial: R$ 9,90/mês.
+- Básico: R$ 32,90/mês ou R$ 334,80/ano à vista (equivalente a R$ 27,90/mês), sem parcelamento. IA: 10/dia e 150/mês.
+- Essencial: R$ 59,90/mês ou R$ 658,80/ano à vista (equivalente a R$ 54,90/mês), sem parcelamento. IA: 20/dia e 300/mês.
 
 Diferenciais:
 

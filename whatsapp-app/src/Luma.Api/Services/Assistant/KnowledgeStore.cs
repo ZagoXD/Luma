@@ -25,6 +25,9 @@ public sealed record KnowledgeDocument(string Id, string Title, string Content, 
     string? ReviewedAt = null, string? ReviewDueAt = null, string ReviewLevel = "editorial",
     string? Attribution = null, string? LicenseUrl = null);
 
+public sealed record PreparedKnowledgeVector(string Id, string InputSha256, float[] Vector);
+public sealed record PreparedKnowledgeVectors(string Model, int Dimensions, IReadOnlyList<PreparedKnowledgeVector> Entries);
+
 public static class KnowledgeCorpus
 {
     public static IReadOnlyList<KnowledgeDocument> Validate(IEnumerable<KnowledgeDocument> documents)
@@ -141,9 +144,38 @@ public sealed class KnowledgeStore(IConfiguration config, IOptions<RagOptions> o
                 return version;
             }
         }
-        if (!_options.AllowEmbeddingGeneration)
-            throw new InvalidOperationException("Importe os vetores do acervo antes de iniciar este ambiente; geração automática de embeddings desativada.");
-        var vectors = await embeddings.EmbedAsync(documents.Select(document => document.Title + "\n" + document.Content).ToArray(), ct);
+        var vectors = new float[documents.Count][];
+        var preparedPath = Path.Combine(AppContext.BaseDirectory, "Knowledge/precomputed.json");
+        var prepared = File.Exists(preparedPath) ? JsonSerializer.Deserialize<PreparedKnowledgeVectors>(
+            await File.ReadAllTextAsync(preparedPath, ct), new JsonSerializerOptions(JsonSerializerDefaults.Web)) : null;
+        var missing = new List<int>();
+        for (var index = 0; index < documents.Count; index++)
+        {
+            var doc = documents[index];
+            var input = doc.Title + "\n" + doc.Content;
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
+            var bundled = prepared?.Model == _options.EmbeddingModel && prepared.Dimensions == _options.Dimensions
+                ? prepared.Entries.SingleOrDefault(entry => entry.Id == doc.Id && entry.InputSha256.Equals(hash, StringComparison.OrdinalIgnoreCase)) : null;
+            if (bundled is not null) { vectors[index] = bundled.Vector; KnowledgeCorpus.Vector(bundled.Vector, _options.Dimensions); continue; }
+            // Exact embedding input and model only; metadata revisions never require paid re-embedding.
+            await using var reuse = new NpgsqlCommand("""
+                SELECT embedding::text FROM luma_knowledge WHERE title=@title AND content=@content
+                AND vector_dims(embedding)=@dimensions AND release LIKE @model LIMIT 1
+                """, db, transaction);
+            reuse.Parameters.AddWithValue("title", doc.Title);
+            reuse.Parameters.AddWithValue("content", doc.Content);
+            reuse.Parameters.AddWithValue("dimensions", _options.Dimensions);
+            reuse.Parameters.AddWithValue("model", "%:" + _options.EmbeddingModel + ":" + _options.Dimensions);
+            if (await reuse.ExecuteScalarAsync(ct) is string existing) vectors[index] = JsonSerializer.Deserialize<float[]>(existing)!;
+            else missing.Add(index);
+        }
+        if (missing.Count > 0)
+        {
+            if (!_options.AllowEmbeddingGeneration)
+                throw new InvalidOperationException("Importe os vetores do acervo antes de iniciar este ambiente; geração automática de embeddings desativada.");
+            var generated = await embeddings.EmbedAsync(missing.Select(index => documents[index].Title + "\n" + documents[index].Content).ToArray(), ct);
+            for (var index = 0; index < missing.Count; index++) vectors[missing[index]] = generated[index];
+        }
         for (var index = 0; index < documents.Count; index++)
         {
             var document = documents[index];

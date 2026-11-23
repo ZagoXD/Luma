@@ -7,6 +7,61 @@ namespace Luma.Tests;
 
 public sealed class UsageLedgerTests
 {
+    [Fact]
+    public async Task Onboarding_and_normal_AI_share_the_monthly_budget()
+    {
+        var service = new UsageLedger(db, Options.Create(new UsageOptions { BasicMonthlyMessages = 1 }), TimeProvider.System);
+        var account = Guid.NewGuid();
+        Assert.True((await service.ReserveAsync(account, "basico", "signup", "onboarding", 1)).Allowed);
+        Assert.False((await service.ReserveAsync(account, "basico", "normal", "ai", 1)).Allowed);
+        Assert.Equal(1, (await service.SnapshotAsync(account, "basico", default)).MonthlyUsed);
+    }
+    [Fact]
+    public async Task Monthly_AI_is_atomic_with_daily_and_resets_only_at_local_month_boundary()
+    {
+        var clock = new Clock(new(2026, 11, 29, 15, 0, 0, TimeSpan.Zero));
+        var service = new UsageLedger(db, Options.Create(new UsageOptions { BasicMonthlyMessages = 2 }), clock);
+        var id = Guid.NewGuid();
+        Assert.True((await service.ReserveAsync(id, "basico", "first", "ai", 1)).Allowed);
+        clock.Now = clock.Now.AddDays(1);
+        Assert.True((await service.ReserveAsync(id, "basico", "second", "ai", 1)).Allowed);
+        var rejected = await service.ReserveAsync(id, "basico", "third", "ai", 1);
+        Assert.False(rejected.Allowed);
+        Assert.Contains("mês", rejected.Message);
+        var state = await service.SnapshotAsync(id, "basico", default);
+        Assert.Equal(1, state.DailyUsed);
+        Assert.Equal(2, state.MonthlyUsed);
+        Assert.Equal(new DateTimeOffset(2026, 12, 1, 3, 0, 0, TimeSpan.Zero), state.MonthlyResetsAt);
+        clock.Now = state.MonthlyResetsAt;
+        Assert.True((await service.ReserveAsync(id, "basico", "new-month", "ai", 1)).Allowed);
+    }
+
+    [Fact]
+    public async Task Monthly_upgrade_uses_existing_consumption_and_audio_cannot_bypass_monthly_AI()
+    {
+        var service = new UsageLedger(db, Options.Create(new UsageOptions { BasicMonthlyMessages = 1, EssentialMonthlyMessages = 2 }), TimeProvider.System);
+        var id = Guid.NewGuid();
+        Assert.True((await service.ReserveAsync(id, "basico", "one", "ai", 1)).Allowed);
+        Assert.True((await service.ReserveAudioAsync(id, "essencial", "two", 30)).Allowed);
+        Assert.False((await service.ReserveAudioAsync(id, "essencial", "three", 30)).Allowed);
+        var state = await service.SnapshotAsync(id, "essencial", default);
+        Assert.Equal(2, state.MonthlyUsed);
+        Assert.Equal(30, state.AudioSecondsUsed);
+        Assert.True((await service.ReserveAsync(id, "basico", "one", "ai", 1)).Duplicate);
+    }
+
+    [Fact]
+    public async Task Existing_daily_receipts_are_counted_when_monthly_buckets_are_introduced()
+    {
+        var clock = new Clock(new(2026, 11, 22, 15, 0, 0, TimeSpan.Zero));
+        var id = Guid.NewGuid();
+        await using var context = new LumaDbContext(db);
+        context.UsageReceipts.Add(new() { Id = "legacy", AccountId = id, Kind = "ai", Units = 1, CreatedAt = clock.Now });
+        await context.SaveChangesAsync();
+        var service = new UsageLedger(db, Options.Create(new UsageOptions { BasicMonthlyMessages = 1 }), clock);
+        Assert.Equal(1, (await service.SnapshotAsync(id, "basico", default)).MonthlyUsed);
+        Assert.False((await service.ReserveAsync(id, "basico", "extra", "ai", 1)).Allowed);
+    }
     private readonly DbContextOptions<LumaDbContext> db = new DbContextOptionsBuilder<LumaDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
     [Fact]
     public async Task Daily_admission_is_idempotent_and_resets_by_server_calendar_not_plan_change()
@@ -50,7 +105,7 @@ public sealed class UsageLedgerTests
         Assert.False((await service.ReserveAudioAsync(account, "essencial", "second", 1)).Allowed);
         await using var context = new LumaDbContext(db);
         Assert.Equal(1L, (await context.UsageBuckets.SingleAsync(x => x.Kind == "ai")).Units);
-        Assert.Equal(2, await context.UsageReceipts.CountAsync());
+        Assert.Equal(3, await context.UsageReceipts.CountAsync());
     }
 
     [Fact]

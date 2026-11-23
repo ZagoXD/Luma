@@ -16,6 +16,7 @@ public static class LumaToolCatalog
     {
         ["get_user_profile"] = ("Consulta dados pessoais autorizados e preferências menstruais reais.", [], []),
         ["get_usage_summary"] = ("Consulta limites e consumo real de IA, áudio e imagens da conta atual. Não estime contagens pela conversa.", [], []),
+        ["get_plan_catalog"] = ("Consulta preços atuais para novas contratações, cobrança anual à vista e franquias diárias e mensais. Para consumo pessoal use get_usage_summary.", [], []),
         ["get_onboarding_state"] = ("Consulta a etapa atual, o próximo dado necessário e intenções aguardando confirmação.", [], []),
         ["complete_onboarding_step"] = ("Registra somente dados explicitamente informados no cadastro; não infira idade ou consentimento a partir do nome. Se a usuária não lembra a DUM, use last_period_unknown=true.", ["display_name", "consent_accepted", "is_adult_confirmed", "date", "last_period_unknown", "average_cycle_length", "average_period_length", "contraceptive_type"], []),
         ["confirm_pending_intent"] = ("Confirma ou descarta a intenção pendente após cadastro concluído, só mediante resposta explícita da usuária.", ["confirmed"], ["confirmed"]),

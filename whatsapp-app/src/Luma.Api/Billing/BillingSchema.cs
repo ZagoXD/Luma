@@ -14,6 +14,19 @@ ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ReplacedBySubscripti
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ReplacementConfirmedAt" timestamptz;
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingPlanCode" varchar(32);
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingBillingInterval" varchar(32);
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "ContractAmount" numeric(18,2);
+ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "PendingContractAmount" numeric(18,2);
+UPDATE account_subscriptions SET "ContractAmount" = CASE
+ WHEN "PlanCode"='basico' AND "BillingInterval"='annual' THEN 70.80
+ WHEN "PlanCode"='basico' THEN 11.00
+ WHEN "PlanCode"='essencial' AND "BillingInterval"='annual' THEN 118.80
+ WHEN "PlanCode"='essencial' THEN 20.00 END WHERE "ContractAmount" IS NULL;
+UPDATE account_subscriptions SET "PendingContractAmount" = CASE
+ WHEN "PendingPlanCode"='basico' AND "PendingBillingInterval"='annual' THEN 70.80
+ WHEN "PendingPlanCode"='basico' THEN 11.00
+ WHEN "PendingPlanCode"='essencial' AND "PendingBillingInterval"='annual' THEN 118.80
+ WHEN "PendingPlanCode"='essencial' THEN 20.00 END
+ WHERE "PendingContractAmount" IS NULL AND "PendingPlanCode" IS NOT NULL;
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "TerminatedAt" timestamptz;
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "TerminationConfirmedAt" timestamptz;
 ALTER TABLE account_subscriptions ADD COLUMN IF NOT EXISTS "WithdrawalRequestedAt" timestamptz;

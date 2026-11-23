@@ -200,6 +200,7 @@ public sealed class WhatsAppAudioTranscriptionService(
                 if (usageContext?.AccountId is not Guid owner || usageContext.Plan != "essencial") return new(true, false, null, "audio_limit");
                 var remaining = await usage.SnapshotAsync(owner, usageContext.Plan, cancellationToken);
                 if (remaining.DailyUsed >= remaining.DailyLimit) return new(true, false, null, "daily_limit");
+                if (remaining.MonthlyUsed >= remaining.MonthlyLimit) return new(true, false, null, "monthly_limit");
                 if (remaining.AudioSecondsUsed >= remaining.MonthlyAudioSeconds) return new(true, false, null, "audio_limit");
             }
             var media = await mediaDownloader.DownloadAsync(audio.Value.MediaUrl, cancellationToken);

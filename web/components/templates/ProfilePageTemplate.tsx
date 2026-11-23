@@ -353,12 +353,12 @@ export function ProfilePageTemplate({ accountId, whatsappNumber }: ProfilePageTe
             <h2><CreditCard size={20} /> Plano</h2>
             {subscription && plan ? (
               <>
-                <p className="plan-pill">{plan.name} - {getPlanPrice(subscription.planCode, subscription.billingInterval)}</p>
+                <p className="plan-pill">{plan.name} - {getPlanPrice(subscription.planCode, subscription.billingInterval, subscription.amount)}</p>
                 {profile?.pendingCheckout?.scheduled && <div className="account-status info">
                   <p>Troca para {plans[profile.pendingCheckout.planCode].name} {formatBillingIntervalName(profile.pendingCheckout.billingInterval)} agendada para {formatDate(profile.pendingCheckout.startsAt)}, após confirmação da cobrança.</p>
                   <button type="button" className="account-secondary" onClick={handleCancelScheduled} disabled={billingAction === "scheduled"}>Cancelar troca agendada</button>
                 </div>}
-                {subscription.pendingPlanCode && <p>Próxima renovação: {getPlanPrice(subscription.pendingPlanCode, subscription.pendingBillingInterval || subscription.billingInterval)} no plano {plans[subscription.pendingPlanCode].name}.</p>}
+                {subscription.pendingPlanCode && <p>Próxima renovação: {getPlanPrice(subscription.pendingPlanCode, subscription.pendingBillingInterval || subscription.billingInterval, subscription.pendingContractAmount)} no plano {plans[subscription.pendingPlanCode].name}.</p>}
                 <dl className="profile-list">
                   <div><dt>Status</dt><dd>{formatSubscriptionStatus(subscription.status)}</dd></div>
                   <div><dt>Cobrança</dt><dd>{subscription.billingLabel}</dd></div>

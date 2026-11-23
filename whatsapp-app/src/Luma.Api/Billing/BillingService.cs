@@ -11,7 +11,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
 {
     public async Task<AccountSubscription> PrepareAsync(AccountUser user, string planCode, string interval, CancellationToken ct, Guid? replaces = null)
     {
-        BillingCatalog.Get(planCode, interval);
+        var quotedPlan = BillingCatalog.Get(planCode, interval);
         if (user.PhoneVerifiedAt is null) throw new BillingException("Confirme seu celular antes de contratar um plano.");
         await using var transaction = await LockAsync(user.Id, ct);
         if (await db.AccountUsers.AnyAsync(a => a.Id == user.Id && a.DeletionRequestedAt != null, ct)) throw new BillingException("Esta conta está em exclusão.");
@@ -28,7 +28,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         if (pending is null)
         {
             pending = new() { AccountUserId = user.Id, PhoneNumber = user.PhoneNumber, PlanCode = planCode, BillingInterval = interval,
-                BillingProvider = gateway.Provider, Status = SubscriptionStatuses.Pending, CurrentPeriodEndsAt = DateTimeOffset.UtcNow };
+                BillingProvider = gateway.Provider, ContractAmount = quotedPlan.Amount, Status = SubscriptionStatuses.Pending, CurrentPeriodEndsAt = DateTimeOffset.UtcNow };
             pending.ReplacesSubscriptionId = replaces;
             if (current is not null) pending.StartsAt = current.CurrentPeriodEndsAt;
             db.AccountSubscriptions.Add(pending);
@@ -64,7 +64,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
             var email = string.IsNullOrWhiteSpace(payerEmail) ? user.Email : payerEmail.Trim();
             if (!System.Net.Mail.MailAddress.TryCreate(email, out var address) || address.Address != email || email.Length > 254)
                 throw new BillingException("E-mail do pagador inválido.");
-            var order = new SubscriptionOrder(local.Id, email, BillingCatalog.Get(local.PlanCode, local.BillingInterval), returnUrl,
+            var order = new SubscriptionOrder(local.Id, email, BillingCatalog.Contract(local), returnUrl,
                 local.ReplacesSubscriptionId is not null ? local.StartsAt : null);
             local.PaymentAttemptedAt ??= DateTimeOffset.UtcNow;
             local.PaymentMethod = method;
@@ -205,8 +205,10 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         // Keep the paid entitlement unchanged; the new tier is granted only when its renewal is paid.
         var previousPlan = local.PendingPlanCode;
         var previousInterval = local.PendingBillingInterval;
+        var previousAmount = local.PendingContractAmount;
         local.PendingPlanCode = code;
         local.PendingBillingInterval = interval;
+        local.PendingContractAmount = plan.Amount;
         await db.SaveChangesAsync(ct);
         try { await gateway.ChangePlanAsync(local.ProviderSubscriptionId!, plan, local.CurrentPeriodEndsAt, ct); }
         catch (Exception exception) when (exception is BillingException or HttpRequestException or TaskCanceledException)
@@ -215,6 +217,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
             {
                 local.PendingPlanCode = previousPlan;
                 local.PendingBillingInterval = previousInterval;
+                local.PendingContractAmount = previousAmount;
                 await db.SaveChangesAsync(CancellationToken.None);
             }
             if (transaction is not null) await transaction.CommitAsync(CancellationToken.None);
@@ -299,7 +302,7 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
         }
         var effective = local;
         if (local.PendingPlanCode is not null && local.PendingBillingInterval is not null)
-            effective = new() { Id = local.Id, PlanCode = local.PendingPlanCode, BillingInterval = local.PendingBillingInterval };
+            effective = new() { Id = local.Id, PlanCode = local.PendingPlanCode, BillingInterval = local.PendingBillingInterval, ContractAmount = local.PendingContractAmount };
         if (!BillingPolicy.Matches(effective, remote)) throw new BillingException("Plano, valor ou período da cobrança incompatível.");
         var wasPending = local.Status == SubscriptionStatuses.Pending;
         foreach (var payment in await gateway.GetPaymentsAsync(remote.Id, ct))
@@ -322,8 +325,10 @@ public sealed class BillingService(LumaDbContext db, ISubscriptionGateway gatewa
             await new Luma.Api.Fiscal.FiscalOutbox(db).ObserveAsync(savedPayment,ct);
             local.PlanCode = effective.PlanCode;
             local.BillingInterval = effective.BillingInterval;
+            local.ContractAmount = BillingCatalog.Contract(effective).Amount;
             local.PendingPlanCode = null;
             local.PendingBillingInterval = null;
+            local.PendingContractAmount = null;
         }
         await db.SaveChangesAsync(ct);
         var end = await db.BillingPayments.Where(p => p.AccountSubscriptionId == local.Id && p.Status == "approved")

@@ -1,5 +1,6 @@
 import { PlanCard } from "@/components/molecules/PlanCard";
 import { SectionHeading } from "@/components/molecules/SectionHeading";
+import { plans } from "@/lib/luma-api";
 
 const baseFeatures = [
   { enabled: true, label: "Mensagens de texto pelo WhatsApp" },
@@ -26,15 +27,15 @@ export function PricingSection() {
             planValue="basico"
             price={
               <div className="plan-price-stack">
-                <span className="plan-price-line">R$ 5,90/mês</span>
-                <span className="plan-period">no plano anual cobrado à vista: R$ 70,80/ano</span>
-                <span className="plan-monthly-line">Plano mensal: R$ 11,00/mês</span>
+                <span className="plan-price-line">{plans.basico.annualEquivalent.replace("equivale a ", "")}</span>
+                <span className="plan-period">no anual à vista: {plans.basico.annualPrice}, sem parcelamento</span>
+                <span className="plan-monthly-line">Plano mensal: {plans.basico.monthlyPrice}</span>
               </div>
             }
             description="Tudo que você precisa para registrar seu ciclo de forma simples e sem esforço."
             features={[
               ...baseFeatures,
-              { enabled: true, label: "Até 10 mensagens com IA por dia, sem cota mensal" },
+              { enabled: true, label: "Até 10 mensagens com IA por dia e 150 por mês" },
               { enabled: true, label: "Menu de registros disponível após a cota de IA" },
               { enabled: false, label: "Mensagens por áudio" },
               { enabled: false, label: "Imagens educativas do bebê" },
@@ -48,21 +49,21 @@ export function PricingSection() {
             delay="0.15s"
           />
           <PlanCard
-            badge="Mais escolhido"
+            badge="Mais recursos"
             badgeClass="full"
             name="Essencial"
             planValue="essencial"
             price={
               <div className="plan-price-stack">
-                <span className="plan-price-line">R$ 9,90/mês</span>
-                <span className="plan-period">no plano anual cobrado à vista: R$ 118,80/ano</span>
-                <span className="plan-monthly-line">Plano mensal: R$ 20,00/mês</span>
+                <span className="plan-price-line">{plans.essencial.annualEquivalent.replace("equivale a ", "")}</span>
+                <span className="plan-period">no anual à vista: {plans.essencial.annualPrice}, sem parcelamento</span>
+                <span className="plan-monthly-line">Plano mensal: {plans.essencial.monthlyPrice}</span>
               </div>
             }
             description="Tudo do plano Básico, mais recursos inteligentes para uma rotina com menos esforço."
             features={[
               ...baseFeatures,
-              { enabled: true, label: "Até 20 mensagens com IA por dia, sem cota mensal" },
+              { enabled: true, label: "Até 20 mensagens com IA por dia e 300 por mês" },
               { enabled: true, label: "Menu de registros disponível após a cota de IA" },
               { enabled: true, label: "Áudios de até 60 segundos: 10 minutos por mês" },
               { enabled: true, label: "Até 2 imagens educativas por mês" },

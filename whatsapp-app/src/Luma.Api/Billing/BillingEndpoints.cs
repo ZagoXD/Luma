@@ -27,7 +27,7 @@ public static class BillingEndpoints
                 return Results.Json(new { message = "O checkout está temporariamente indisponível." }, statusCode: 503);
             var local = await billing.PrepareAsync(user, input.PlanCode, input.BillingInterval, ct, input.ReplacesSubscriptionId);
             return Results.Ok(new { provider = gateway.Provider, publicKey = gateway.PublicKey, checkoutId = local.Id,
-                amount = BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount, email = gateway.CheckoutEmail(user.Email),
+                amount = BillingCatalog.Contract(local).Amount, email = gateway.CheckoutEmail(user.Email),
                 submitted = local.PaymentAttemptedAt is not null, scheduled = local.ReplacementConfirmedAt != null, startsAt = local.StartsAt });
         });
 
@@ -96,7 +96,7 @@ public static class BillingEndpoints
                 && s.PaymentMethod == "card" && s.CurrentPeriodEndsAt > DateTimeOffset.UtcNow
                 && (s.Status == "active" || s.Status == "canceled")).OrderByDescending(s => s.CurrentPeriodEndsAt).FirstOrDefaultAsync();
             if (current is null) throw new BillingException("Nenhuma assinatura disponível para atualizar o cartão.");
-            return Results.Ok(new { publicKey = gateway.PublicKey, email = gateway.CheckoutEmail(user.Email), amount = BillingCatalog.Get(current.PlanCode, current.BillingInterval).Amount });
+            return Results.Ok(new { publicKey = gateway.PublicKey, email = gateway.CheckoutEmail(user.Email), amount = BillingCatalog.Contract(current).Amount });
         });
         group.MapPost("/account/payment-method/confirm", async (HttpRequest http, CardRequest input, LumaDbContext db, BillingService billing, CancellationToken ct) =>
         {
@@ -135,6 +135,7 @@ public static class BillingEndpoints
     {
         subscription.Id, subscription.PlanCode, planName = subscription.PlanCode == "essencial" ? "Essencial" : "Básico",
         subscription.BillingInterval, billingLabel = subscription.BillingInterval == "annual" ? "Anual" : "Mensal",
+        amount = BillingCatalog.Contract(subscription).Amount, subscription.PendingContractAmount,
         subscription.Status, subscription.StartsAt, subscription.CurrentPeriodEndsAt, subscription.CanceledAt,
         subscription.PaymentMethod, subscription.PendingPlanCode, subscription.PendingBillingInterval,
         subscription.TerminatedAt, subscription.WithdrawalRequestedAt, subscription.WithdrawalCompletedAt,

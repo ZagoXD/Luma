@@ -32,7 +32,7 @@ public sealed class AudioUsageAdmissionTests
         Assert.False((await service.TryTranscribeAsync(form)).Success);
         Assert.Equal(allowed ? 1 : 0, speech.Calls);
         await using var db = new LumaDbContext(options);
-        Assert.Equal(allowed ? 2 : 0, await db.UsageReceipts.CountAsync());
+        Assert.Equal(allowed ? 3 : 0, await db.UsageReceipts.CountAsync());
         Assert.Equal(allowed, context.Admitted);
     }
 
@@ -40,6 +40,28 @@ public sealed class AudioUsageAdmissionTests
     {
         public Task<TwilioMediaDownloadResult> DownloadAsync(string url, CancellationToken ct = default)
             => Task.FromResult(new TwilioMediaDownloadResult(AudioDurationPolicyTests.Wave(seconds), "audio/wav"));
+    }
+
+    [Fact]
+    public async Task Monthly_AI_exhaustion_rejects_audio_before_download_or_transcription()
+    {
+        var options = new DbContextOptionsBuilder<LumaDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        var ledger = new UsageLedger(options, Options.Create(new UsageOptions { EssentialMonthlyMessages = 1 }), TimeProvider.System);
+        var context = new UsageContext { AccountId = Guid.NewGuid(), Plan = "essencial", MessageId = "new-audio" };
+        await ledger.ReserveAsync(context.AccountId.Value, "essencial", "previous", "ai", 1);
+        var speech = new SpeechSpy();
+        var service = new WhatsAppAudioTranscriptionService(new NeverDownload(), speech,
+            NullLogger<WhatsAppAudioTranscriptionService>.Instance, ledger, context);
+        var result = await service.TryTranscribeAsync(new FormCollection(new Dictionary<string, StringValues> {
+            ["NumMedia"] = "1", ["MediaContentType0"] = "audio/wav", ["MediaUrl0"] = "https://offline.invalid/audio" }));
+        Assert.Equal("monthly_limit", result.ErrorMessage);
+        Assert.Equal(0, speech.Calls);
+    }
+
+    private sealed class NeverDownload : ITwilioMediaDownloader
+    {
+        public Task<TwilioMediaDownloadResult> DownloadAsync(string url, CancellationToken ct = default)
+            => throw new Exception("A quota-rejected audio must never be downloaded.");
     }
 
     [Fact]

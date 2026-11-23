@@ -62,9 +62,15 @@ As fichas cobrem identidade, limites, maioridade e consentimento, assinatura men
 e anual, pagamento e cancelamento, cadastro fora da ordem, registros, calendário,
 gravidez, áudio, imagens, notificações, privacidade e suporte.
 
-Os valores refletem o catálogo atual: Básico R$ 11,00/mês ou R$ 70,80/ano;
-Essencial R$ 20,00/mês ou R$ 118,80/ano. Os equivalentes anuais R$ 5,90 e
-R$ 9,90 não são parcelamento. Um teste acusa divergência com os preços da web.
+Os valores refletem o catálogo atual: Básico R$ 32,90/mês ou R$ 334,80/ano;
+Essencial R$ 59,90/mês ou R$ 658,80/ano. Os equivalentes anuais R$ 27,90 e
+R$ 54,90 não são parcelamento. Um teste acusa divergência com os preços da web.
+Os dois trechos incluem franquias diárias/mensais e a alternativa sem IA. `get_plan_catalog`
+consulta o catálogo autoritativo; `get_usage_summary` consulta consumo real e datas de renovação.
+`Knowledge/precomputed.json` inclui apenas os dois vetores de produto, com hash do texto,
+modelo e dimensão. O publicador reutiliza vetores de texto idêntico e importa os preparados,
+sem chamar API quando geração está desativada. Uma alteração sem vetor compatível falha
+antes de ativar a nova release; não reutiliza vetor de conteúdo diferente.
 
 Plano da pessoa, validade, datas menstruais e gravidez continuam sendo dados
 consultados por ferramentas autorizadas. O acervo não substitui essas leituras.

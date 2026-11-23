@@ -18,10 +18,10 @@ O frontend mantém atomic design. `PaymentCardForm`, em organisms, encapsula o C
 
 | Plano | Mensal | Anual à vista |
 |---|---:|---:|
-| Básico | R$ 11,00 | R$ 70,80 |
-| Essencial | R$ 20,00 | R$ 118,80 |
+| Básico | R$ 32,90 | R$ 334,80 |
+| Essencial | R$ 59,90 | R$ 658,80 |
 
-O anual equivale a R$ 5,90 ou R$ 9,90 por mês; não significa doze parcelas. Não foram criados produtos no painel: a assinatura sem plano associado recebe o preço validado pela API.
+O anual equivale a R$ 27,90 ou R$ 54,90 por mês, cobrado integralmente à vista, sem parcelamento. Não foram criados produtos no painel: a assinatura sem plano associado recebe o preço validado pela API. Novos contratos salvam `ContractAmount`; cobranças antigas continuam sendo validadas pelo preço contratado, inclusive renovação e reembolso. Trocas confirmadas salvam `PendingContractAmount` antes do provedor e só mudam o benefício após pagamento.
 
 Cartão: autorização de recorrência via `/preapproval`, frequência de um ou doze meses. Autorização não prova pagamento. O acesso só é concedido após leitura de pagamento aprovado, com valor e moeda esperados. A primeira cobrança é assíncrona e, segundo a documentação do provedor, ocorre aproximadamente uma hora depois da assinatura; a tela informa que está aguardando confirmação, o webhook e a reconciliação podem concluir o acesso mesmo após a usuária fechar a página.
 

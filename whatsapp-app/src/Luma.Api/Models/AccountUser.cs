@@ -68,6 +68,8 @@ public sealed class AccountSubscription
     public string PhoneHash { get; set; } = string.Empty;
     public string PlanCode { get; set; } = string.Empty;
     public string BillingInterval { get; set; } = "monthly";
+    public decimal? ContractAmount { get; set; }
+    public decimal? PendingContractAmount { get; set; }
     public string Status { get; set; } = SubscriptionStatuses.Pending;
     public string BillingProvider { get; set; } = "legacy";
     public string? ProviderSubscriptionId { get; set; }

@@ -13,7 +13,7 @@ test("contact encryption is randomized and does not expose its payload", async (
 
 const key = Buffer.alloc(32, 1).toString("base64");
 const signup = { name: "Nay", email: "nay@example.com", channel: "email", termsAccepted: true,
-  launchConsent: true, version: "2026-11-22", termsVersion: "2026-11-22", privacyVersion: "2026-11-22" };
+  launchConsent: true, version: "2026-11-22", termsVersion: "2026-11-22-v2", privacyVersion: "2026-11-22-v2" };
 function harness() {
   const inserts = [];
   const env = { API_SECRET: "secret", ENCRYPTION_KEY: key, ASSETS: { fetch: () => new Response("asset") },
@@ -50,7 +50,7 @@ test("Pages encrypts contacts and independent consent evidence for each channel"
     assert.equal(stored.whatsapp, channel === "email" ? null : "+5516992330309");
     assert.equal(stored.termsAccepted, true); assert.equal(stored.launchConsent, true);
     assert.equal(stored.emailOptIn, channel !== "whatsapp"); assert.equal(stored.whatsappOptIn, channel !== "email");
-    assert.equal(stored.termsVersion, "2026-11-22"); assert.equal(stored.version, "2026-11-22");
+    assert.equal(stored.termsVersion, "2026-11-22-v2"); assert.equal(stored.version, "2026-11-22");
     assert.ok(!Number.isNaN(Date.parse(stored.consentRecordedAt))); assert.equal(insert[3], "2026-11-22");
     assert.ok(!insert.join(" ").includes("nay@example.com"));
   }
