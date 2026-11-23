@@ -17,11 +17,22 @@ public static class BillingCatalog
 {
     public static BillingPlan Get(string? code, string? interval) => (code, interval) switch
     {
-        ("basico", "monthly") => new("basico", "monthly", 11m, "Luma Básico mensal"),
-        ("basico", "annual") => new("basico", "annual", 70.80m, "Luma Básico anual"),
-        ("essencial", "monthly") => new("essencial", "monthly", 20m, "Luma Essencial mensal"),
-        ("essencial", "annual") => new("essencial", "annual", 118.80m, "Luma Essencial anual"),
+        ("basico", "monthly") => new("basico", "monthly", 32.90m, "Luma Básico mensal"),
+        ("basico", "annual") => new("basico", "annual", 334.80m, "Luma Básico anual"),
+        ("essencial", "monthly") => new("essencial", "monthly", 59.90m, "Luma Essencial mensal"),
+        ("essencial", "annual") => new("essencial", "annual", 658.80m, "Luma Essencial anual"),
         _ => throw new BillingException("Plano ou período de cobrança inválido.")
+    };
+
+    // Missing snapshots belong to contracts created before the catalog revision.
+    public static BillingPlan Contract(AccountSubscription subscription)
+        => Get(subscription.PlanCode, subscription.BillingInterval) with { Amount = subscription.ContractAmount ?? LegacyAmount(subscription.PlanCode, subscription.BillingInterval) };
+
+    public static decimal LegacyAmount(string code, string interval) => (code, interval) switch
+    {
+        ("basico", "monthly") => 11m, ("basico", "annual") => 70.80m,
+        ("essencial", "monthly") => 20m, ("essencial", "annual") => 118.80m,
+        _ => throw new BillingException("Contrato inválido.")
     };
 }
 
@@ -58,12 +69,12 @@ public static class BillingPolicy
             && (plan is null || subscription.PlanCode == plan);
     public static bool Matches(AccountSubscription local, ProviderSubscription remote)
     {
-        var plan = BillingCatalog.Get(local.PlanCode, local.BillingInterval);
+        var plan = BillingCatalog.Contract(local);
         return remote.Reference == local.Id.ToString("N") && remote.Currency == "BRL"
             && remote.Amount == plan.Amount && remote.Months == plan.Months;
     }
 
     public static bool IsPaid(AccountSubscription local, ProviderSubscription remote, ProviderPayment payment)
         => Matches(local, remote) && payment.SubscriptionId == remote.Id && payment.Status == "approved"
-            && payment.Currency == "BRL" && payment.Amount == BillingCatalog.Get(local.PlanCode, local.BillingInterval).Amount;
+            && payment.Currency == "BRL" && payment.Amount == BillingCatalog.Contract(local).Amount;
 }

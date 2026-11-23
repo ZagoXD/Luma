@@ -45,7 +45,7 @@ public sealed class MercadoPagoGatewayTests
         Assert.Equal("remote", response.Id);
         var payload = JsonDocument.Parse(requests[1].Body).RootElement;
         Assert.Equal("opaque", payload.GetProperty("card_token_id").GetString());
-        Assert.Equal(118.80m, payload.GetProperty("auto_recurring").GetProperty("transaction_amount").GetDecimal());
+        Assert.Equal(658.80m, payload.GetProperty("auto_recurring").GetProperty("transaction_amount").GetDecimal());
         Assert.DoesNotContain("security_code", requests[1].Body);
         Assert.DoesNotContain("card_number", requests[1].Body);
     }

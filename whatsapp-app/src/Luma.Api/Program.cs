@@ -63,6 +63,7 @@ builder.Services.AddScoped<AssistantOrchestrator>();
 builder.Services.AddScoped<KnowledgeStore>();
 builder.Services.AddOptions<UsageOptions>().Bind(builder.Configuration.GetSection("Usage"))
     .Validate(x => x.BasicDailyMessages > 0 && x.EssentialDailyMessages >= x.BasicDailyMessages
+        && x.BasicMonthlyMessages > 0 && x.EssentialMonthlyMessages >= x.BasicMonthlyMessages
         && x.OnboardingDailyMessages > 0 && x.MonthlyAudioSeconds > 0 && x.MaxAudioSeconds > 0
         && x.MonthlyImages > 0 && TimeZoneInfo.TryFindSystemTimeZoneById(x.TimeZone, out _), "Limites ou fuso de uso inválidos.")
     .ValidateOnStart();
@@ -715,6 +716,7 @@ app.MapPost("/webhooks/twilio/whatsapp", async (
         else if (audio.Attempted)
         {
             if (audio.ErrorMessage == "audio_busy") return TwilioXmlReply("Estou processando outros áudios agora. Tente novamente em instantes ou escreva sua mensagem.");
+            if (audio.ErrorMessage == "monthly_limit") return TwilioXmlReply("Sua cota mensal de IA terminou. Ela renova no primeiro dia do próximo mês, à meia-noite de São Paulo. Envie *registrar* para continuar seus registros sem IA ou *meu uso* para consultar os limites.");
             return TwilioXmlReply(audio.ErrorMessage is "audio_limit" or "daily_limit"
                 ? "Este áudio excede seus limites de uso: até 60 segundos por áudio e 10 minutos por mês, além da cota diária de IA. Você pode escrever ou enviar *registrar* para usar o menu sem IA."
                 : "Eu recebi seu áudio, mas não consegui entender com segurança agora. Pode tentar mandar de novo ou escrever a mensagem em texto?");

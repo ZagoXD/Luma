@@ -78,6 +78,31 @@ public sealed class ProductionSecurityHttpTests
             var result = await client.GetFromJsonAsync<JsonElement>("/account/usage");
             Assert.Equal(0, result.GetProperty("dailyUsed").GetInt32());
             Assert.Equal(10, result.GetProperty("dailyLimit").GetInt32());
+            Assert.Equal(150, result.GetProperty("monthlyLimit").GetInt32());
+            Assert.Equal(0, result.GetProperty("monthlyUsed").GetInt32());
+            Assert.True(result.GetProperty("monthlyResetsAt").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+        });
+    }
+
+    [PostgresFact]
+    public async Task Monthly_usage_is_atomic_across_independent_database_connections()
+    {
+        await WithHost(async (host, client) =>
+        {
+            var policy = host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<UsageOptions>>().Value;
+            policy.BasicDailyMessages = 100;
+            policy.BasicMonthlyMessages = 2;
+            var account = Guid.NewGuid();
+            var decisions = await Task.WhenAll(Enumerable.Range(0, 20).Select(async index =>
+            {
+                using var scope = host.Services.CreateScope();
+                return await scope.ServiceProvider.GetRequiredService<UsageLedger>().ReserveAsync(account, "basico", "monthly-race-" + index, "ai", 1);
+            }));
+            Assert.Equal(2, decisions.Count(decision => decision.Allowed));
+            using var verify = host.Services.CreateScope();
+            var snapshot = await verify.ServiceProvider.GetRequiredService<UsageLedger>().SnapshotAsync(account, "basico", default);
+            Assert.Equal(2, snapshot.DailyUsed);
+            Assert.Equal(2, snapshot.MonthlyUsed);
         });
     }
     [PostgresFact]

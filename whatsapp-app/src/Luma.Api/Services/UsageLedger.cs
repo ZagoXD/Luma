@@ -10,12 +10,15 @@ public sealed class UsageOptions
 {
     public int BasicDailyMessages { get; set; } = 10;
     public int EssentialDailyMessages { get; set; } = 20;
+    public int BasicMonthlyMessages { get; set; } = 150;
+    public int EssentialMonthlyMessages { get; set; } = 300;
     public int OnboardingDailyMessages { get; set; } = 12;
     public int MonthlyAudioSeconds { get; set; } = 600;
     public int MaxAudioSeconds { get; set; } = 60;
     public int MonthlyImages { get; set; } = 2;
     public string TimeZone { get; set; } = "America/Sao_Paulo";
     public int DailyLimit(string plan) => plan == "essencial" ? EssentialDailyMessages : BasicDailyMessages;
+    public int MonthlyLimit(string plan) => plan == "essencial" ? EssentialMonthlyMessages : BasicMonthlyMessages;
 }
 
 public sealed class UsageBucket
@@ -53,7 +56,8 @@ public sealed class UsageCall
 
 public sealed record UsageDecision(bool Allowed, bool Duplicate = false, string? Message = null);
 public sealed record UsageSnapshot(int DailyLimit, long DailyUsed, int MonthlyAudioSeconds,
-    long AudioSecondsUsed, int MonthlyImages, long ImagesUsed, string TimeZone);
+    long AudioSecondsUsed, int MonthlyImages, long ImagesUsed, string TimeZone,
+    int MonthlyLimit, long MonthlyUsed, DateTimeOffset DailyResetsAt, DateTimeOffset MonthlyResetsAt);
 
 public sealed class UsageContext
 {
@@ -79,6 +83,7 @@ public sealed class UsageLedger(DbContextOptions<LumaDbContext> options, IOption
     {
         var now = clock.GetUtcNow();
         var local = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById(Policy.TimeZone));
+        requests = requests.SelectMany(item => item.Kind is "ai" or "onboarding" ? new[] { item, ("ai_month", item.Units) } : new[] { item }).ToArray();
         await using var db = new LumaDbContext(options);
         var localOnly = !db.Database.IsNpgsql();
         if (localOnly) await LocalGate.WaitAsync(ct);
@@ -94,12 +99,13 @@ public sealed class UsageLedger(DbContextOptions<LumaDbContext> options, IOption
                     return new(false, Message: "Este recurso não está disponível ou excede o limite por envio.");
                 var receipt = ReceiptId(account, kind, message);
                 if (await db.UsageReceipts.AnyAsync(x => x.Id == receipt, ct)) return new(true, true);
-                var key = $"{account:N}:{kind}:{local.ToString(kind is "audio" or "image" ? "yyyy-MM" : "yyyy-MM-dd")}";
+                var key = $"{account:N}:{kind}:{local.ToString(kind is "audio" or "image" or "ai_month" ? "yyyy-MM" : "yyyy-MM-dd")}";
                 var row = await db.UsageBuckets.SingleOrDefaultAsync(x => x.Key == key, ct);
-                if ((row?.Units ?? 0) + units > limit) return new(false, Message: LimitMessage(kind));
+                var used = row?.Units ?? (kind == "ai_month" ? await LegacyMonthlyCountAsync(db, account, local, ct) : 0);
+                if (used + units > limit) return new(false, Message: LimitMessage(kind));
                 if (row is null)
                 {
-                    row = new() { Key = key, AccountId = account, Kind = kind, ExpiresAt = now.AddDays(40) };
+                    row = new() { Key = key, AccountId = account, Kind = kind, Units = used, ExpiresAt = now.AddDays(40) };
                     db.UsageBuckets.Add(row);
                 }
                 row.Units += units;
@@ -116,6 +122,7 @@ public sealed class UsageLedger(DbContextOptions<LumaDbContext> options, IOption
     private int Limit(string plan, string kind) => kind switch
     {
         "ai" => Policy.DailyLimit(plan),
+        "ai_month" => Policy.MonthlyLimit(plan),
         "onboarding" => Policy.OnboardingDailyMessages,
         "audio" => plan == "essencial" ? Policy.MonthlyAudioSeconds : 0,
         "image" => plan == "essencial" ? Policy.MonthlyImages : 0,
@@ -128,6 +135,7 @@ public sealed class UsageLedger(DbContextOptions<LumaDbContext> options, IOption
     private static string LimitMessage(string kind) => kind switch
     {
         "ai" or "onboarding" => "Você chegou ao limite de conversas com IA de hoje. Seus registros continuam disponíveis: envie *registrar* para usar o menu sem IA. As conversas são liberadas novamente amanhã.",
+        "ai_month" => "Você chegou ao limite de conversas com IA deste mês. A cota renova no primeiro dia do próximo mês, à meia-noite de São Paulo. Envie *registrar* para continuar seus registros sem IA, *meu calendário* para abrir o painel ou *meu uso* para consultar os limites.",
         "audio" => "Os minutos de áudio deste mês terminaram. Você ainda pode escrever ou usar o menu *registrar*.",
         _ => "Você atingiu o limite de imagens deste mês. Seus registros e consultas continuam disponíveis."
     };
@@ -165,8 +173,23 @@ public sealed class UsageLedger(DbContextOptions<LumaDbContext> options, IOption
             var key = $"{account:N}:{kind}:{period}";
             return await db.UsageBuckets.Where(x => x.Key == key).Select(x => (long?)x.Units).SingleOrDefaultAsync(ct) ?? 0;
         }
+        var monthKey = $"{account:N}:ai_month:{local:yyyy-MM}";
+        var monthly = await db.UsageBuckets.Where(x => x.Key == monthKey).Select(x => (long?)x.Units).SingleOrDefaultAsync(ct)
+            ?? await LegacyMonthlyCountAsync(db, account, local, ct);
         return new(Policy.DailyLimit(plan), await Count("ai", local.ToString("yyyy-MM-dd")),
             plan == "essencial" ? Policy.MonthlyAudioSeconds : 0, await Count("audio", local.ToString("yyyy-MM")),
-            plan == "essencial" ? Policy.MonthlyImages : 0, await Count("image", local.ToString("yyyy-MM")), Policy.TimeZone);
+            plan == "essencial" ? Policy.MonthlyImages : 0, await Count("image", local.ToString("yyyy-MM")), Policy.TimeZone,
+            Policy.MonthlyLimit(plan), monthly, LocalMidnight(local.Date.AddDays(1)), LocalMidnight(new DateTime(local.Year, local.Month, 1).AddMonths(1)));
+    }
+
+    private DateTimeOffset LocalMidnight(DateTime value) => new(TimeZoneInfo.ConvertTimeToUtc(
+        DateTime.SpecifyKind(value, DateTimeKind.Unspecified), TimeZoneInfo.FindSystemTimeZoneById(Policy.TimeZone)));
+
+    private async Task<long> LegacyMonthlyCountAsync(LumaDbContext db, Guid account, DateTimeOffset local, CancellationToken ct)
+    {
+        var start = LocalMidnight(new DateTime(local.Year, local.Month, 1));
+        var end = LocalMidnight(new DateTime(local.Year, local.Month, 1).AddMonths(1));
+        return await db.UsageReceipts.Where(x => x.AccountId == account && (x.Kind == "ai" || x.Kind == "onboarding") && x.CreatedAt >= start && x.CreatedAt < end)
+            .SumAsync(x => (long?)x.Units, ct) ?? 0;
     }
 }

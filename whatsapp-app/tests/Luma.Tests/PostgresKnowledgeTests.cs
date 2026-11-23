@@ -18,6 +18,45 @@ public sealed class PostgresFactAttribute : FactAttribute
 public sealed class PostgresKnowledgeTests
 {
     [PostgresFact]
+    public async Task Final_product_prices_publish_from_prepared_vectors_without_paid_embeddings()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "luma-final-product-" + Guid.NewGuid() + ".json");
+        try
+        {
+            var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+            var documents = System.Text.Json.JsonSerializer.Deserialize<KnowledgeDocument[]>(
+                await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Knowledge/corpus.json")), json)!;
+            var previous = documents.Select(doc => doc.Id is "luma-plano-basico" or "luma-plano-essencial"
+                ? doc with { Content = "Contrato anterior de teste " + Guid.NewGuid(), Version = "previous" } : doc).ToArray();
+            var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+                ["ConnectionStrings:DefaultConnection"] = Environment.GetEnvironmentVariable("LUMA_INTEGRATION_DATABASE") }).Build();
+            using var cache = new MemoryCache(new MemoryCacheOptions());
+            var fake = new FullCorpusEmbedding();
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(previous));
+            var options = new RagOptions { Enabled = true, CorpusPath = path, Dimensions = 512 };
+            var store = new KnowledgeStore(config, Options.Create(options), fake, cache, NullLogger<KnowledgeStore>.Instance);
+            await store.PublishAsync();
+            var calls = fake.Calls;
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(documents));
+            options.AllowEmbeddingGeneration = false;
+            var published = await store.PublishAsync();
+            Assert.Equal(calls, fake.Calls);
+            Assert.Equal(published, await store.PublishAsync());
+        }
+        finally { File.Delete(path); }
+    }
+
+    private sealed class FullCorpusEmbedding : IEmbeddingClient
+    {
+        public int Calls { get; private set; }
+        public Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(texts.Select(_ => { var vector = new float[512]; vector[0] = 1; return vector; }).ToArray());
+        }
+    }
+
+    [PostgresFact]
     public async Task Startup_can_require_imported_vectors_without_generating_paid_embeddings()
     {
         var path = Path.Combine(Path.GetTempPath(), "luma-import-only-" + Guid.NewGuid() + ".json");
@@ -114,7 +153,7 @@ public sealed class PostgresKnowledgeTests
         {
             var initialVersion = "v1-" + Guid.NewGuid();
             var documents = new[] { new KnowledgeDocument("cycle", "Calendário menstrual",
-                "Previsões de menstruação são estimativas do ciclo menstrual.", "https://www.gov.br/saude", initialVersion, "approved") };
+                "Previsões de menstruação são estimativas do ciclo menstrual. " + initialVersion, "https://www.gov.br/saude", initialVersion, "approved") };
             await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(documents));
             var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -127,12 +166,20 @@ public sealed class PostgresKnowledgeTests
             var release = await store.PublishAsync();
             Assert.Equal(release, await store.PublishAsync());
             Assert.Equal(1, embedding.Calls);
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(new[] { documents[0] with { Version = initialVersion + "-metadata" } }));
+            var importOnly = new KnowledgeStore(config, Options.Create(new RagOptions { Enabled = true, Dimensions = 3, CorpusPath = path, AllowEmbeddingGeneration = false }),
+                embedding, cache, NullLogger<KnowledgeStore>.Instance);
+            var reused = await importOnly.PublishAsync();
+            Assert.NotEqual(release, reused);
+            Assert.Equal(1, embedding.Calls);
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(documents));
+            await store.PublishAsync();
             var result = await store.SearchAsync("calendário menstrual", default);
             Assert.True(result.Success);
             Assert.Equal("cycle", Assert.Single(result.Sources!).Id);
             Assert.Equal(3, embedding.LastDimensions);
             embedding.Fail = true;
-            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(new[] { documents[0] with { Version = initialVersion + "-v2" } }));
+            await File.WriteAllTextAsync(path, System.Text.Json.JsonSerializer.Serialize(new[] { documents[0] with { Version = initialVersion + "-v2", Content = documents[0].Content + " Nova revisão." } }));
             await Assert.ThrowsAsync<HttpRequestException>(() => store.PublishAsync());
             var fallback = await store.SearchAsync("menstruação", default);
             Assert.True(fallback.Success);

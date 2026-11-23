@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Luma.Api.Billing;
 using Luma.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,8 @@ public sealed partial class ConversationService
     {
         var normalized = MessageText.Normalize(text).Trim();
         if (normalized is "meu uso" or "meus limites") return await BuildUsageReplyAsync();
+        if (normalized is "planos" or "precos" or "precos da luma" or "quais sao os planos da luma")
+            return string.Join("\n", PlanCatalog().Select(item => $"{item.Name}: R$ {item.Monthly.ToString("F2", CultureInfo.GetCultureInfo("pt-BR"))}/mês ou R$ {item.Annual.ToString("F2", CultureInfo.GetCultureInfo("pt-BR"))}/ano à vista, sem parcelamento. IA: {item.DailyMessages}/dia e {item.MonthlyMessages}/mês.")) + "\nEnvie meu uso para consultar seu consumo. Os registros pelo menu continuam disponíveis após a cota de IA.";
         if (normalized is "minha conta" or "suporte" or "privacidade" or "meu calendario" or "notificacoes" or "meus lembretes")
         {
             var baseUrl = (configuration["Luma:WebBaseUrl"] ?? "https://ia-luma.com.br").TrimEnd('/');
@@ -208,9 +211,20 @@ public sealed partial class ConversationService
     {
         if (usage is null || usageContext?.AccountId is not Guid account) return "Consulte o uso do seu plano no perfil da Luma.";
         var state = await usage.SnapshotAsync(account, usageContext.Plan, CancellationToken.None);
-        var text = $"Hoje você usou {state.DailyUsed} de {state.DailyLimit} mensagens para IA. A cota renova à meia-noite ({state.TimeZone}); não há cota mensal de mensagens.";
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(state.TimeZone);
+        var text = $"Hoje você usou {state.DailyUsed} de {state.DailyLimit} mensagens para IA. Neste mês: {state.MonthlyUsed} de {state.MonthlyLimit}.\nRenovação diária: {TimeZoneInfo.ConvertTime(state.DailyResetsAt, zone):dd/MM/yyyy HH:mm}. Renovação mensal: {TimeZoneInfo.ConvertTime(state.MonthlyResetsAt, zone):dd/MM/yyyy HH:mm} ({state.TimeZone}).";
         if (state.MonthlyAudioSeconds > 0)
             text += $"\nÁudio neste mês: {state.AudioSecondsUsed} de {state.MonthlyAudioSeconds} segundos. Cada áudio pode ter até {usage.Policy.MaxAudioSeconds} segundos.\nImagens neste mês: {state.ImagesUsed} de {state.MonthlyImages}.";
         return text + "\nO menu registrar e o painel continuam disponíveis após a cota de IA.";
     }
+
+    private IReadOnlyList<PlanCatalogItem> PlanCatalog()
+    {
+        var policy = usage?.Policy ?? new UsageOptions();
+        return new[] { "basico", "essencial" }.Select(code => new PlanCatalogItem(code == "basico" ? "Básico" : "Essencial",
+            BillingCatalog.Get(code, "monthly").Amount, BillingCatalog.Get(code, "annual").Amount,
+            policy.DailyLimit(code), policy.MonthlyLimit(code), "annual_upfront_only")).ToArray();
+    }
+
+    private sealed record PlanCatalogItem(string Name, decimal Monthly, decimal Annual, int DailyMessages, int MonthlyMessages, string Billing);
 }

@@ -10,7 +10,7 @@ async function main(){
   const marker='waitlist-smoke-'+crypto.randomUUID();
   const cases=['email','whatsapp','both'].map((channel,i)=>({name:marker,channel,
     email:`${marker}-${i}@example.com`,whatsapp:`1191234567${i}`,termsAccepted:true,launchConsent:true,
-    version:'2026-11-22',termsVersion:'2026-11-22',privacyVersion:'2026-11-22'}));
+    version:'2026-11-22',termsVersion:'2026-11-22-v2',privacyVersion:'2026-11-22-v2'}));
   const {validateWaitlist}=await import('../../web/lib/waitlist-validation.mjs');
   const hashes=cases.map(c=>{const v=validateWaitlist(c);assert.ok(v);return crypto.createHmac('sha256',env.WAITLIST_ENCRYPTION_KEY).update(v.email||`whatsapp:${v.whatsapp}`).digest('hex');});
   fs.writeFileSync(path.join(root,'.backups/waitlist-smoke.json'),JSON.stringify({marker,hashes,cases}));

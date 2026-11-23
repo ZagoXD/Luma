@@ -24,12 +24,22 @@ public class BillingPolicyTests
     }
 
     [Theory]
-    [InlineData("basico", "monthly", 11)]
-    [InlineData("basico", "annual", 70.80)]
-    [InlineData("essencial", "monthly", 20)]
-    [InlineData("essencial", "annual", 118.80)]
+    [InlineData("basico", "monthly", 32.90)]
+    [InlineData("basico", "annual", 334.80)]
+    [InlineData("essencial", "monthly", 59.90)]
+    [InlineData("essencial", "annual", 658.80)]
     public void PricesAreAuthoritative(string plan, string interval, decimal amount)
         => Assert.Equal(amount, BillingCatalog.Get(plan, interval).Amount);
+
+    [Fact]
+    public void Contract_price_is_immutable_and_lower_payments_cannot_activate_new_contracts()
+    {
+        var local = new AccountSubscription { PlanCode = "basico", BillingInterval = "monthly", ContractAmount = 32.90m };
+        var remote = new ProviderSubscription("r", local.Id.ToString("N"), "authorized", 11m, "BRL", 1, null);
+        Assert.False(BillingPolicy.Matches(local, remote));
+        local.ContractAmount = 11m;
+        Assert.True(BillingPolicy.Matches(local, remote));
+    }
 
     [Fact]
     public void UnknownPlanIsRejected() => Assert.Throws<BillingException>(() => BillingCatalog.Get("premium", "monthly"));

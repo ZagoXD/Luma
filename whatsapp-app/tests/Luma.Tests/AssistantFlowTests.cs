@@ -244,8 +244,10 @@ public sealed class AssistantFlowTests
         Assert.Single(await db.CycleEvents.ToListAsync());
     }
 
-    [Fact]
-    public async Task Exhausted_AI_quota_still_allows_records_corrections_and_replay_without_model_calls()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Exhausted_AI_quota_still_allows_records_corrections_and_replay_without_model_calls(bool monthly)
     {
         var options = new DbContextOptionsBuilder<LumaDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new LumaDbContext(options);
@@ -261,7 +263,7 @@ public sealed class AssistantFlowTests
             CurrentPeriodEndsAt = DateTimeOffset.UtcNow.AddDays(30)
         });
         await db.SaveChangesAsync();
-        var ledger = new UsageLedger(options, Options.Create(new UsageOptions { BasicDailyMessages = 1 }), TimeProvider.System);
+        var ledger = new UsageLedger(options, Options.Create(new UsageOptions { BasicDailyMessages = monthly ? 10 : 1, BasicMonthlyMessages = monthly ? 1 : 150 }), TimeProvider.System);
         var model = new ScriptedModel();
         model.Call("get_last_period", new { });
         var service = CreateService(db, model, ledger, new UsageContext());
@@ -269,6 +271,11 @@ public sealed class AssistantFlowTests
         var calls = model.Requests;
         var blocked = await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, "outra pergunta", "quota-2"));
         Assert.Contains("limite", blocked);
+        Assert.Contains(monthly ? "mês" : "hoje", blocked);
+        Assert.Equal(calls, model.Requests);
+        var prices = await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, "planos", "prices-without-ai"));
+        Assert.Contains("32,90", prices);
+        Assert.Contains("658,80", prices);
         Assert.Equal(calls, model.Requests);
         Assert.Contains("1 de 1", await service.HandleIncomingMessageAsync(new("test", user.PhoneNumber, "meu uso", "usage-without-ai")));
         Assert.Equal(calls, model.Requests);

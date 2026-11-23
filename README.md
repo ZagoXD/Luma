@@ -48,7 +48,7 @@ Implementado:
 - Bloqueio defensivo de grupos.
 - Recusa local de anexos, contatos e localização, sem enviar esses arquivos à IA.
 - Até três registros explícitos por mensagem, com validação e transação no backend.
-- Cotas diárias persistentes de IA: 10 no Básico e 20 no Essencial, sem cota mensal de mensagens.
+- Cotas persistentes e simultâneas de IA: Básico 10/dia e 150/mês; Essencial 20/dia e 300/mês. Painel com barras, contadores e horários de renovação. Menu de registros disponível após a cota de IA.
 - Menu `registrar` sem IA para registros, correção da última menstruação e notificações.
 - Essencial: áudio de até 60 segundos, 10 minutos/mês e duas solicitações de imagem/mês.
 - Consumo no perfil e contabilização técnica de chamadas sem guardar texto de saúde nesse ledger.

@@ -124,11 +124,14 @@ public sealed partial class ConversationService
             today = Today(), name = user.DisplayName, stage = user.OnboardingStep, pending_action = user.PendingAction,
             consent = user.ConsentAcceptedAt is not null, adult = user.IsAdultConfirmed,
             subscription,
+            plan_catalog = PlanCatalog(),
             usage_policy = usage is null ? null : new
             {
                 basic_daily_messages = usage.Policy.BasicDailyMessages,
                 essential_daily_messages = usage.Policy.EssentialDailyMessages,
-                monthly_message_cap = false,
+                basic_monthly_messages = usage.Policy.BasicMonthlyMessages,
+                essential_monthly_messages = usage.Policy.EssentialMonthlyMessages,
+                monthly_message_cap = true,
                 monthly_audio_seconds = usage.Policy.MonthlyAudioSeconds,
                 max_audio_seconds = usage.Policy.MaxAudioSeconds,
                 monthly_images = usage.Policy.MonthlyImages,
@@ -154,6 +157,7 @@ public sealed partial class ConversationService
         if (name == "out_of_scope") return new(true, OutOfScopeMessage(), true);
         if (name == "ask_clarification") return new(true, arguments.GetProperty("question").GetString()!);
         if (name == "get_onboarding_state") return new(true, await AssistantContextAsync(user), ContextOnly: true);
+        if (name == "get_plan_catalog") return new(true, JsonSerializer.Serialize(PlanCatalog(), new JsonSerializerOptions(JsonSerializerDefaults.Web)), ContextOnly: true);
         if (name == "search_luma_knowledge_base")
             return knowledge is null ? new(false, KnowledgeStore.NoEvidence, true) : await knowledge.SearchAsync(arguments.GetProperty("query").GetString()!, ct,
                 arguments.TryGetProperty("scope", out var scope) ? scope.GetString() ?? "all" : "all");

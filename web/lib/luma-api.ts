@@ -17,6 +17,8 @@ export type AccountSubscription = {
   planName: string;
   billingInterval: BillingInterval;
   billingLabel: string;
+  amount?: number;
+  pendingContractAmount?: number | null;
   status: "active" | "canceled" | "pending" | "failed" | "terminated";
   paymentMethod: "card";
   canManage: boolean;
@@ -106,26 +108,26 @@ export const plans: Record<PlanCode, {
 }> = {
   basico: {
     name: "Básico",
-    monthlyPrice: "R$ 11,00/mês",
-    annualPrice: "R$ 70,80/ano",
-    annualEquivalent: "equivale a R$ 5,90/mês",
+    monthlyPrice: "R$ 32,90/mês",
+    annualPrice: "R$ 334,80/ano",
+    annualEquivalent: "equivale a R$ 27,90/mês",
     benefits: [
       "Liberação da Luma no WhatsApp",
       "Registro de menstruação, sintomas, humor e relação sexual",
       "Histórico e calendário visual do ciclo",
       "Previsões estimadas de menstruação",
-      "Até 10 mensagens com IA por dia, sem cota mensal",
+      "Até 10 mensagens com IA por dia e 150 por mês",
       "Menu de registros disponível após a cota de IA",
     ],
   },
   essencial: {
     name: "Essencial",
-    monthlyPrice: "R$ 20,00/mês",
-    annualPrice: "R$ 118,80/ano",
-    annualEquivalent: "equivale a R$ 9,90/mês",
+    monthlyPrice: "R$ 59,90/mês",
+    annualPrice: "R$ 658,80/ano",
+    annualEquivalent: "equivale a R$ 54,90/mês",
     benefits: [
       "Tudo do plano Básico",
-      "Até 20 mensagens com IA por dia, sem cota mensal",
+      "Até 20 mensagens com IA por dia e 300 por mês",
       "Áudios de até 60 segundos: 10 minutos por mês",
       "Notificações automáticas e lembretes",
       "Até 2 imagens educativas por mês",
@@ -141,7 +143,9 @@ export function getBillingInterval(value: string | null | undefined): BillingInt
   return value === "monthly" || value === "mensal" ? "monthly" : "annual";
 }
 
-export function getPlanPrice(planCode: PlanCode, billingInterval: BillingInterval) {
+export function getPlanPrice(planCode: PlanCode, billingInterval: BillingInterval, amount?: number | null) {
+  if (amount != null && Number.isFinite(amount) && amount > 0)
+    return `${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount)}/${billingInterval === "annual" ? "ano" : "mês"}`;
   const plan = plans[planCode];
   return billingInterval === "annual" ? plan.annualPrice : plan.monthlyPrice;
 }

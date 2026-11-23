@@ -52,6 +52,8 @@ services:
       Luma__DeduplicationSeconds: ${LUMA_DEDUPLICATION_SECONDS:-300}
       Usage__BasicDailyMessages: ${USAGE_BASIC_DAILY_MESSAGES:-10}
       Usage__EssentialDailyMessages: ${USAGE_ESSENTIAL_DAILY_MESSAGES:-20}
+      Usage__BasicMonthlyMessages: ${USAGE_BASIC_MONTHLY_MESSAGES:-150}
+      Usage__EssentialMonthlyMessages: ${USAGE_ESSENTIAL_MONTHLY_MESSAGES:-300}
       Usage__OnboardingDailyMessages: ${USAGE_ONBOARDING_DAILY_MESSAGES:-12}
       Usage__MonthlyAudioSeconds: ${USAGE_MONTHLY_AUDIO_SECONDS:-600}
       Usage__MaxAudioSeconds: ${USAGE_MAX_AUDIO_SECONDS:-60}

@@ -8,19 +8,19 @@ a autoridade para verificar conta, plano, consentimento e limites.
 | Recurso | Básico | Essencial |
 | --- | --- | --- |
 | Mensagens admitidas para IA por dia | 10 | 20 |
-| Limite mensal de mensagens | Não há | Não há |
-| Cadastro inicial | Cota separada de 12 mensagens/dia | Cota separada de 12 mensagens/dia |
+| Mensagens admitidas para IA por mês | 150 | 300 |
+| Cadastro inicial | Até 12/dia, também contabilizadas no mês | Até 12/dia, também contabilizadas no mês |
 | Transcrição | Não disponível | 600 segundos/mês |
 | Tamanho de cada áudio | Não disponível | 60 segundos, até 10 MB |
 | Solicitações de imagem | Não disponível | 2/mês |
 
 O dia renova à meia-noite em `America/Sao_Paulo`, não 24 horas após a primeira
-mensagem. Áudio/imagens renovam no início do mês nesse fuso. O fuso do lembrete
+mensagem. A cota mensal de IA e áudio/imagens renovam no início do mês nesse fuso, inclusive em contratos anuais. O fuso do lembrete
 continua sendo individual e não muda a janela de contabilização do plano.
 
 Uma mensagem composta é uma admissão, não uma por ferramenta ou chamada interna.
-Um áudio usa uma admissão diária e os segundos efetivos, arredondados para cima.
-A reserva dessas duas franquias é atômica. Bloquear uma delas não gasta a outra.
+Um áudio usa uma admissão diária, uma mensal e os segundos efetivos, arredondados para cima.
+A reserva dessas três franquias é atômica. Bloquear uma delas não gasta as outras.
 Tentativas admitidas com falha posterior podem consumir a cota: um timeout não
 comprova ausência de cobrança do provedor. Reentregas com o mesmo MessageSid não
 disparam outra chamada paga, mesmo se a tentativa anterior terminou de forma incerta.
@@ -113,16 +113,26 @@ provedor. `ReferenceCostUsd` é estimativa tarifária, não a fatura real. Embed
 áudio e imagens têm registros separados; custo desconhecido fica nulo, não é
 anunciado como gratuito. Um registro `reserved` pode representar resultado incerto.
 
-Não foi adicionado teto monetário mensal oculto ou bloqueio mensal das conversas.
+Há uma franquia mensal explícita de IA, exibida antes da compra, no painel e pelo MCP.
+Não há teto monetário mensal oculto. O menu de registros e as consultas determinísticas continuam disponíveis.
 As franquias limitam abuso, mas não garantem margem positiva em qualquer padrão
 de uso. Custos Twilio, infraestrutura, câmbio, impostos e taxas devem ser medidos.
 
 ## Preços e validação
 
-Preços mantidos: Básico R$ 11/mês ou R$ 70,80/ano; Essencial R$ 20/mês ou
-R$ 118,80/ano. Nenhuma assinatura existente foi reajustada. Não é seguro mudar
-somente o catálogo: uma futura mudança deve preservar o preço contratado no
-contrato e na validação de pagamentos, em vez de invalidar cobranças antigas.
+Preços finais para novas contratações: Básico R$ 32,90/mês ou R$ 334,80/ano;
+Essencial R$ 59,90/mês ou R$ 658,80/ano. Anual integralmente à vista, sem parcelamento;
+equivalentes R$ 27,90 e R$ 54,90/mês. `ContractAmount` e `PendingContractAmount`
+preservam preços contratados e trocas previamente autorizadas. A migração aditiva
+preenche contratos legados com os preços anteriores, sem alterar cobranças no provedor.
+O painel usa o preço real do contrato. Uso mensal considera recibos anteriores à
+introdução da nova franquia, sem zerar consumo por reinício, novo telefone ou downgrade.
+O endpoint de uso informa `monthlyLimit`, `monthlyUsed`, `dailyResetsAt` e `monthlyResetsAt`.
+O painel mostra barras e atualiza contadores; `meu uso` funciona sem IA mesmo após esgotamento.
+Novos defaults estão no `.env`, `.env.production` e `.env.example`: `USAGE_BASIC_MONTHLY_MESSAGES=150`
+e `USAGE_ESSENTIAL_MONTHLY_MESSAGES=300`; Docker mapeia para `Usage__*`. Na AWS os defaults
+do código se aplicam também quando as variáveis não existem no segredo; geração de vetores
+permanece desativada e a release importa somente os dois novos vetores de produto preparados.
 
 Sonda offline do orquestrador, com HTTP simulado e tokenização local aproximada:
 

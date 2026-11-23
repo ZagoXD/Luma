@@ -279,7 +279,7 @@ public sealed class BillingServiceTests
         public int Refunds;
         public bool FailRefund;
         public string PaymentStatus = "pending";
-        public decimal PaymentAmount = 118.80m;
+        public decimal PaymentAmount = 658.80m;
         public Task<ProviderSubscription> CreateAsync(SubscriptionOrder order, string token, CancellationToken ct)
         {
             Creates++;
